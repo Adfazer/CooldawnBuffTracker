@@ -6,14 +6,14 @@ local PLAYER_CANVAS
 
 local settingsOpened = false
 
--- Основные функции для работы с настройками
+-- Main functions for working with settings
 function helpers.getSettings(cnv, playerCnv)
     if cnv ~= nil then CANVAS = cnv end
     if playerCnv ~= nil then PLAYER_CANVAS = playerCnv end
     
     local settings = api.GetSettings("CooldawnBuffTracker")
     
-    -- Проверяем и устанавливаем настройки по умолчанию
+    -- Check and set default settings
     if not settings.playerpet then
         settings.playerpet = {}
         for k, v in pairs(defaultSettings.playerpet) do
@@ -28,7 +28,7 @@ function helpers.getSettings(cnv, playerCnv)
         end
     end
     
-    -- Проверяем общие настройки
+    -- Check global settings
     if settings.debugBuffId == nil then
         settings.debugBuffId = defaultSettings.debugBuffId
     end
@@ -40,12 +40,12 @@ function helpers.updateSettings(newSettings)
     local settings = newSettings or api.GetSettings("CooldawnBuffTracker")
     local currentPosX, currentPosY, playerPosX, playerPosY
     
-    -- Сохраняем текущую позицию холста маунта, если он существует
+    -- Save current mount canvas position, if it exists
     if CANVAS then
         pcall(function()
             currentPosX, currentPosY = CANVAS:GetOffset()
             if currentPosX and currentPosY then
-                -- Обновляем позицию в настройках только если позиция изменилась
+                -- Update position in settings only if position has changed
                 if settings.playerpet.posX ~= currentPosX or settings.playerpet.posY ~= currentPosY then
                     settings.playerpet.posX = currentPosX
                     settings.playerpet.posY = currentPosY
@@ -54,12 +54,12 @@ function helpers.updateSettings(newSettings)
         end)
     end
     
-    -- Сохраняем текущую позицию холста игрока, если он существует
+    -- Save current player canvas position, if it exists
     if PLAYER_CANVAS then
         pcall(function()
             playerPosX, playerPosY = PLAYER_CANVAS:GetOffset()
             if playerPosX and playerPosY then
-                -- Обновляем позицию в настройках только если позиция изменилась
+                -- Update position in settings only if position has changed
                 if settings.player.posX ~= playerPosX or settings.player.posY ~= playerPosY then
                     settings.player.posX = playerPosX
                     settings.player.posY = playerPosY
@@ -68,17 +68,17 @@ function helpers.updateSettings(newSettings)
         end)
     end
     
-    -- Убедимся, что изменения сохранены в настройках
+    -- Ensure changes are saved in settings
     pcall(function()
         api.SaveSettings()
     end)
     
-    -- Явное обновление интерфейса через обработчик
+    -- Explicit UI update via handler
     if CANVAS and CANVAS.OnSettingsSaved then
         pcall(function()
             CANVAS.OnSettingsSaved()
             
-            -- Восстанавливаем позицию после обновления
+            -- Restore position after update
             if currentPosX and currentPosY then
                 CANVAS:RemoveAllAnchors()
                 CANVAS:AddAnchor("TOPLEFT", "UIParent", currentPosX, currentPosY)
@@ -86,12 +86,12 @@ function helpers.updateSettings(newSettings)
         end)
     end
     
-    -- Явное обновление интерфейса игрока через обработчик
+    -- Explicit UI update for player via handler
     if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
         pcall(function()
             PLAYER_CANVAS.OnSettingsSaved()
             
-            -- Восстанавливаем позицию после обновления
+            -- Restore position after update
             if playerPosX and playerPosY then
                 PLAYER_CANVAS:RemoveAllAnchors()
                 PLAYER_CANVAS:AddAnchor("TOPLEFT", "UIParent", playerPosX, playerPosY)
@@ -106,34 +106,34 @@ end
 function helpers.resetSettingsToDefault()
     local settings = api.GetSettings("CooldawnBuffTracker")
     
-    -- Копируем все настройки по умолчанию для playerpet
+    -- Copy all default settings for playerpet
     settings.playerpet = {}
     for k, v in pairs(defaultSettings.playerpet) do
         settings.playerpet[k] = v
     end
     
-    -- Копируем все настройки по умолчанию для player
+    -- Copy all default settings for player
     settings.player = {}
     for k, v in pairs(defaultSettings.player) do
         settings.player[k] = v
     end
     
-    -- Копируем общие настройки
+    -- Copy global settings
     settings.debugBuffId = defaultSettings.debugBuffId
     
-    -- Сохраняем настройки
+    -- Save settings
     pcall(function()
         api.SaveSettings()
     end)
     
-    -- Полное обновление UI для маунта
+    -- Full UI update for mount
     if CANVAS and CANVAS.OnSettingsSaved then
         pcall(function()
             CANVAS.OnSettingsSaved()
         end)
     end
     
-    -- Полное обновление UI для игрока
+    -- Full UI update for player
     if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
         pcall(function()
             PLAYER_CANVAS.OnSettingsSaved()
@@ -143,18 +143,18 @@ function helpers.resetSettingsToDefault()
     return settings
 end
 
--- Функции для работы с UI
+-- Functions for working with UI
 function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     local label = api.Interface:CreateWidget('label', id, parent)
     label:AddAnchor("TOPLEFT", offsetX, offsetY)
     label:SetExtent(255, 20)
     label:SetText(text)
     
-    -- Устанавливаем цвет, если доступно
+    -- Set color if available
     if FONT_COLOR and FONT_COLOR.TITLE then
         label.style:SetColor(FONT_COLOR.TITLE[1], FONT_COLOR.TITLE[2], FONT_COLOR.TITLE[3], 1)
     else
-        label.style:SetColor(0.87, 0.69, 0, 1) -- Золотистый цвет по умолчанию
+        label.style:SetColor(0.87, 0.69, 0, 1) -- Gold color by default
     end
     
     label.style:SetAlign(ALIGN.LEFT)
@@ -178,7 +178,7 @@ end
 function helpers.createButton(id, parent, text, x, y)
     local button = api.Interface:CreateWidget('button', id, parent)
     button:AddAnchor("TOPLEFT", x, y)
-    button:SetExtent(95, 26)  -- Увеличил ширину для кнопок
+    button:SetExtent(95, 26)  -- Increased width for buttons
     button:SetText(text)
     api.Interface:ApplyButtonSkin(button, BUTTON_BASIC.DEFAULT)
     
@@ -188,7 +188,7 @@ end
 function helpers.createCheckbox(id, parent, text, offsetX, offsetY)
     local checkBox = nil
     
-    -- Используем компонент чекбокса из утилит, если доступен
+    -- Use check button component from utilities if available
     local checkButtonModule = require('CooldawnBuffTracker/util/check_button') or require('util/check_button') or require('./util/check_button')
     
     if checkButtonModule and checkButtonModule.CreateCheckButton then
@@ -196,14 +196,14 @@ function helpers.createCheckbox(id, parent, text, offsetX, offsetY)
         checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
         checkBox:SetButtonStyle("default")
     else
-        -- Создаем чекбокс, используя доступные методы
+        -- Create check box using available methods
         checkBox = api.Interface:CreateWidget('checkbutton', id, parent)
         checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
         
-        -- Добавляем текст
+        -- Add text
         local textLabel = helpers.createLabel(id .. "Text", checkBox, text, 20, 0, 15)
         
-        -- Обработчик клика на текст
+        -- Text click handler
         if textLabel then
             textLabel:SetHandler("OnClick", function()
                 checkBox:SetChecked(not checkBox:GetChecked())
@@ -214,11 +214,11 @@ function helpers.createCheckbox(id, parent, text, offsetX, offsetY)
     return checkBox
 end
 
--- Создание кнопки выбора цвета
+-- Create color pick button
 function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
     local colorButton = nil
     
-    -- Загружаем модуль создания кнопки выбора цвета
+    -- Load color pick button creation module
     local createColorPickButtonsModule = require('CooldawnBuffTracker/util/color_picker') or require('util/color_picker') or require('./util/color_picker')
     
     if createColorPickButtonsModule then
@@ -243,7 +243,7 @@ function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
             colorButton:SetHandler("OnClick", colorButton.OnClick)
         end
     else
-        -- Создаем простую цветную кнопку, если модуль не доступен
+        -- Create simple color button if module is not available
         colorButton = api.Interface:CreateWidget('button', id, parent)
         colorButton:AddAnchor("TOPLEFT", parent, offsetX, offsetY)
         colorButton:SetExtent(23, 15)
@@ -257,7 +257,7 @@ function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
     return colorButton
 end
 
--- Функции для управления состоянием настроек
+-- Functions for managing settings state
 function helpers.setSettingsPageOpened(state) 
     settingsOpened = state 
 end

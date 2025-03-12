@@ -46,7 +46,7 @@ function BuffList.GetBuffInfo(buffId)
     -- If buff is not in predefined list, return a generic object
     return {
         id = buffId, 
-        name = "Бафф #" .. buffId, 
+        name = "Buff #" .. buffId, 
         cooldown = 30, 
         timeOfAction = 5
     }
@@ -68,7 +68,7 @@ function BuffList.GetBuffName(buffId)
         end
     end)
     
-    return buffName or buffInfo.name or "Бафф #" .. buffId
+    return buffName or buffInfo.name or "Buff #" .. buffId
 end
 
 function BuffList.GetBuffCooldown(buffId)

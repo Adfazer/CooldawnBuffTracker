@@ -1,7 +1,7 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 
--- Загружаем модуль для работы с баффами
+-- Load module for working with buffs
 pcall(function()
     BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track") or require("buffs_to_track") or require("./buffs_to_track")
 end)
@@ -11,7 +11,7 @@ pcall(function()
     BuffList = require("CooldawnBuffTracker/buff_helper") or require("buff_helper") or require("./buff_helper")
 end)
 
--- Если не удалось загрузить модуль для работы с баффами, создаем заглушку
+-- If failed to load the module for working with buffs, create a placeholder
 if not BuffsToTrack then
     BuffsToTrack = {
         GetAllTrackedBuffIds = function() return {} end,
@@ -23,7 +23,7 @@ end
 
 if not BuffList then
     BuffList = {
-        GetBuffName = function(id) return "Бафф #" .. id end,
+        GetBuffName = function(id) return "Buff #" .. id end,
         GetBuffIcon = function(id) return nil end
     }
 end
@@ -31,8 +31,8 @@ end
 local settings, settingsWindow
 local settingsControls = {}
 local palletWindow
-local trackedBuffsList = {} -- Для хранения виджетов списка баффов
-local currentUnitType = "playerpet" -- По умолчанию показываем настройки для маунта
+local trackedBuffsList = {} -- For storing buff list widgets
+local currentUnitType = "playerpet" -- By default, show settings for mount
 
 local function settingsWindowClose()
     if settingsWindow then
@@ -40,7 +40,7 @@ local function settingsWindowClose()
         helpers.setSettingsPageOpened(false)
     end
     
-    -- Закрываем палитру, если она открыта
+    -- Close palette if it's open
     local F_ETC = nil
     F_ETC = require('CooldawnBuffTracker/util/etc') or require('util/etc') or require('./util/etc')
     if F_ETC then
@@ -82,10 +82,10 @@ local function updateTrackedBuffsList()
         table.insert(trackedBuffsList, emptyBg)
         
         -- Добавляем текст для пустого списка в зависимости от статуса отслеживания
-        local unitName = currentUnitType == "playerpet" and "маунта" or "игрока"
+        local unitName = currentUnitType == "playerpet" and "mount" or "player"
         local messageText = isTrackingDisabled 
-            and "Отслеживание баффов " .. unitName .. " отключено" 
-            or "Список отслеживаемых баффов " .. unitName .. " пуст! Добавьте новый бафф ниже."
+            and "Buff tracking for " .. unitName .. " is disabled" 
+            or "Buff list for " .. unitName .. " is empty! Add new buff below."
         
         local messageColor = isTrackingDisabled and {r=0, g=0.6, b=0, a=1} or {r=0.8, g=0, b=0, a=1}
         
@@ -104,7 +104,7 @@ local function updateTrackedBuffsList()
     -- Создаем список отслеживаемых баффов
     for i, buffId in ipairs(trackedBuffs) do
         -- Получаем название баффа, если возможно
-        local buffName = "Бафф #" .. buffId
+        local buffName = "Buff #" .. buffId
         pcall(function()
             buffName = BuffList.GetBuffName(buffId) or buffName
         end)
@@ -123,7 +123,7 @@ local function updateTrackedBuffsList()
         buffNameLabel:SetExtent(350, 20) -- Увеличиваем ширину поля названия
         
         -- Кнопка удаления
-        local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Удалить', 440, 0)
+        local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 440, 0)
         removeButton:SetExtent(100, 20) -- Увеличиваем ширину кнопки удаления
         
         -- Обработчик кнопки удаления
@@ -283,7 +283,7 @@ local function addTrackedBuff()
     if not buffId then
         -- Показываем ошибку, если ID баффа не является числом
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Ошибка: ID баффа должен быть числом")
+            settingsControls.addBuffError:SetText("Error: Buff ID must be a number")
             settingsControls.errorPanel:Show(true)
         end
         return
@@ -301,14 +301,14 @@ local function addTrackedBuff()
             local buffName = BuffList.GetBuffName(buffId)
             
             -- Проверка существования баффа - если есть хотя бы иконка или специфическое имя
-            isValidBuff = buffIcon ~= nil or (buffName and buffName ~= "Бафф #" .. buffId)
+            isValidBuff = buffIcon ~= nil or (buffName and buffName ~= "Buff #" .. buffId)
         end
     end)
     
     if not isValidBuff then
         -- Показываем ошибку, если ID баффа не найден в BuffList
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Ошибка: Бафф с ID " .. buffId .. " не найден в библиотеке баффов")
+            settingsControls.addBuffError:SetText("Error: Buff with ID " .. buffId .. " not found in buff library")
             settingsControls.errorPanel:Show(true)
         end
         return
@@ -339,7 +339,7 @@ local function addTrackedBuff()
     else
         -- Показываем сообщение, что бафф уже отслеживается
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Ошибка: Бафф уже отслеживается или произошла ошибка")
+            settingsControls.addBuffError:SetText("Error: Buff already tracked or error occurred")
             settingsControls.errorPanel:Show(true)
         end
     end
@@ -446,25 +446,25 @@ local function initSettingsPage()
     
     -- ПЕРЕКЛЮЧАТЕЛЬ ТИПА ЮНИТА - Добавляем в самом верху
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
-                                           'Выберите тип юнита для настройки:', 15, 30, 16)
+                                           'Select unit type for settings:', 15, 30, 16)
     unitTypeLabel:SetWidth(250)
     
     -- Кнопка для выбора настроек маунта
-    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Маунт (playerpet)', 300, 30)
+    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount (playerpet)', 300, 30)
     mountButton:SetWidth(140)
     
     -- Кнопка для выбора настроек игрока
-    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Игрок (player)', 450, 30)
+    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player (player)', 450, 30)
     playerButton:SetWidth(140)
     
     -- Функция для обновления стиля кнопок в зависимости от выбранного типа
     local function updateUnitTypeButtons()
         if currentUnitType == "playerpet" then
-            mountButton:SetText("* Маунт (playerpet)")
-            playerButton:SetText("Игрок (player)")
+            mountButton:SetText("* Mount (playerpet)")
+            playerButton:SetText("Player (player)")
         else
-            mountButton:SetText("Маунт (playerpet)")
-            playerButton:SetText("* Игрок (player)")
+            mountButton:SetText("Mount (playerpet)")
+            playerButton:SetText("* Player (player)")
         end
     end
     
@@ -490,7 +490,7 @@ local function initSettingsPage()
     
     -- ПЕРВЫЙ БЛОК - Заголовок управления отслеживаемыми баффами
     local trackedBuffsGroupLabel = helpers.createLabel('trackedBuffsGroupLabel', settingsWindow,
-                                                    'Управление отслеживаемыми баффами', 15, 60, 20)
+                                                    'Buff tracker management', 15, 60, 20)
     trackedBuffsGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка
     
     -- Кнопка для очистки всего списка баффов
@@ -499,7 +499,7 @@ local function initSettingsPage()
     -- ВТОРОЙ БЛОК - Список отслеживаемых баффов (СРАЗУ ПОСЛЕ ЗАГОЛОВКА)
     -- Помещаем его выше остальных элементов в иерархии
     local trackedBuffsListHeader = helpers.createLabel('trackedBuffsListHeader', trackedBuffsGroupLabel,
-                                                    'Список отслеживаемых баффов:', 0, 30, 16)
+                                                    'Buff list:', 0, 30, 16)
     trackedBuffsListHeader:Show(true)
     trackedBuffsListHeader:SetWidth(570) -- Увеличиваем ширину заголовка списка
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
@@ -524,7 +524,7 @@ local function initSettingsPage()
     -- ТРЕТИЙ БЛОК - Только после создания списка добавляем элементы ввода нового баффа
     -- Поле для ввода ID нового баффа - размещаем ПОСЛЕ списка баффов, но в основном окне (не в контейнере списка)
     local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow,
-                                            'ID баффа:', 15, 220, 15)
+                                            'Buff ID:', 15, 220, 15)
     newBuffIdLabel:SetWidth(100) -- Устанавливаем ширину метки
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel,
                                       "", 200, 0)
@@ -535,7 +535,7 @@ local function initSettingsPage()
     settingsControls.newBuffId = newBuffId
     
     -- Кнопка добавления баффа
-    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Добавить', 450, 0)
+    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 450, 0)
     addBuffButton:SetWidth(100) -- Увеличиваем ширину кнопки
     settingsControls.addBuffButton = addBuffButton
     
@@ -573,12 +573,12 @@ local function initSettingsPage()
     -- ЧЕТВЕРТЫЙ БЛОК - остальные настройки
     -- Группа настроек иконок - размещаем ниже панели ошибок
     local iconGroupLabel = helpers.createLabel('iconGroupLabel', settingsWindow,
-                                             'Настройки иконок', 15, 290, 20)
+                                             'Icon settings', 15, 290, 20)
     iconGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
                                              
     -- Размер иконок
     local iconSizeLabel = helpers.createLabel('iconSizeLabel', iconGroupLabel,
-                                            'Размер иконок:', 0, 25, 15)
+                                            'Icon size:', 0, 25, 15)
     iconSizeLabel:SetWidth(150) -- Устанавливаем ширину метки
     local iconSize = helpers.createEdit('iconSize', iconSizeLabel,
                                       settings.iconSize, 200, 0)
@@ -590,7 +590,7 @@ local function initSettingsPage()
     
     -- Интервал между иконками
     local iconSpacingLabel = helpers.createLabel('iconSpacingLabel', iconSizeLabel,
-                                               'Интервал между иконками:', 0, 25, 15)
+                                               'Icon spacing:', 0, 25, 15)
     iconSpacingLabel:SetWidth(150) -- Устанавливаем ширину метки
     local iconSpacing = helpers.createEdit('iconSpacing', iconSpacingLabel,
                                          settings.iconSpacing, 200, 0)
@@ -602,12 +602,12 @@ local function initSettingsPage()
     
     -- Группа настроек положения иконок
     local positionLabel = helpers.createLabel('positionLabel', iconSpacingLabel,
-                                            'Положение иконок', 0, 35, 18)
+                                            'Icon position', 0, 35, 18)
     positionLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
                                             
     -- Координата X
     local posXLabel = helpers.createLabel('posXLabel', positionLabel,
-                                        'Позиция X:', 0, 25, 15)
+                                        'Position X:', 0, 25, 15)
     posXLabel:SetWidth(150) -- Устанавливаем ширину метки
     local posX = helpers.createEdit('posX', posXLabel,
                                   settings.posX, 200, 0)
@@ -619,7 +619,7 @@ local function initSettingsPage()
     
     -- Координата Y
     local posYLabel = helpers.createLabel('posYLabel', posXLabel,
-                                        'Позиция Y:', 0, 25, 15)
+                                        'Position Y:', 0, 25, 15)
     posYLabel:SetWidth(150) -- Устанавливаем ширину метки
     local posY = helpers.createEdit('posY', posYLabel,
                                   settings.posY, 200, 0)
@@ -631,7 +631,7 @@ local function initSettingsPage()
     
     -- Блокировка перемещения
     local lockPositioning = helpers.createCheckbox('lockPositioning', posYLabel,
-                                                 "Заблокировать перемещение иконок", 0, 25)
+                                                 "Lock icon movement", 0, 25)
     if lockPositioning then 
         lockPositioning:SetChecked(settings.lockPositioning or false)
     end
@@ -639,12 +639,12 @@ local function initSettingsPage()
     
     -- Настройки таймера
     local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockPositioning,
-                                             'Настройки таймера', 0, 35, 18)
+                                             'Timer settings', 0, 35, 18)
     timerGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
     
     -- Размер шрифта таймера
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
-                                                'Размер шрифта:', 0, 25, 15)
+                                                'Font size:', 0, 25, 15)
     timerFontSizeLabel:SetWidth(150) -- Устанавливаем ширину метки
     local timerFontSize = helpers.createEdit('timerFontSize', timerFontSizeLabel,
                                           settings.timerFontSize, 200, 0)
@@ -656,7 +656,7 @@ local function initSettingsPage()
     
     -- Цвет текста таймера
     local timerTextColorLabel = helpers.createLabel('timerTextColorLabel', timerFontSizeLabel,
-                                                 'Цвет текста:', 0, 25, 15)
+                                                 'Text color:', 0, 25, 15)
     timerTextColorLabel:SetWidth(150) -- Устанавливаем ширину метки
     
     -- Получаем цвет текста таймера из настроек для выбранного типа юнита
@@ -683,19 +683,19 @@ local function initSettingsPage()
     
     -- Добавляем настройки отладки с лучшим расположением
     local debugGroupLabel = helpers.createLabel('debugGroupLabel', timerTextColorLabel,
-                                             'Настройки отладки', 0, 35, 18)
+                                             'Debug settings', 0, 35, 18)
     debugGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
     
     -- Чекбокс для отладки buff ID - изменяем позицию для лучшего отображения
     local debugBuffId = helpers.createCheckbox('debugBuffId', debugGroupLabel,
-                                            "Дебаг buffId", 0, 25)
+                                            "Debug buffId", 0, 25)
     if debugBuffId then 
         debugBuffId:SetChecked(settings.debugBuffId or false)
     end
     settingsControls.debugBuffId = debugBuffId
     
     -- Создаем кнопки Сохранить и Отмена
-    local saveButton = helpers.createButton("saveButton", settingsWindow, "Сохранить", 0, 0)
+    local saveButton = helpers.createButton("saveButton", settingsWindow, "Save", 0, 0)
     saveButton:SetExtent(120, 30)
     saveButton:RemoveAllAnchors()
     saveButton:AddAnchor("BOTTOMRIGHT", settingsWindow, "BOTTOMRIGHT", -20, -20)
@@ -704,7 +704,7 @@ local function initSettingsPage()
     end)
     settingsControls.saveButton = saveButton
     
-    local resetButton = helpers.createButton("resetButton", settingsWindow, "Сбросить", 0, 0)
+    local resetButton = helpers.createButton("resetButton", settingsWindow, "Reset", 0, 0)
     resetButton:SetExtent(120, 30)
     resetButton:RemoveAllAnchors()
     resetButton:AddAnchor("RIGHT", saveButton, "LEFT", -10, 0)
@@ -713,7 +713,7 @@ local function initSettingsPage()
     end)
     settingsControls.resetButton = resetButton
     
-    local cancelButton = helpers.createButton("cancelButton", settingsWindow, "Отмена", 0, 0)
+    local cancelButton = helpers.createButton("cancelButton", settingsWindow, "Cancel", 0, 0)
     cancelButton:SetExtent(120, 30)
     cancelButton:RemoveAllAnchors()
     cancelButton:AddAnchor("RIGHT", resetButton, "LEFT", -10, 0)
@@ -741,7 +741,7 @@ local function initSettingsPage()
         if #buffIds == 0 then
             -- Добавляем информационное сообщение для пустого списка
             local emptyLabel = helpers.createLabel('initialEmptyLabel', settingsControls.buffsListContainer, 
-                                                'Пустой список. Добавьте новый бафф ниже.', 10, 10, 14)
+                                                'Empty list. Add new buff below.', 10, 10, 14)
             table.insert(trackedBuffsList, emptyLabel)
         end
     end)

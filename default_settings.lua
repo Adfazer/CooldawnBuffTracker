@@ -16,11 +16,11 @@ local defaultSettings = {
         timerFontSize = 16,
         timerX = 0,
         timerY = 0,
-        trackedBuffs = {}  -- Пустой массив - пользователь сам указывает баффы
+        trackedBuffs = {}  -- Empty array - user specifies buffs themselves
     },
     player = {
         posX = 330,
-        posY = 100,  -- Немного ниже маунта
+        posY = 100,  -- Slightly lower than mount
         iconSize = 40,
         iconSpacing = 5,
         lockPositioning = false,
@@ -35,9 +35,9 @@ local defaultSettings = {
         timerFontSize = 16,
         timerX = 0,
         timerY = 0,
-        trackedBuffs = {}  -- Пустой массив - пользователь сам указывает баффы
+        trackedBuffs = {}  -- Empty array - user specifies buffs themselves
     },
-    debugBuffId = false  -- Debug option for buff ID logging - общая настройка
+    debugBuffId = false  -- Debug option for buff ID logging - global setting
 }
 
 return defaultSettings 
