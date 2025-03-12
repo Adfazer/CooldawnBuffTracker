@@ -48,9 +48,9 @@ local function settingsWindowClose()
     end
 end
 
--- Обновляет список отслеживаемых баффов в интерфейсе
+-- Updates the list of tracked buffs in the interface
 local function updateTrackedBuffsList()
-    -- Очищаем предыдущие элементы списка
+    -- Clear previous list elements
     for _, widget in ipairs(trackedBuffsList) do
         pcall(function()
             if widget then
@@ -61,27 +61,27 @@ local function updateTrackedBuffsList()
     end
     trackedBuffsList = {}
     
-    -- Получаем актуальный список отслеживаемых баффов для выбранного типа юнита
+    -- Get current list of tracked buffs for the selected unit type
     local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
     
-    -- Ссылка на родительский элемент для списка
+    -- Reference to parent element for the list
     local container = settingsControls.buffsListContainer
     local yOffset = 0
     
-    -- Если список пуст, показываем выделенное сообщение
+    -- If list is empty, show selected message
     if #trackedBuffs == 0 then
-        -- Проверяем настройку, чтобы понять, отключено ли отслеживание полностью
+        -- Check setting to understand if tracking is disabled completely
         local settings = api.GetSettings("CooldawnBuffTracker") or {}
         local isTrackingDisabled = settings[currentUnitType] and settings[currentUnitType].enabled == false
         
-        -- Создаем фон для пустого списка, с цветом в зависимости от статуса отслеживания
+        -- Create background for empty list, with color depending on tracking status
         local bgColor = isTrackingDisabled and {r=0.2, g=0.8, b=0.2, a=0.3} or {r=0.9, g=0.7, b=0.7, a=0.5}
         local emptyBg = container:CreateColorDrawable(bgColor.r, bgColor.g, bgColor.b, bgColor.a, "background")
         emptyBg:AddAnchor("TOPLEFT", container, 10, 10)
         emptyBg:AddAnchor("BOTTOMRIGHT", container, -10, -10)
         table.insert(trackedBuffsList, emptyBg)
         
-        -- Добавляем текст для пустого списка в зависимости от статуса отслеживания
+        -- Add text for empty list depending on tracking status
         local unitName = currentUnitType == "playerpet" and "mount" or "player"
         local messageText = isTrackingDisabled 
             and "Buff tracking for " .. unitName .. " is disabled" 
@@ -90,53 +90,53 @@ local function updateTrackedBuffsList()
         local messageColor = isTrackingDisabled and {r=0, g=0.6, b=0, a=1} or {r=0.8, g=0, b=0, a=1}
         
         local emptyLabel = helpers.createLabel('emptyTrackedBuffsList', container, messageText, 0, 40, 16)
-        emptyLabel:SetWidth(550) -- Увеличиваем ширину сообщения
-        emptyLabel:AddAnchor("TOP", container, 0, 40) -- Центрируем сообщение
-        emptyLabel.style:SetAlign(ALIGN.CENTER) -- Центрируем текст
+        emptyLabel:SetWidth(550) -- Increase message width
+        emptyLabel:AddAnchor("TOP", container, 0, 40) -- Center message
+        emptyLabel.style:SetAlign(ALIGN.CENTER) -- Center text
         emptyLabel.style:SetColor(messageColor.r, messageColor.g, messageColor.b, messageColor.a)
         table.insert(trackedBuffsList, emptyLabel)
         
-        -- Устанавливаем минимальную высоту контейнера
+        -- Set minimum container height
         container:SetHeight(100)
         return
     end
     
-    -- Создаем список отслеживаемых баффов
+    -- Create list of tracked buffs
     for i, buffId in ipairs(trackedBuffs) do
-        -- Получаем название баффа, если возможно
+        -- Get buff name if possible
         local buffName = "Buff #" .. buffId
         pcall(function()
             buffName = BuffList.GetBuffName(buffId) or buffName
         end)
         
-        -- Создаем строку с информацией о баффе
+        -- Create row with buff information
         local buffRow = api.Interface:CreateWidget('window', 'trackedBuff_' .. i, container)
-        buffRow:SetExtent(550, 20) -- Увеличиваем ширину строки списка
+        buffRow:SetExtent(550, 20) -- Increase row width
         buffRow:AddAnchor("TOPLEFT", container, 10, yOffset)
         
-        -- ID баффа
+        -- Buff ID
         local buffIdLabel = helpers.createLabel('buffIdLabel_' .. i, buffRow, tostring(buffId), 0, 0, 14)
-        buffIdLabel:SetExtent(70, 20) -- Увеличиваем ширину поля ID
+        buffIdLabel:SetExtent(70, 20) -- Increase ID field width
         
-        -- Название баффа
+        -- Buff name
         local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
-        buffNameLabel:SetExtent(350, 20) -- Увеличиваем ширину поля названия
+        buffNameLabel:SetExtent(350, 20) -- Increase name field width
         
-        -- Кнопка удаления
+        -- Remove button
         local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 440, 0)
-        removeButton:SetExtent(100, 20) -- Увеличиваем ширину кнопки удаления
+        removeButton:SetExtent(100, 20) -- Increase remove button width
         
-        -- Обработчик кнопки удаления
+        -- Remove button handler
         removeButton:SetHandler("OnClick", function()
             if BuffsToTrack.RemoveTrackedBuff(buffId, currentUnitType) then
-                -- Обновляем список после удаления
+                -- Update list after removal
                 updateTrackedBuffsList()
-                -- Обновляем основной интерфейс
+                -- Update main interface
                 if helpers and helpers.updateSettings then
                     helpers.updateSettings()
                 end
                 
-                -- Явно вызываем событие обновления списка отслеживаемых баффов
+                -- Explicitly call buffs list update event
                 pcall(function()
                     api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
                 end)
@@ -147,25 +147,25 @@ local function updateTrackedBuffsList()
         table.insert(trackedBuffsList, buffRow)
     end
     
-    -- Устанавливаем правильную высоту контейнера, чтобы он вмещал все элементы
+    -- Set correct container height to fit all elements
     local containerHeight = math.max(100, yOffset + 30)
     container:SetHeight(containerHeight)
 end
 
 local function saveSettings()
-    -- Получаем текущие настройки
+    -- Get current settings
     local mainSettings = api.GetSettings("CooldawnBuffTracker")
     
-    -- Обновляем значения из контролов для выбранного типа юнита
+    -- Update values from controls for selected unit type
     if not mainSettings[currentUnitType] then
         mainSettings[currentUnitType] = {}
     end
     
-    -- Обновляем настройки размера иконок
+    -- Update icon size settings
     mainSettings[currentUnitType].iconSize = tonumber(settingsControls.iconSize:GetText())
     mainSettings[currentUnitType].iconSpacing = tonumber(settingsControls.iconSpacing:GetText())
     
-    -- Проверяем правильность значений и устанавливаем значения по умолчанию, если нужно
+    -- Check values and set default values if needed
     if not mainSettings[currentUnitType].iconSize or mainSettings[currentUnitType].iconSize <= 0 then 
         mainSettings[currentUnitType].iconSize = 40 
     end
@@ -174,12 +174,12 @@ local function saveSettings()
         mainSettings[currentUnitType].iconSpacing = 5
     end
     
-    -- Обновляем настройки позиции
+    -- Update position settings
     mainSettings[currentUnitType].posX = tonumber(settingsControls.posX:GetText())
     mainSettings[currentUnitType].posY = tonumber(settingsControls.posY:GetText())
     mainSettings[currentUnitType].lockPositioning = settingsControls.lockPositioning:GetChecked()
     
-    -- Сохраняем настройки таймера
+    -- Update timer settings
     if settingsControls.timerFontSize then
         mainSettings[currentUnitType].timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
     end
@@ -190,32 +190,32 @@ local function saveSettings()
             settingsControls.timerTextColor.colorBG:GetColor()
     end
     
-    -- Сохраняем настройки отладки (общие для всех типов юнитов)
+    -- Update debug settings (common for all unit types)
     if settingsControls.debugBuffId then
         mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
     end
     
-    -- Сохраняем настройки и явно применяем
+    -- Save settings and explicitly apply
     api.SaveSettings()
     
-    -- Сохраняем настройки через helpers, который полностью перезапустит UI
+    -- Save settings through helpers, which will completely restart UI
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
     end
     
-    -- Закрываем окно настроек
+    -- Close settings window
     settingsWindowClose()
 end
 
 local function resetSettings()
     pcall(function()
-        -- Сбрасываем настройки на значения по умолчанию
+        -- Reset settings to default values
         settings = helpers.resetSettingsToDefault()
         
-        -- Обновляем значения в интерфейсе для текущего типа юнита
+        -- Update values in interface for current unit type
         local unitSettings = settings[currentUnitType] or {}
         
-        -- Обновляем поля настроек для выбранного типа юнита
+        -- Update settings fields for selected unit type
         if settingsControls.iconSize then
             settingsControls.iconSize:SetText(tostring(unitSettings.iconSize or 40))
         end
@@ -236,12 +236,12 @@ local function resetSettings()
             settingsControls.lockPositioning:SetChecked(unitSettings.lockPositioning or false)
         end
         
-        -- Обновляем настройки таймера
+        -- Update timer settings
         if settingsControls.timerFontSize then
             settingsControls.timerFontSize:SetText(tostring(unitSettings.timerFontSize or 16))
         end
         
-        -- Обновляем цвет текста таймера
+        -- Update timer text color
         if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
             local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
             settingsControls.timerTextColor.colorBG:SetColor(
@@ -252,36 +252,36 @@ local function resetSettings()
             )
         end
         
-        -- Обновляем настройки отладки (общие)
+        -- Update debug settings (common)
         if settingsControls.debugBuffId then
             settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
         end
         
-        -- Обновляем список отслеживаемых баффов
+        -- Update tracked buffs list
         updateTrackedBuffsList()
         
-        -- Обновляем основной интерфейс
+        -- Update main interface
         if helpers and helpers.updateSettings then
             helpers.updateSettings()
         end
         
-        -- Явно вызываем событие обновления списка отслеживаемых баффов
+        -- Explicitly call buffs list update event
         pcall(function()
             api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
         end)
     end)
 end
 
--- Добавление нового баффа
+-- Add new buff
 local function addTrackedBuff()
-    -- Всегда обновляем список при любом взаимодействии
+    -- Always update list on any interaction
     updateTrackedBuffsList()
     
     local buffIdText = settingsControls.newBuffId:GetText()
     local buffId = tonumber(buffIdText)
     
     if not buffId then
-        -- Показываем ошибку, если ID баффа не является числом
+        -- Show error if buff ID is not a number
         if settingsControls.addBuffError and settingsControls.errorPanel then
             settingsControls.addBuffError:SetText("Error: Buff ID must be a number")
             settingsControls.errorPanel:Show(true)
@@ -289,24 +289,24 @@ local function addTrackedBuff()
         return
     end
     
-    -- Проверяем наличие баффа в BuffList
+    -- Check buff existence in BuffList
     local isValidBuff = false
     pcall(function()
-        -- Используем более надежную функцию для проверки существования баффа
+        -- Use more reliable function for checking buff existence
         if BuffList and BuffList.IsValidBuff then
             isValidBuff = BuffList.IsValidBuff(buffId)
         else
-            -- Запасной вариант: пытаемся получить иконку или имя баффа через BuffList
+            -- Backup option: try to get buff icon or name through BuffList
             local buffIcon = BuffList.GetBuffIcon(buffId)
             local buffName = BuffList.GetBuffName(buffId)
             
-            -- Проверка существования баффа - если есть хотя бы иконка или специфическое имя
+            -- Check buff existence - if there's at least an icon or specific name
             isValidBuff = buffIcon ~= nil or (buffName and buffName ~= "Buff #" .. buffId)
         end
     end)
     
     if not isValidBuff then
-        -- Показываем ошибку, если ID баффа не найден в BuffList
+        -- Show error if buff ID not found in BuffList
         if settingsControls.addBuffError and settingsControls.errorPanel then
             settingsControls.addBuffError:SetText("Error: Buff with ID " .. buffId .. " not found in buff library")
             settingsControls.errorPanel:Show(true)
@@ -314,37 +314,37 @@ local function addTrackedBuff()
         return
     end
     
-    -- Пытаемся добавить бафф для выбранного типа юнита
+    -- Try to add buff for selected unit type
     if BuffsToTrack.AddTrackedBuff(buffId, currentUnitType) then
-        -- Обновляем список, если бафф успешно добавлен
+        -- Update list if buff successfully added
         updateTrackedBuffsList()
         
-        -- Очищаем поле ввода
+        -- Clear input field
         settingsControls.newBuffId:SetText("")
         
-        -- Скрываем сообщение об ошибке
+        -- Hide error message
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
         
-        -- Обновляем основной интерфейс
+        -- Update main interface
         if helpers and helpers.updateSettings then
             helpers.updateSettings()
         end
         
-        -- Явно вызываем событие обновления списка отслеживаемых баффов
+        -- Explicitly call buffs list update event
         pcall(function()
             api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
         end)
     else
-        -- Показываем сообщение, что бафф уже отслеживается
+        -- Show message that buff already tracked
         if settingsControls.addBuffError and settingsControls.errorPanel then
             settingsControls.addBuffError:SetText("Error: Buff already tracked or error occurred")
             settingsControls.errorPanel:Show(true)
         end
     end
     
-    -- Еще раз принудительно обновляем список
+    -- Forcefully update list one more time
     pcall(function()
         updateTrackedBuffsList()
         if settingsControls.buffsListContainer then
@@ -353,20 +353,20 @@ local function addTrackedBuff()
     end)
 end
 
--- Функция для обновления полей настроек в зависимости от выбранного типа юнита
+-- Function to update settings fields depending on selected unit type
 local function updateSettingsFields()
-    -- Обновляем настройки из текущих данных
+    -- Update settings from current data
     settings = helpers.getSettings()
     
-    -- Проверяем, что настройки для выбранного типа юнита существуют
+    -- Check if settings for selected unit type exist
     if not settings[currentUnitType] then
         settings[currentUnitType] = {}
     end
     
-    -- Обновляем поля настроек для выбранного типа юнита
+    -- Update settings fields for selected unit type
     local unitSettings = settings[currentUnitType]
     
-    -- Обновляем поля позиции
+    -- Update position fields
     if settingsControls.posX then
         settingsControls.posX:SetText(tostring(unitSettings.posX or 0))
     end
@@ -375,17 +375,17 @@ local function updateSettingsFields()
         settingsControls.posY:SetText(tostring(unitSettings.posY or 0))
     end
     
-    -- Обновляем чекбокс блокировки перемещения
+    -- Update lock positioning checkbox
     if settingsControls.lockPositioning then
         settingsControls.lockPositioning:SetChecked(unitSettings.lockPositioning or false)
     end
     
-    -- Обновляем настройки таймера
+    -- Update timer settings
     if settingsControls.timerFontSize then
         settingsControls.timerFontSize:SetText(tostring(unitSettings.timerFontSize or 16))
     end
     
-    -- Обновляем цвет текста таймера
+    -- Update timer text color
     if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
         local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
         settingsControls.timerTextColor.colorBG:SetColor(
@@ -396,7 +396,7 @@ local function updateSettingsFields()
         )
     end
     
-    -- Обновляем настройки размера иконок
+    -- Update icon size settings
     if settingsControls.iconSize then
         settingsControls.iconSize:SetText(tostring(unitSettings.iconSize or 40))
     end
@@ -405,7 +405,7 @@ local function updateSettingsFields()
         settingsControls.iconSpacing:SetText(tostring(unitSettings.iconSpacing or 5))
     end
     
-    -- Обновляем настройки метки
+    -- Update label settings
     if settingsControls.labelFontSize then
         settingsControls.labelFontSize:SetText(tostring(unitSettings.labelFontSize or 14))
     end
@@ -418,46 +418,46 @@ local function updateSettingsFields()
         settingsControls.labelY:SetText(tostring(unitSettings.labelY or -30))
     end
     
-    -- Обновляем чекбоксы
+    -- Update checkboxes
     if settingsControls.showLabel then
         settingsControls.showLabel:SetChecked(unitSettings.showLabel or false)
     end
     
     if settingsControls.showTimer then
-        settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- По умолчанию включено
+        settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- Default enabled
     end
     
-    -- Обновляем список отслеживаемых баффов
+    -- Update tracked buffs list
     updateTrackedBuffsList()
 end
 
 local function initSettingsPage()
     settings = helpers.getSettings()
     
-    -- Используем CreateWindow вместо CreateEmptyWindow для корректной поддержки ESC и перетаскивания
+    -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
                                              'CooldawnBuffTracker', 600, 650)
     settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
     settingsWindow:SetHandler("OnCloseByEsc", settingsWindowClose)
     function settingsWindow:OnClose() settingsWindowClose() end
     
-    -- Если не удалось создать окно, выходим
+    -- If unable to create window, exit
     if not settingsWindow then return end
     
-    -- ПЕРЕКЛЮЧАТЕЛЬ ТИПА ЮНИТА - Добавляем в самом верху
+    -- UNIT TYPE SELECTOR - Add at the very top
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
                                            'Select unit type for settings:', 15, 30, 16)
     unitTypeLabel:SetWidth(250)
     
-    -- Кнопка для выбора настроек маунта
+    -- Mount settings button
     local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount (playerpet)', 300, 30)
     mountButton:SetWidth(140)
     
-    -- Кнопка для выбора настроек игрока
+    -- Player settings button
     local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player (player)', 450, 30)
     playerButton:SetWidth(140)
     
-    -- Функция для обновления стиля кнопок в зависимости от выбранного типа
+    -- Function to update button style depending on selected type
     local function updateUnitTypeButtons()
         if currentUnitType == "playerpet" then
             mountButton:SetText("* Mount (playerpet)")
@@ -468,12 +468,12 @@ local function initSettingsPage()
         end
     end
     
-    -- Обработчики нажатия на кнопки выбора типа юнита
+    -- Unit type button click handlers
     mountButton:SetHandler("OnClick", function()
         currentUnitType = "playerpet"
         updateUnitTypeButtons()
         updateTrackedBuffsList()
-        -- Обновляем все поля настроек для отображения настроек маунта
+        -- Update all settings fields for mount settings display
         updateSettingsFields()
     end)
     
@@ -481,155 +481,155 @@ local function initSettingsPage()
         currentUnitType = "player"
         updateUnitTypeButtons()
         updateTrackedBuffsList()
-        -- Обновляем все поля настроек для отображения настроек игрока
+        -- Update all settings fields for player settings display
         updateSettingsFields()
     end)
     
-    -- Инициализируем стиль кнопок
+    -- Initialize button style
     updateUnitTypeButtons()
     
-    -- ПЕРВЫЙ БЛОК - Заголовок управления отслеживаемыми баффами
+    -- FIRST BLOCK - Buff tracker management header
     local trackedBuffsGroupLabel = helpers.createLabel('trackedBuffsGroupLabel', settingsWindow,
                                                     'Buff tracker management', 15, 60, 20)
-    trackedBuffsGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка
+    trackedBuffsGroupLabel:SetWidth(570) -- Increase header width
     
-    -- Кнопка для очистки всего списка баффов
+    -- Clear all buffs button
 
     
-    -- ВТОРОЙ БЛОК - Список отслеживаемых баффов (СРАЗУ ПОСЛЕ ЗАГОЛОВКА)
-    -- Помещаем его выше остальных элементов в иерархии
+    -- SECOND BLOCK - Tracked buffs list (RIGHT AFTER HEADER)
+    -- Place it above other elements in hierarchy
     local trackedBuffsListHeader = helpers.createLabel('trackedBuffsListHeader', trackedBuffsGroupLabel,
                                                     'Buff list:', 0, 30, 16)
     trackedBuffsListHeader:Show(true)
-    trackedBuffsListHeader:SetWidth(570) -- Увеличиваем ширину заголовка списка
+    trackedBuffsListHeader:SetWidth(570) -- Increase header width
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
     
-    -- Создаем контейнер для списка баффов и помещаем его прямо под заголовком
+    -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
-    buffsListContainer:SetExtent(570, 120) -- Увеличиваем ширину контейнера для списка
+    buffsListContainer:SetExtent(570, 120) -- Increase container width
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 25)
     buffsListContainer:Show(true)
     
-    -- Крайне заметный фон для контейнера
+    -- Visible background for container
     local containerBg = buffsListContainer:CreateColorDrawable(0.85, 0.85, 0.85, 1, "background")
     containerBg:AddAnchor("TOPLEFT", buffsListContainer, 0, 0)
     containerBg:AddAnchor("BOTTOMRIGHT", buffsListContainer, 0, 0)
     
-    -- Сохраняем контейнер в управляющих элементах
+    -- Save container in controlling elements
     settingsControls.buffsListContainer = buffsListContainer
     
-    -- НЕМЕДЛЕННО заполняем список отслеживаемых баффов
+    -- IMMEDIATELY fill list of tracked buffs
     updateTrackedBuffsList()
     
-    -- ТРЕТИЙ БЛОК - Только после создания списка добавляем элементы ввода нового баффа
-    -- Поле для ввода ID нового баффа - размещаем ПОСЛЕ списка баффов, но в основном окне (не в контейнере списка)
+    -- THIRD BLOCK - Only after list creation adds input elements for new buff
+    -- Input field for new buff ID - place AFTER list, but in main window (not in list container)
     local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow,
                                             'Buff ID:', 15, 220, 15)
-    newBuffIdLabel:SetWidth(100) -- Устанавливаем ширину метки
+    newBuffIdLabel:SetWidth(100) -- Set label width
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel,
                                       "", 200, 0)
     if newBuffId then 
         newBuffId:SetMaxTextLength(10) 
-        newBuffId:SetWidth(50) -- Увеличиваем ширину поля ввода
+        newBuffId:SetWidth(50) -- Increase input field width
     end
     settingsControls.newBuffId = newBuffId
     
-    -- Кнопка добавления баффа
+    -- Add buff button
     local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 450, 0)
-    addBuffButton:SetWidth(100) -- Увеличиваем ширину кнопки
+    addBuffButton:SetWidth(100) -- Increase button width
     settingsControls.addBuffButton = addBuffButton
     
-    -- Теперь привязываем обработчик нажатия на кнопку добавления
+    -- Now bind input handler to add button
     addBuffButton:SetHandler("OnClick", addTrackedBuff)
     
-    -- Создаем выделенную панель для сообщений об ошибке
-    -- Размещаем ее в отдельном месте между полем ввода ID и настройками иконок
+    -- Create highlighted panel for error messages
+    -- Place it in separate place between input ID field and icon settings
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
-    errorPanel:SetExtent(570, 25) -- Увеличиваем ширину панели ошибок
-    errorPanel:AddAnchor("TOPLEFT", settingsWindow, 15, 250) -- Фиксированное положение под полем ввода
+    errorPanel:SetExtent(570, 25) -- Increase error panel width
+    errorPanel:AddAnchor("TOPLEFT", settingsWindow, 15, 250) -- Fixed position under input field
     
-    -- Рамка для панели ошибок для лучшего выделения
+    -- Frame for error panel for better highlighting
     local errorPanelBorder = errorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     errorPanelBorder:SetCoords(0, 0, 27, 16)
     errorPanelBorder:SetInset(0, 8, 0, 7)
     errorPanelBorder:AddAnchor("TOPLEFT", errorPanel, -1, -1)
     errorPanelBorder:AddAnchor("BOTTOMRIGHT", errorPanel, 1, 1)
     
-    -- Фон для панели ошибок - делаем более заметным
+    -- Background for error panel - make more visible
     local errorPanelBg = errorPanel:CreateColorDrawable(0.98, 0.85, 0.85, 0.9, "background")
     errorPanelBg:AddAnchor("TOPLEFT", errorPanel, 0, 0)
     errorPanelBg:AddAnchor("BOTTOMRIGHT", errorPanel, 0, 0)
     
-    -- Сообщение об ошибке в панели
+    -- Error message in panel
     local addBuffError = helpers.createLabel('addBuffError', errorPanel, '', 5, 5, 14)
-    addBuffError:SetExtent(560, 20) -- Увеличиваем ширину сообщения об ошибке
-    addBuffError.style:SetColor(1, 0, 0, 1) -- Красный цвет для сообщения об ошибке
+    addBuffError:SetExtent(560, 20) -- Increase error message width
+    addBuffError.style:SetColor(1, 0, 0, 1) -- Red color for error message
     settingsControls.addBuffError = addBuffError
     
-    -- По умолчанию панель ошибок скрыта
+    -- By default error panel is hidden
     errorPanel:Show(false)
     settingsControls.errorPanel = errorPanel
     
-    -- ЧЕТВЕРТЫЙ БЛОК - остальные настройки
-    -- Группа настроек иконок - размещаем ниже панели ошибок
+    -- FOURTH BLOCK - other settings
+    -- Icon settings group - place below error panel
     local iconGroupLabel = helpers.createLabel('iconGroupLabel', settingsWindow,
                                              'Icon settings', 15, 290, 20)
-    iconGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
+    iconGroupLabel:SetWidth(570) -- Increase header width
                                              
-    -- Размер иконок
+    -- Icon size
     local iconSizeLabel = helpers.createLabel('iconSizeLabel', iconGroupLabel,
                                             'Icon size:', 0, 25, 15)
-    iconSizeLabel:SetWidth(150) -- Устанавливаем ширину метки
+    iconSizeLabel:SetWidth(150) -- Set label width
     local iconSize = helpers.createEdit('iconSize', iconSizeLabel,
                                       settings.iconSize, 200, 0)
     if iconSize then 
         iconSize:SetMaxTextLength(4) 
-        iconSize:SetWidth(50) -- Увеличиваем ширину поля ввода
+        iconSize:SetWidth(50) -- Increase input field width
     end
     settingsControls.iconSize = iconSize
     
-    -- Интервал между иконками
+    -- Icon spacing
     local iconSpacingLabel = helpers.createLabel('iconSpacingLabel', iconSizeLabel,
                                                'Icon spacing:', 0, 25, 15)
-    iconSpacingLabel:SetWidth(150) -- Устанавливаем ширину метки
+    iconSpacingLabel:SetWidth(150) -- Set label width
     local iconSpacing = helpers.createEdit('iconSpacing', iconSpacingLabel,
                                          settings.iconSpacing, 200, 0)
     if iconSpacing then 
         iconSpacing:SetMaxTextLength(4) 
-        iconSpacing:SetWidth(50) -- Увеличиваем ширину поля ввода
+        iconSpacing:SetWidth(50) -- Increase input field width
     end
     settingsControls.iconSpacing = iconSpacing
     
-    -- Группа настроек положения иконок
+    -- Icon position group
     local positionLabel = helpers.createLabel('positionLabel', iconSpacingLabel,
                                             'Icon position', 0, 35, 18)
-    positionLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
+    positionLabel:SetWidth(570) -- Increase header width
                                             
-    -- Координата X
+    -- X coordinate
     local posXLabel = helpers.createLabel('posXLabel', positionLabel,
                                         'Position X:', 0, 25, 15)
-    posXLabel:SetWidth(150) -- Устанавливаем ширину метки
+    posXLabel:SetWidth(150) -- Set label width
     local posX = helpers.createEdit('posX', posXLabel,
                                   settings.posX, 200, 0)
     if posX then 
         posX:SetMaxTextLength(6) 
-        posX:SetWidth(50) -- Увеличиваем ширину поля ввода
+        posX:SetWidth(50) -- Increase input field width
     end
     settingsControls.posX = posX
     
-    -- Координата Y
+    -- Y coordinate
     local posYLabel = helpers.createLabel('posYLabel', posXLabel,
                                         'Position Y:', 0, 25, 15)
-    posYLabel:SetWidth(150) -- Устанавливаем ширину метки
+    posYLabel:SetWidth(150) -- Set label width
     local posY = helpers.createEdit('posY', posYLabel,
                                   settings.posY, 200, 0)
     if posY then 
         posY:SetMaxTextLength(6) 
-        posY:SetWidth(50) -- Увеличиваем ширину поля ввода
+        posY:SetWidth(50) -- Increase input field width
     end
     settingsControls.posY = posY
     
-    -- Блокировка перемещения
+    -- Lock positioning
     local lockPositioning = helpers.createCheckbox('lockPositioning', posYLabel,
                                                  "Lock icon movement", 0, 25)
     if lockPositioning then 
@@ -637,40 +637,40 @@ local function initSettingsPage()
     end
     settingsControls.lockPositioning = lockPositioning
     
-    -- Настройки таймера
+    -- Timer settings
     local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockPositioning,
                                              'Timer settings', 0, 35, 18)
-    timerGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
+    timerGroupLabel:SetWidth(570) -- Increase header width
     
-    -- Размер шрифта таймера
+    -- Timer font size
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
                                                 'Font size:', 0, 25, 15)
-    timerFontSizeLabel:SetWidth(150) -- Устанавливаем ширину метки
+    timerFontSizeLabel:SetWidth(150) -- Set label width
     local timerFontSize = helpers.createEdit('timerFontSize', timerFontSizeLabel,
                                           settings.timerFontSize, 200, 0)
     if timerFontSize then 
         timerFontSize:SetMaxTextLength(4) 
-        timerFontSize:SetWidth(50) -- Увеличиваем ширину поля ввода
+        timerFontSize:SetWidth(50) -- Increase input field width
     end
     settingsControls.timerFontSize = timerFontSize
     
-    -- Цвет текста таймера
+    -- Timer text color
     local timerTextColorLabel = helpers.createLabel('timerTextColorLabel', timerFontSizeLabel,
                                                  'Text color:', 0, 25, 15)
-    timerTextColorLabel:SetWidth(150) -- Устанавливаем ширину метки
+    timerTextColorLabel:SetWidth(150) -- Set label width
     
-    -- Получаем цвет текста таймера из настроек для выбранного типа юнита
+    -- Get timer text color from settings for selected unit type
     local unitSettings = settings[currentUnitType] or {}
     local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
     
     local timerTextColor = helpers.createColorPickButton('timerTextColor', timerTextColorLabel, 
                                                       textColor, 200, 0)
     
-    -- Настраиваем обработчик выбора цвета для сохранения выбранного цвета
+    -- Configure color picker handler to save selected color
     if timerTextColor and timerTextColor.colorBG then
         function timerTextColor:SelectedProcedure(r, g, b, a)
             self.colorBG:SetColor(r, g, b, a)
-            -- Сохраняем цвет для будущего использования
+            -- Save color for future use
             local mainSettings = api.GetSettings("CooldawnBuffTracker")
             if not mainSettings[currentUnitType] then
                 mainSettings[currentUnitType] = {}
@@ -681,12 +681,12 @@ local function initSettingsPage()
     
     settingsControls.timerTextColor = timerTextColor
     
-    -- Добавляем настройки отладки с лучшим расположением
+    -- Add debug settings with better location
     local debugGroupLabel = helpers.createLabel('debugGroupLabel', timerTextColorLabel,
                                              'Debug settings', 0, 35, 18)
-    debugGroupLabel:SetWidth(570) -- Увеличиваем ширину заголовка группы настроек
+    debugGroupLabel:SetWidth(570) -- Increase header width
     
-    -- Чекбокс для отладки buff ID - изменяем позицию для лучшего отображения
+    -- Checkbox for debug buff ID - change position for better display
     local debugBuffId = helpers.createCheckbox('debugBuffId', debugGroupLabel,
                                             "Debug buffId", 0, 25)
     if debugBuffId then 
@@ -694,7 +694,7 @@ local function initSettingsPage()
     end
     settingsControls.debugBuffId = debugBuffId
     
-    -- Создаем кнопки Сохранить и Отмена
+    -- Create save and cancel buttons
     local saveButton = helpers.createButton("saveButton", settingsWindow, "Save", 0, 0)
     saveButton:SetExtent(120, 30)
     saveButton:RemoveAllAnchors()
@@ -722,24 +722,24 @@ local function initSettingsPage()
     end)
     settingsControls.cancelButton = cancelButton
     
-    -- Финальная проверка - вызываем ещё раз обновление списка для уверенности
+    -- Final check - call update one more time for confidence
     pcall(function()
-        -- Заставляем обновить список еще раз
+        -- Force update list one more time
         updateTrackedBuffsList()
         
-        -- Заставляем показать все критические элементы
+        -- Force show all critical elements
         settingsControls.buffsListContainer:Show(true)
         settingsControls.trackedBuffsListHeader:Show(true)
         
-        -- Скрываем панель ошибок при первом открытии
+        -- Hide error panel on first opening
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
         
-        -- Проверяем наличие баффов в списке
+        -- Check buffs existence in list
         local buffIds = BuffsToTrack.GetAllTrackedBuffIds()
         if #buffIds == 0 then
-            -- Добавляем информационное сообщение для пустого списка
+            -- Add informational message for empty list
             local emptyLabel = helpers.createLabel('initialEmptyLabel', settingsControls.buffsListContainer, 
                                                 'Empty list. Add new buff below.', 10, 10, 14)
             table.insert(trackedBuffsList, emptyLabel)
@@ -753,7 +753,7 @@ local function Unload()
         settingsWindow = nil
     end
     
-    -- Закрываем палитру, если она открыта
+    -- Close palette if it's open
     local F_ETC = nil
     F_ETC = require('CooldawnBuffTracker/util/etc') or require('util/etc') or require('./util/etc')
     if F_ETC then
@@ -767,15 +767,15 @@ local function openSettingsWindow()
         return
     end
     
-    -- Если окно уже было инициализировано, просто показываем его
+    -- If window was already initialized, just show it
     if settingsWindow then
-        -- Обновляем настройки полей для текущего типа юнита
+        -- Update settings fields for current unit type
         updateSettingsFields()
         
-        -- Обновляем список отслеживаемых баффов при каждом открытии окна настроек
+        -- Update tracked buffs list on each window opening
         updateTrackedBuffsList()
         
-        -- Скрываем панель ошибок при каждом открытии окна
+        -- Hide error panel on each window opening
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
@@ -785,11 +785,11 @@ local function openSettingsWindow()
         return
     end
     
-    -- Если окно не было инициализировано, создаем его
+    -- If window wasn't initialized, create it
     initSettingsPage()
     
     if settingsWindow then
-        -- Обновляем настройки полей для текущего типа юнита
+        -- Update settings fields for current unit type
         updateSettingsFields()
         
         settingsWindow:Show(true)

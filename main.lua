@@ -9,7 +9,7 @@ pcall(function()
   BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track") or require("buffs_to_track") or require("./buffs_to_track")
 end)
 
--- Подключаем новые модули настроек
+-- Connect new settings modules
 local helpers
 pcall(function()
   helpers = require("CooldawnBuffTracker/helpers") or require("helpers") or require("./helpers")
@@ -20,12 +20,12 @@ pcall(function()
   settingsPage = require("CooldawnBuffTracker/settings_page") or require("settings_page") or require("./settings_page")
 end)
 
--- Объявляем переменные для кэширования состояний баффов (добавляем в начало файла после остальных переменных)
+-- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
 local cachedBuffStatus = {}
 
--- Функция для получения списка отслеживаемых баффов из настроек
+-- Function to get a list of tracked buffs from settings
 local function getTrackedBuffsFromSettings(unitType)
   local settings = api.GetSettings("CooldawnBuffTracker") or {}
   local trackedBuffs = {}
@@ -37,7 +37,7 @@ local function getTrackedBuffsFromSettings(unitType)
   return trackedBuffs
 end
 
--- Замена для BuffsToTrack, если модуль не загрузился
+-- Replacement for BuffsToTrack if module not loaded
 if not BuffsToTrack then
   BuffsToTrack = {
     ShouldTrackBuff = function(id, unitType) 
@@ -53,17 +53,17 @@ if not BuffsToTrack then
       return getTrackedBuffsFromSettings(unitType)
     end
   }
-  pcall(function() api.Log:Info("Не удалось загрузить buffs_to_track.lua, используем настройки") end)
+  pcall(function() api.Log:Info("Failed to load buffs_to_track.lua, using settings") end)
 end
 
 if not BuffList then
   BuffList = {
-    GetBuffName = function(id) return "Бафф #" .. id end,
+    GetBuffName = function(id) return "Buff #" .. id end,
     GetBuffIcon = function(id) return nil end,
     GetBuffCooldown = function(id) return 0 end,
     GetBuffTimeOfAction = function(id) return 0 end
   }
-  pcall(function() api.Log:Info("Не удалось загрузить buff_helper.lua, используем заглушку") end)
+  pcall(function() api.Log:Info("Failed to load buff_helper.lua, using placeholder") end)
 end
 
 local CooldawnBuffTracker = {
@@ -96,9 +96,9 @@ local defaultPositionX = 330
 local defaultPositionY = 30
 
 local ICON_COLORS = {
-  READY = {1, 1, 1, 1},          -- Белый (не изменяется)
-  ACTIVE = {0.2, 1, 0.2, 1},     -- Более яркий зеленый
-  COOLDOWN = {1, 0.2, 0.2, 1}    -- Более яркий красный
+  READY = {1, 1, 1, 1},          -- White (unchanged)
+  ACTIVE = {0.2, 1, 0.2, 1},     -- Brighter green
+  COOLDOWN = {1, 0.2, 0.2, 1}    -- Brighter red
 }
 
 local settings = {}
@@ -127,25 +127,25 @@ local function getCurrentTime()
 end
 
 local function initBuffData()
-  -- Инициализация данных для маунта (playerpet)
+  -- Initialize data for mount (playerpet)
   local trackedMountBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
   
-  -- Создаем таблицу для проверки существующих баффов маунта
+  -- Create a table to check existing mount buffs
   local trackedMountBuffsMap = {}
   for _, buffId in ipairs(trackedMountBuffIds) do
     trackedMountBuffsMap[buffId] = true
   end
   
-  -- Удаляем из buffData баффы, которые больше не отслеживаются
+  -- Remove buffs that are no longer tracked from buffData
   for buffId in pairs(buffData) do
     if not trackedMountBuffsMap[buffId] then
-      -- Если бафф больше не отслеживается, удаляем его из данных
+      -- If buff is no longer tracked, remove it from data
       buffData[buffId] = nil
-      safeLog("Удален бафф маунта из отслеживания: " .. tostring(buffId))
+      safeLog("Mount buff removed from tracking: " .. tostring(buffId))
     end
   end
   
-  -- Добавляем новые баффы маунта
+  -- Add new mount buffs
   for _, buffId in ipairs(trackedMountBuffIds) do
     if not buffData[buffId] then
       local buffName = BuffList.GetBuffName(buffId)
@@ -170,29 +170,29 @@ local function initBuffData()
         status = "ready"
       }
       
-      safeLog("Добавлен бафф маунта для отслеживания: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
+      safeLog("Mount buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
     end
   end
   
-  -- Инициализация данных для игрока (player)
+  -- Initialize data for player (player)
   local trackedPlayerBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
   
-  -- Создаем таблицу для проверки существующих баффов игрока
+  -- Create a table to check existing player buffs
   local trackedPlayerBuffsMap = {}
   for _, buffId in ipairs(trackedPlayerBuffIds) do
     trackedPlayerBuffsMap[buffId] = true
   end
   
-  -- Удаляем из playerBuffData баффы, которые больше не отслеживаются
+  -- Remove buffs that are no longer tracked from playerBuffData
   for buffId in pairs(playerBuffData) do
     if not trackedPlayerBuffsMap[buffId] then
-      -- Если бафф больше не отслеживается, удаляем его из данных
+      -- If buff is no longer tracked, remove it from data
       playerBuffData[buffId] = nil
-      safeLog("Удален бафф игрока из отслеживания: " .. tostring(buffId))
+      safeLog("Player buff removed from tracking: " .. tostring(buffId))
     end
   end
   
-  -- Добавляем новые баффы игрока
+  -- Add new player buffs
   for _, buffId in ipairs(trackedPlayerBuffIds) do
     if not playerBuffData[buffId] then
       local buffName = BuffList.GetBuffName(buffId)
@@ -217,7 +217,7 @@ local function initBuffData()
         status = "ready"
       }
       
-      safeLog("Добавлен бафф игрока для отслеживания: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
+      safeLog("Player buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
     end
   end
 end
@@ -234,14 +234,14 @@ local function setBuffStatus(buffId, status, currentTime, unitType)
     if status == "active" then
       buff.fixedTime = currentTime
     elseif status == "cooldown" and not buff.fixedTime then
-      -- Если баф переходит в кулдаун, но fixedTime не установлен, 
-      -- устанавливаем текущее время как время начала кулдауна
+      -- If buff transitions to cooldown, but fixedTime is not set,
+      -- set current time as cooldown start time
       buff.fixedTime = currentTime
     end
     
     buff.statusChangeTime = currentTime
   else
-    -- По умолчанию работаем с маунтом
+    -- Default work with mount
     if not buffData[buffId] then return end
     
     local buff = buffData[buffId]
@@ -252,8 +252,8 @@ local function setBuffStatus(buffId, status, currentTime, unitType)
     if status == "active" then
       buff.fixedTime = currentTime
     elseif status == "cooldown" and not buff.fixedTime then
-      -- Если баф переходит в кулдаун, но fixedTime не установлен, 
-      -- устанавливаем текущее время как время начала кулдауна
+      -- If buff transitions to cooldown, but fixedTime is not set,
+      -- set current time as cooldown start time
       buff.fixedTime = currentTime
     end
     
@@ -313,9 +313,9 @@ local function createChildWidgetSafe(parent, widgetType, name, index)
   return widget
 end
 
--- Функция для создания иконки баффа
+-- Function to create buff icon
 local function addBuffIcon(parent, index, unitType)
-  unitType = unitType or "playerpet" -- По умолчанию используем маунта
+  unitType = unitType or "playerpet" -- Use mount by default
   
   local unitSettings = settings[unitType] or settings.playerpet
   
@@ -325,53 +325,53 @@ local function addBuffIcon(parent, index, unitType)
   pcall(function()
     icon:SetExtent(unitSettings.iconSize, unitSettings.iconSize)
     
-    -- Явно вычисляем позицию иконки с учетом текущего интервала
+    -- Explicitly calculate icon position taking into account current interval
     local xPosition = (index-1) * (unitSettings.iconSize + unitSettings.iconSpacing)
     icon:AddAnchor("LEFT", parent, xPosition, 0)
     
-    -- Создаем цветной оверлей для иконки (будет показывать статус)
+    -- Create a color overlay for the icon (will show status)
     local statusOverlay = icon:CreateColorDrawable(0, 0, 0, 0, "overlay")
     statusOverlay:AddAnchor("TOPLEFT", icon, 0, 0)
     statusOverlay:AddAnchor("BOTTOMRIGHT", icon, 0, 0)
     icon.statusOverlay = statusOverlay
     
-    -- Создаем рамку вокруг иконки
+    -- Create a border around the icon
     local borderSize = 2
     
-    -- Верхняя рамка
+    -- Top border
     local topBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
     topBorder:AddAnchor("TOPLEFT", icon, -borderSize, -borderSize)
     topBorder:AddAnchor("TOPRIGHT", icon, borderSize, -borderSize)
     topBorder:SetHeight(borderSize)
     icon.topBorder = topBorder
     
-    -- Нижняя рамка
+    -- Bottom border
     local bottomBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
     bottomBorder:AddAnchor("BOTTOMLEFT", icon, -borderSize, borderSize)
     bottomBorder:AddAnchor("BOTTOMRIGHT", icon, borderSize, borderSize)
     bottomBorder:SetHeight(borderSize)
     icon.bottomBorder = bottomBorder
     
-    -- Левая рамка
+    -- Left border
     local leftBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
     leftBorder:AddAnchor("TOPLEFT", icon, -borderSize, -borderSize)
     leftBorder:AddAnchor("BOTTOMLEFT", icon, -borderSize, borderSize)
     leftBorder:SetWidth(borderSize)
     icon.leftBorder = leftBorder
     
-    -- Правая рамка
+    -- Right border
     local rightBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
     rightBorder:AddAnchor("TOPRIGHT", icon, borderSize, -borderSize)
     rightBorder:AddAnchor("BOTTOMRIGHT", icon, borderSize, borderSize)
     rightBorder:SetWidth(borderSize)
     icon.rightBorder = rightBorder
     
-    -- Сохраняем параметры создания для диагностики
+    -- Save creation parameters for diagnostics
     icon.createdWithSize = unitSettings.iconSize
     icon.createdWithSpacing = unitSettings.iconSpacing
     icon.iconIndex = index
     
-    -- Создаем фон для иконки
+    -- Create background for icon
     local slotStyle = {
         path = TEXTURE_PATH.HUD,
         coords = {685, 130, 7, 8},
@@ -383,7 +383,7 @@ local function addBuffIcon(parent, index, unitType)
     icon:Show(false)
   end)
   
-  -- Создаем лейбл для названия
+  -- Create label for name
   local nameLabel = createChildWidgetSafe(icon, "label", "nameLabel_" .. index)
   if nameLabel then
     pcall(function()
@@ -393,7 +393,7 @@ local function addBuffIcon(parent, index, unitType)
       nameLabel.style:SetAlign(ALIGN.CENTER)
       nameLabel.style:SetShadow(true)
       
-      -- Устанавливаем цвет из настроек
+      -- Set color from settings
       if unitSettings.labelTextColor then
         nameLabel.style:SetColor(
           unitSettings.labelTextColor.r or 1, 
@@ -1286,7 +1286,7 @@ local function OnLoad()
   
   if not BuffList then
     BuffList = {
-      GetBuffName = function(id) return "Бафф #" .. id end,
+      GetBuffName = function(id) return "Buff #" .. id end,
       GetBuffIcon = function(id) return nil end,
       GetBuffCooldown = function(id) return 0 end,
       GetBuffTimeOfAction = function(id) return 0 end
@@ -1412,11 +1412,11 @@ local function OnLoad()
   
   -- Проверяем, есть ли отслеживаемые баффы маунта при загрузке
   local shouldShowMountUI = hasTrackedBuffs("playerpet")
-  safeLog("Инициализация UI маунта: " .. (shouldShowMountUI and "показать" or "скрыть"))
+  safeLog("Mount UI initialization: " .. (shouldShowMountUI and "show" or "hide"))
   
   -- Проверяем, есть ли отслеживаемые баффы игрока при загрузке
   local shouldShowPlayerUI = hasTrackedBuffs("player")
-  safeLog("Инициализация UI игрока: " .. (shouldShowPlayerUI and "показать" or "скрыть"))
+  safeLog("Player UI initialization: " .. (shouldShowPlayerUI and "show" or "hide"))
   
   -- Создаем канвас для маунта, если есть отслеживаемые баффы
   if shouldShowMountUI then
