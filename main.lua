@@ -654,7 +654,7 @@ local function createPlayerBuffCanvas()
       end
       
       self:StopMovingOrSizing()
-      -- Возвращаем обычную непрозрачность после перетаскивания
+      -- Return to normal opacity after dragging
       if self.bg then
         self.bg:SetColor(0, 0, 0, 0.4)
       end
@@ -663,12 +663,12 @@ local function createPlayerBuffCanvas()
       settings.player.posX = x
       settings.player.posY = y
       
-      -- Обновляем поля в окне настроек, если оно открыто
+      -- Update fields in settings window if it's open
       if settingsPage and settingsPage.updatePositionFields then
         settingsPage.updatePositionFields(x, y)
       end
       
-      -- Сохраняем настройки через helpers
+      -- Save settings through helpers
       if helpers and helpers.updateSettings then
         helpers.updateSettings()
       end
@@ -677,16 +677,16 @@ local function createPlayerBuffCanvas()
       api.Cursor:ClearCursor()
     end
     
-    -- Устанавливаем обработчики событий перетаскивания
+    -- Set event handlers for dragging
     canvas:SetHandler("OnDragStart", canvas.OnDragStart)
     canvas:SetHandler("OnDragStop", canvas.OnDragStop)
     
-    -- Регистрируем перетаскивание с помощью левой кнопки мыши
+    -- Register dragging with left mouse button
     if canvas.RegisterForDrag ~= nil then
       canvas:RegisterForDrag("LeftButton")
     end
     
-    -- Включаем/отключаем перетаскивание в зависимости от настроек
+    -- Enable/disable dragging based on settings
     if canvas.EnableDrag ~= nil then
       canvas:EnableDrag(not settings.player.lockPositioning)
     end
@@ -695,31 +695,31 @@ local function createPlayerBuffCanvas()
   return canvas
 end
 
--- Функция для проверки наличия баффов для отслеживания
+-- Function to check if there are buffs to track
 local function hasTrackedBuffs(unitType)
-  -- Сначала проверяем настройку, которая полностью отключает отслеживание
+  -- First check the setting that completely disables tracking
   local settings = api.GetSettings("CooldawnBuffTracker") or {}
   
   if unitType == "player" then
-    -- Проверяем настройки для игрока
+    -- Check settings for player
     if not settings.player or settings.player.enabled == false then
       return false
     end
     
-    -- Проверяем наличие баффов в списке
+    -- Check if there are buffs in the list
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
     return #trackedBuffIds > 0
   elseif unitType == "playerpet" then
-    -- Проверяем настройки для маунта
+    -- Check settings for mount
     if not settings.playerpet or settings.playerpet.enabled == false then
       return false
     end
     
-    -- Проверяем наличие баффов в списке
+    -- Check if there are buffs in the list
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
     return #trackedBuffIds > 0
   else
-    -- Если тип не указан, проверяем наличие баффов для любого типа
+    -- If type is not specified, check for buffs of any type
     local trackedMountBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
     local trackedPlayerBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
     
@@ -951,7 +951,7 @@ local function updateBuffIcons()
   end)
   
   if not status then
-    safeLog("Ошибка при обновлении иконок: " .. tostring(err))
+    safeLog("Error updating icons: " .. tostring(err))
   end
 end
 
@@ -989,10 +989,10 @@ local function checkMountBuffs()
         -- Записываем ID текущих баффов для дальнейшего сравнения
         currentBuffsOnMount[buff.buff_id] = true
         
-        -- Для режима отладки регистрируем новые баффы маунта
+        -- For debug mode register new mount buffs
         if settings.debugBuffId and not cachedMountBuffs[buff.buff_id] then
           pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] Новый бафф на маунте: " .. tostring(buff.buff_id))
+            api.Log:Info("[CooldawnBuffTracker] New mount buff: " .. tostring(buff.buff_id))
           end)
         end
         
@@ -1016,10 +1016,10 @@ local function checkMountBuffs()
           setBuffStatus(buffId, "active", currentTime, "playerpet")
           hasChanges = true
           
-          -- Логируем только изменение статуса для отслеживаемых баффов
+          -- Log only status change for tracked buffs
           if settings.debugBuffId and cachedBuffStatus[buffId] ~= "active" then
             pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d сменил статус на: active", buffId))
+              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: active", buffId))
             end)
           end
           
@@ -1034,10 +1034,10 @@ local function checkMountBuffs()
             setBuffStatus(buffId, expectedStatus, currentTime, "playerpet")
             hasChanges = true
             
-            -- Логируем только изменение статуса для отслеживаемых баффов
+            -- Log only status change for tracked buffs
             if settings.debugBuffId and cachedBuffStatus[buffId] ~= expectedStatus then
               pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d сменил статус на: %s", buffId, expectedStatus))
+                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: %s", buffId, expectedStatus))
               end)
             end
             
@@ -1048,10 +1048,10 @@ local function checkMountBuffs()
           setBuffStatus(buffId, "ready", nil, "playerpet")
           hasChanges = true
           
-          -- Логируем только изменение статуса для отслеживаемых баффов
+          -- Log only status change for tracked buffs
           if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
             pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d сменил статус на: ready", buffId))
+              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: ready", buffId))
             end)
           end
           
@@ -1061,12 +1061,12 @@ local function checkMountBuffs()
       end
     end
     
-    -- Проверяем, исчезли ли какие-то баффы с маунта
+    -- Check if any buffs have disappeared from mount
     if settings.debugBuffId then
       for buffId in pairs(cachedMountBuffs) do
         if not currentBuffsOnMount[buffId] then
           pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] Бафф исчез с маунта: " .. tostring(buffId))
+            api.Log:Info("[CooldawnBuffTracker] Buff disappeared from mount: " .. tostring(buffId))
           end)
         end
       end
@@ -1078,11 +1078,11 @@ local function checkMountBuffs()
   end)
   
   if not status then
-    safeLog("Ошибка при проверке баффов: " .. tostring(err))
+    safeLog("Error checking buffs: " .. tostring(err))
   end
 end
 
--- Функция для проверки наличия баффов игрока
+-- Function to check for player buffs
 local function checkPlayerBuffs()
   local status, err = pcall(function()
     -- Скрываем окно, если аддон выключен в настройках
@@ -1120,10 +1120,10 @@ local function checkPlayerBuffs()
           -- Записываем ID текущих баффов для дальнейшего сравнения
           currentBuffsOnPlayer[buff.buff_id] = true
           
-          -- Для режима отладки регистрируем новые баффы игрока
+          -- For debug mode register new player buffs
           if settings.debugBuffId and not cachedPlayerBuffs[buff.buff_id] then
             pcall(function()
-              api.Log:Info("[CooldawnBuffTracker] Новый бафф на игроке: " .. tostring(buff.buff_id))
+              api.Log:Info("[CooldawnBuffTracker] New player buff: " .. tostring(buff.buff_id))
             end)
             cachedPlayerBuffs[buff.buff_id] = true
           end
@@ -1136,10 +1136,10 @@ local function checkPlayerBuffs()
               setBuffStatus(buff.buff_id, "active", getCurrentTime(), "player")
               hasChanges = true
               
-              -- Логируем только изменение статуса для отслеживаемых баффов
+              -- Log only status change for tracked buffs
               if settings.debugBuffId then
                 pcall(function()
-                  api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d (player) сменил статус на: active", buff.buff_id))
+                  api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: active", buff.buff_id))
                 end)
               end
               
@@ -1164,10 +1164,10 @@ local function checkPlayerBuffs()
           setBuffStatus(buffId, "cooldown", currentTime, "player")
           hasChanges = true
           
-          -- Логируем только изменение статуса для отслеживаемых баффов
+          -- Log only status change for tracked buffs
           if settings.debugBuffId and cachedBuffStatus[buffId] ~= "cooldown" then
             pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d (player) сменил статус на: cooldown", buffId))
+              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: cooldown", buffId))
             end)
           end
           
@@ -1183,10 +1183,10 @@ local function checkPlayerBuffs()
             setBuffStatus(buffId, "ready", currentTime, "player")
             hasChanges = true
             
-            -- Логируем только изменение статуса для отслеживаемых баффов
+            -- Log only status change for tracked buffs
             if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
               pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Бафф ID %d (player) сменил статус на: ready", buffId))
+                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: ready", buffId))
               end)
             end
             
@@ -1211,7 +1211,7 @@ local function checkPlayerBuffs()
           isPlayerCanvasInitialized = true
         end)
         if not success then
-          safeLog("Ошибка при инициализации канваса баффов игрока")
+          safeLog("Error initializing player buff canvas")
         end
       end
       
@@ -1226,7 +1226,7 @@ local function checkPlayerBuffs()
   end)
   
   if not status then
-    safeLog("Ошибка при проверке баффов игрока: " .. tostring(err))
+    safeLog("Error checking player buffs: " .. tostring(err))
   end
 end
 
@@ -1367,14 +1367,14 @@ local function OnLoad()
     settings.timerY = nil
     settings.trackedBuffs = nil
     
-    -- Сохраняем обновленные настройки
+    -- Save updated settings
     if helpers and helpers.updateSettings then
       helpers.updateSettings(settings)
     else
       api.SaveSettings()
     end
     
-    safeLog("Настройки мигрированы на новую структуру с разделением на playerpet и player")
+    safeLog("Settings migrated to new structure with separation for playerpet and player")
   end
   
   -- Проверяем наличие ключа debugBuffId
@@ -1426,9 +1426,9 @@ local function OnLoad()
       isCanvasInitialized = true
       updateBuffIcons()
     else
-      safeLog("Ошибка при создании канваса баффов маунта: " .. tostring(result))
+      safeLog("Error creating mount buff canvas: " .. tostring(result))
       
-      -- Повторная попытка создания канваса с задержкой
+      -- Repeat attempt to create canvas with delay
       api:DoIn(1000, function()
         local retrySuccess, retryResult = pcall(createBuffCanvas)
         if retrySuccess and retryResult then
@@ -1436,7 +1436,7 @@ local function OnLoad()
           isCanvasInitialized = true
           updateBuffIcons()
         else
-          safeLog("Повторная ошибка при создании канваса баффов маунта: " .. tostring(retryResult))
+          safeLog("Repeated error creating mount buff canvas: " .. tostring(retryResult))
         end
       end)
     end
@@ -1450,9 +1450,9 @@ local function OnLoad()
       isPlayerCanvasInitialized = true
       updatePlayerBuffIcons()
     else
-      safeLog("Ошибка при создании канваса баффов игрока: " .. tostring(result))
+      safeLog("Error creating player buff canvas: " .. tostring(result))
       
-      -- Повторная попытка создания канваса с задержкой
+      -- Repeat attempt to create canvas with delay
       api:DoIn(1000, function()
         local retrySuccess, retryResult = pcall(createPlayerBuffCanvas)
         if retrySuccess and retryResult then
@@ -1460,7 +1460,7 @@ local function OnLoad()
           isPlayerCanvasInitialized = true
           updatePlayerBuffIcons()
         else
-          safeLog("Повторная ошибка при создании канваса баффов игрока: " .. tostring(retryResult))
+          safeLog("Repeated error creating player buff canvas: " .. tostring(retryResult))
         end
       end)
     end
@@ -1587,27 +1587,27 @@ end
 -- Обработчик события обновления списка отслеживаемых баффов
 pcall(function()
   api.On("MOUNT_BUFF_TRACKER_UPDATE_BUFFS", function()
-    safeLog("Получено событие обновления списка баффов")
+    safeLog("Received buffs list update event")
     
-    -- Обновляем данные баффов (включая удаление ненужных)
+    -- Update buff data (including removing unnecessary ones)
     local oldMountBuffsCount = 0
     for _ in pairs(buffData) do oldMountBuffsCount = oldMountBuffsCount + 1 end
     
     local oldPlayerBuffsCount = 0
     for _ in pairs(playerBuffData) do oldPlayerBuffsCount = oldPlayerBuffsCount + 1 end
     
-    -- Инициализируем данные баффов
+    -- Initialize buff data
     initBuffData()
     
-    -- Подсчитываем новое количество баффов
+    -- Count new number of buffs
     local newMountBuffsCount = 0
     for _ in pairs(buffData) do newMountBuffsCount = newMountBuffsCount + 1 end
     
     local newPlayerBuffsCount = 0
     for _ in pairs(playerBuffData) do newPlayerBuffsCount = newPlayerBuffsCount + 1 end
     
-    safeLog("Обновление списка баффов маунта: было " .. oldMountBuffsCount .. ", стало " .. newMountBuffsCount)
-    safeLog("Обновление списка баффов игрока: было " .. oldPlayerBuffsCount .. ", стало " .. newPlayerBuffsCount)
+    safeLog("Mount buffs list update: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
+    safeLog("Player buffs list update: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
     
     -- Проверяем, нужно ли показывать канвас маунта
     local shouldShowMountUI = hasTrackedBuffs("playerpet")
@@ -1891,7 +1891,7 @@ function updatePlayerBuffIcons()
   end)
   
   if not status then
-    safeLog("Ошибка при обновлении иконок баффов игрока: " .. tostring(err))
+    safeLog("Error updating player buff icons: " .. tostring(err))
   end
 end
 
