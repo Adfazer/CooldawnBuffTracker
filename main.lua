@@ -410,11 +410,11 @@ local function addBuffIcon(parent, index, unitType)
     end)
   end
   
-  -- Создаем полупрозрачный фон для таймера (без изображения, только с цветом)
+  -- Create semi-transparent background for timer (no image, only color)
   local timerBg = createChildWidgetSafe(icon, "window", "timerBg_" .. index)
   if timerBg then
     pcall(function()
-      -- Создаем полупрозрачный цветной фон, а не изображение
+      -- Create semi-transparent color background, not an image
       local bg = timerBg:CreateColorDrawable(0, 0, 0, 0.5, "background")
       timerBg:SetExtent(unitSettings.iconSize, unitSettings.iconSize/2)
       timerBg:AddAnchor("BOTTOM", icon, 0, 0)
@@ -422,7 +422,7 @@ local function addBuffIcon(parent, index, unitType)
     end)
   end
   
-  -- Создаем лейбл для таймера
+  -- Create label for timer
   local timerLabel = createChildWidgetSafe(icon, "label", "timerLabel_" .. index)
   pcall(function()
     timerLabel:SetExtent(unitSettings.iconSize, unitSettings.iconSize/2)
@@ -431,7 +431,7 @@ local function addBuffIcon(parent, index, unitType)
     timerLabel.style:SetAlign(ALIGN.CENTER)
     timerLabel.style:SetShadow(true)
     
-    -- Устанавливаем цвет из настроек
+    -- Set color from settings
     if unitSettings.timerTextColor then
       timerLabel.style:SetColor(
         unitSettings.timerTextColor.r or 1, 
@@ -461,10 +461,10 @@ local function createBuffCanvas()
   end
   
   pcall(function()    
-    -- Устанавливаем размер холста
+    -- Set canvas size
     canvas:SetExtent(settings.playerpet.iconSize * 3, settings.playerpet.iconSize * 1.5)
     
-    -- Явно устанавливаем позицию холста из настроек
+    -- Explicitly set canvas position from settings
     canvas:RemoveAllAnchors()
     canvas:AddAnchor("TOPLEFT", "UIParent", settings.playerpet.posX, settings.playerpet.posY)
     
@@ -490,35 +490,35 @@ local function createBuffCanvas()
   for i = 1, 10 do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, "playerpet")
     
-    -- Дополнительно убедимся, что иконка имеет правильную позицию, основанную на настройках
+    -- Ensure that the icon has the correct position based on settings
     if canvas.buffIcons[i] then
       pcall(function()
         canvas.buffIcons[i]:RemoveAllAnchors()
         canvas.buffIcons[i]:SetExtent(settings.playerpet.iconSize, settings.playerpet.iconSize)
         
-        -- Явно вычисляем позицию иконки с учетом текущего интервала
+        -- Explicitly calculate icon position taking into account current interval
         local xPosition = (i-1) * (settings.playerpet.iconSize + settings.playerpet.iconSpacing)
         canvas.buffIcons[i]:AddAnchor("LEFT", canvas, xPosition, 0)
       end)
     end
   end
   
-  -- Реализация перетаскивания (drag) для canvas
+  -- Implementation of drag functionality for canvas
   pcall(function()
-    -- Флаг для отслеживания состояния перетаскивания
+    -- Flag to track dragging state
     canvas.isDragging = false
     
-    -- Определяем функции для перетаскивания
+    -- Define functions for dragging
     canvas.OnDragStart = function(self, arg)
-      -- Проверяем, не заблокировано ли перемещение
+      -- Check if movement is blocked
       if settings.playerpet.lockPositioning then
         return
       end
       
       self.isDragging = true
-      -- Делаем фон более заметным во время перетаскивания
+      -- Make the background more visible during dragging
       if self.bg then
-        self.bg:SetColor(0, 0, 0, 0.6)  -- Более высокая непрозрачность при перетаскивании
+        self.bg:SetColor(0, 0, 0, 0.6)  -- Higher opacity during dragging
       end
       
       self:StartMoving()
@@ -527,13 +527,13 @@ local function createBuffCanvas()
     end
     
     canvas.OnDragStop = function(self)
-      -- Проверяем, не заблокировано ли перемещение
+      -- Check if movement is blocked
       if settings.playerpet.lockPositioning then
         return
       end
       
       self:StopMovingOrSizing()
-      -- Возвращаем обычную непрозрачность после перетаскивания
+      -- Return to normal opacity after dragging
       if self.bg then
         self.bg:SetColor(0, 0, 0, 0.4)
       end
@@ -542,12 +542,12 @@ local function createBuffCanvas()
       settings.playerpet.posX = x
       settings.playerpet.posY = y
       
-      -- Обновляем поля в окне настроек, если оно открыто
+      -- Update fields in settings window if it's open
       if settingsPage and settingsPage.updatePositionFields then
         settingsPage.updatePositionFields(x, y)
       end
       
-      -- Сохраняем настройки через helpers
+      -- Save settings through helpers
       if helpers and helpers.updateSettings then
         helpers.updateSettings()
       end
@@ -556,16 +556,16 @@ local function createBuffCanvas()
       api.Cursor:ClearCursor()
     end
     
-    -- Устанавливаем обработчики событий перетаскивания
+    -- Set event handlers for dragging
     canvas:SetHandler("OnDragStart", canvas.OnDragStart)
     canvas:SetHandler("OnDragStop", canvas.OnDragStop)
     
-    -- Регистрируем перетаскивание с помощью левой кнопки мыши
+    -- Register dragging with left mouse button
     if canvas.RegisterForDrag ~= nil then
       canvas:RegisterForDrag("LeftButton")
     end
     
-    -- Включаем/отключаем перетаскивание в зависимости от настроек
+    -- Enable/disable dragging based on settings
     if canvas.EnableDrag ~= nil then
       canvas:EnableDrag(not settings.playerpet.lockPositioning)
     end
@@ -574,7 +574,7 @@ local function createBuffCanvas()
   return canvas
 end
 
--- Создаем новую функцию для создания канваса баффов игрока
+-- Create new function for player buff canvas creation
 local function createPlayerBuffCanvas()
   local canvas = api.Interface:CreateEmptyWindow("PlayerBuffCanvas")
   if not canvas then
@@ -582,10 +582,10 @@ local function createPlayerBuffCanvas()
   end
   
   pcall(function()    
-    -- Устанавливаем размер холста
+    -- Set canvas size
     canvas:SetExtent(settings.player.iconSize * 3, settings.player.iconSize * 1.5)
     
-    -- Явно устанавливаем позицию холста из настроек
+    -- Explicitly set canvas position from settings
     canvas:RemoveAllAnchors()
     canvas:AddAnchor("TOPLEFT", "UIParent", settings.player.posX, settings.player.posY)
     
@@ -611,35 +611,35 @@ local function createPlayerBuffCanvas()
   for i = 1, 10 do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, "player")
     
-    -- Дополнительно убедимся, что иконка имеет правильную позицию, основанную на настройках
+    -- Ensure that the icon has the correct position based on settings
     if canvas.buffIcons[i] then
       pcall(function()
         canvas.buffIcons[i]:RemoveAllAnchors()
         canvas.buffIcons[i]:SetExtent(settings.player.iconSize, settings.player.iconSize)
         
-        -- Явно вычисляем позицию иконки с учетом текущего интервала
+        -- Explicitly calculate icon position taking into account current interval
         local xPosition = (i-1) * (settings.player.iconSize + settings.player.iconSpacing)
         canvas.buffIcons[i]:AddAnchor("LEFT", canvas, xPosition, 0)
       end)
     end
   end
   
-  -- Реализация перетаскивания (drag) для canvas
+  -- Implementation of drag functionality for canvas
   pcall(function()
-    -- Флаг для отслеживания состояния перетаскивания
+    -- Flag to track dragging state
     canvas.isDragging = false
     
-    -- Определяем функции для перетаскивания
+    -- Define functions for dragging
     canvas.OnDragStart = function(self, arg)
-      -- Проверяем, не заблокировано ли перемещение
+      -- Check if movement is blocked
       if settings.player.lockPositioning then
         return
       end
       
       self.isDragging = true
-      -- Делаем фон более заметным во время перетаскивания
+      -- Make the background more visible during dragging
       if self.bg then
-        self.bg:SetColor(0, 0, 0, 0.6)  -- Более высокая непрозрачность при перетаскивании
+        self.bg:SetColor(0, 0, 0, 0.6)  -- Higher opacity during dragging
       end
       
       self:StartMoving()
@@ -648,7 +648,7 @@ local function createPlayerBuffCanvas()
     end
     
     canvas.OnDragStop = function(self)
-      -- Проверяем, не заблокировано ли перемещение
+      -- Check if movement is blocked
       if settings.player.lockPositioning then
         return
       end
