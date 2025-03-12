@@ -1,2 +1,4 @@
 .cursor/
 .cursorignore 
+# Ignore PowerShell scripts
+*.ps1 
