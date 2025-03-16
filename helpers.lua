@@ -187,30 +187,9 @@ end
 
 function helpers.createCheckbox(id, parent, text, offsetX, offsetY)
     local checkBox = nil
-    
-    -- Use check button component from utilities if available
-    local checkButtonModule = require('CooldawnBuffTracker/util/check_button') or require('util/check_button') or require('./util/check_button')
-    
-    if checkButtonModule and checkButtonModule.CreateCheckButton then
-        checkBox = checkButtonModule.CreateCheckButton(id, parent, text)
-        checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
-        checkBox:SetButtonStyle("default")
-    else
-        -- Create check box using available methods
-        checkBox = api.Interface:CreateWidget('checkbutton', id, parent)
-        checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
-        
-        -- Add text
-        local textLabel = helpers.createLabel(id .. "Text", checkBox, text, 20, 0, 15)
-        
-        -- Text click handler
-        if textLabel then
-            textLabel:SetHandler("OnClick", function()
-                checkBox:SetChecked(not checkBox:GetChecked())
-            end)
-        end
-    end
-    
+    checkBox = api._Library.UI.CreateCheckButton(id, parent, text)
+    checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
+    checkBox:SetButtonStyle("default")
     return checkBox
 end
 
@@ -218,8 +197,8 @@ end
 function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
     local colorButton = nil
     
-    -- Load color pick button creation module
-    local createColorPickButtonsModule = require('CooldawnBuffTracker/util/color_picker') or require('util/color_picker') or require('./util/color_picker')
+    -- Продолжаем использовать локальный модуль
+    local createColorPickButtonsModule = require('CooldawnBuffTracker/util/color_picker')
     
     if createColorPickButtonsModule then
         colorButton = createColorPickButtonsModule(id, parent)
@@ -231,8 +210,8 @@ function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
             self.colorBG:SetColor(r, g, b, a)
         end
         
-        local F_ETC = require('CooldawnBuffTracker/util/etc') or require('util/etc') or require('./util/etc')
-        
+        local F_ETC = require('CooldawnBuffTracker/util/etc')
+            
         if F_ETC then
             function colorButton:OnClick()
                 F_ETC.HidePallet()
