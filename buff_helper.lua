@@ -11883,17 +11883,22 @@ BuffList.ddsData = {
     [9000129] = "emotion/icon_emotion_026.dds",
 }
 
-local defaultSettings
 pcall(function()
-    defaultSettings = require("default_settings")
-end)
+    helpers = require("CooldawnBuffTracker/helpers")
+  end)
 
 -- This function returns the buff info given a buff ID
 -- It will try to find the buff in predefined list or return a generic data object
 function BuffList.GetBuffInfo(buffId)
+
+    if helpers and helpers.getSettings then
+        settings = helpers.getSettings()
+    else
+        settings = api.GetSettings("CooldawnBuffTracker") or {}
+    end
     -- Сначала ищем в пользовательских баффах
-    if defaultSettings and defaultSettings.customBuffs then
-        for _, buffInfo in ipairs(defaultSettings.customBuffs) do
+    if settings and settings.customBuffs then
+        for _, buffInfo in ipairs(settings.customBuffs) do
             if buffInfo.id == buffId then
                 return buffInfo
             end
@@ -11969,9 +11974,15 @@ end
 
 -- Function to check if a buff ID is valid and exists in the game
 function BuffList.IsValidBuff(buffId)
+
+    if helpers and helpers.getSettings then
+        settings = helpers.getSettings()
+    else
+        settings = api.GetSettings("CooldawnBuffTracker") or {}
+    end
     -- Check if buff is in custom buffs list
-    if defaultSettings and defaultSettings.customBuffs then
-        for _, buffInfo in ipairs(defaultSettings.customBuffs) do
+    if settings and settings.customBuffs then
+        for _, buffInfo in ipairs(settings.customBuffs) do
             if buffInfo.id == buffId then
                 return true
             end

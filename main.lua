@@ -1,23 +1,23 @@
 local api = require("api")
 local BuffList
 pcall(function()
-  BuffList = require("CooldawnBuffTracker/buff_helper") or require("buff_helper") or require("./buff_helper")
+  BuffList = require("CooldawnBuffTracker/buff_helper")
 end)
 
 local BuffsToTrack
 pcall(function()
-  BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track") or require("buffs_to_track") or require("./buffs_to_track")
+  BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
 end)
 
 -- Connect new settings modules
 local helpers
 pcall(function()
-  helpers = require("CooldawnBuffTracker/helpers") or require("helpers") or require("./helpers")
+  helpers = require("CooldawnBuffTracker/helpers")
 end)
 
 local settingsPage
 pcall(function()
-  settingsPage = require("CooldawnBuffTracker/settings_page") or require("settings_page") or require("./settings_page")
+  settingsPage = require("CooldawnBuffTracker/settings_page")
 end)
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
@@ -1257,22 +1257,22 @@ local function OnLoad()
   
   -- Load module for working with buffs
   pcall(function()
-    BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track") or require("buffs_to_track") or require("./buffs_to_track")
+    BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
   end)
   
   -- Load module with information about available buffs
   pcall(function()
-    BuffList = require("CooldawnBuffTracker/buff_helper") or require("buff_helper") or require("./buff_helper")
+    BuffList = require("CooldawnBuffTracker/buff_helper")
   end)
   
   -- Load module for working with helper functions
   pcall(function()
-    helpers = require("CooldawnBuffTracker/helpers") or require("helpers") or require("./helpers") 
+    helpers = require("CooldawnBuffTracker/helpers")
   end)
   
   -- Load module for settings page
   pcall(function()
-    settingsPage = require("CooldawnBuffTracker/settings_page") or require("settings_page") or require("./settings_page")
+    settingsPage = require("CooldawnBuffTracker/settings_page")
   end)
   
   if not BuffsToTrack then
@@ -1303,8 +1303,6 @@ local function OnLoad()
   
   -- Check settings correctness and migrate to new structure if necessary
   if not settings.playerpet then
-    -- If there's no playerpet and player separation, create new structure
-    local defaultSettings = require("CooldawnBuffTracker/default_settings") or require("default_settings") or require("./default_settings") or {}
     
     -- Create structure for playerpet
     settings.playerpet = {
