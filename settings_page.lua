@@ -522,7 +522,7 @@ local function initSettingsPage()
     
     -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 1150) -- Увеличиваем высоту окна для всех элементов
+                                             'CooldawnBuffTracker', 600, 1200) -- Увеличиваем высоту окна для всех элементов
     if not settingsWindow then
         pcall(function() 
             if api.Log and api.Log.Err then
@@ -598,7 +598,7 @@ local function initSettingsPage()
     
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
-    buffsListContainer:SetExtent(570, 115) -- Фиксированная высота контейнера для списка
+    buffsListContainer:SetExtent(570, 150) -- Увеличиваем высоту контейнера для списка с учетом отступов
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 35)
     buffsListContainer:Show(true)
     
@@ -636,7 +636,7 @@ local function initSettingsPage()
         -- Получаем ссылки на необходимые элементы
         local container = settingsControls.buffsListContainer
         local contentHeight = 0
-        local containerHeight = container:GetHeight() or 115
+        local containerHeight = container:GetHeight() or 150
         
         -- Получаем список отслеживаемых бафов
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
@@ -655,7 +655,7 @@ local function initSettingsPage()
         
         -- Определяем размер видимой области
         local itemHeight = 23
-        local visibleCount = math.min(5, math.floor(containerHeight / itemHeight)) -- Явно ограничиваем до 5 элементов
+        local visibleCount = math.floor(containerHeight / itemHeight)
         
         -- Определяем индекс первого видимого элемента на основе позиции прокрутки
         local startIndex = math.floor(scrollPosition / itemHeight) + 1
@@ -674,10 +674,16 @@ local function initSettingsPage()
         -- Создаем видимые элементы списка
         local yOffset = 8 - (scrollPosition % itemHeight)
         local displayedCount = 0
-        local maxVisibleItems = 5 -- Максимальное количество отображаемых элементов
         
-        for i = startIndex, math.min(startIndex + visibleCount - 1, #trackedBuffs) do
-            -- Проверка на максимальное количество элементов
+        -- Рассчитываем максимальное количество видимых элементов с учетом отступов
+        -- Вычитаем 16 пикселей для учета верхнего и нижнего отступов
+        local maxVisibleItems = math.floor((containerHeight - 16) / itemHeight)
+        
+        -- Ограничиваем начальный индекс, чтобы не выйти за пределы списка
+        startIndex = math.max(1, math.min(startIndex, #trackedBuffs))
+        
+        -- Используем более строгий подход к определению диапазона элементов
+        for i = startIndex, math.min(startIndex + maxVisibleItems - 1, #trackedBuffs) do
             if displayedCount >= maxVisibleItems then
                 break
             end
@@ -763,16 +769,24 @@ local function initSettingsPage()
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
         
         -- Расчет максимальной позиции прокрутки
-        local containerHeight = settingsControls.buffsListContainer:GetHeight() or 115
+        local containerHeight = settingsControls.buffsListContainer:GetHeight() or 150
         local itemHeight = 23
         local totalContentHeight = #trackedBuffs * itemHeight
-        local maxScroll = math.max(0, totalContentHeight - containerHeight + 10)
+        
+        -- Добавляем небольшой отступ для полного отображения последнего элемента
+        local maxScroll = math.max(0, totalContentHeight - containerHeight + 15)
         
         -- Обновляем позицию прокрутки
         if offset and offset ~= 0 then
-            scrollPosition = scrollPosition + offset
+            -- Учитываем скорость прокрутки для более плавного перемещения
+            local scrollStep = math.min(math.abs(offset), itemHeight)
+            if offset < 0 then
+                scrollStep = -scrollStep
+            end
             
-            -- Проверяем границы
+            scrollPosition = scrollPosition + scrollStep
+            
+            -- Строгая проверка границ
             if scrollPosition < 0 then 
                 scrollPosition = 0 
             end
@@ -781,7 +795,7 @@ local function initSettingsPage()
                 scrollPosition = maxScroll 
             end
             
-            -- Обновляем видимые элементы списка
+            -- Обновляем видимые элементы на каждом шаге прокрутки
             updateVisibleItems()
         end
     end
@@ -869,7 +883,7 @@ local function initSettingsPage()
     
     -- Контейнер для списка пользовательских баффов
     local customBuffsListContainer = api.Interface:CreateWidget('window', 'customBuffsListContainer', customBuffsListHeader)
-    customBuffsListContainer:SetExtent(570, 115)
+    customBuffsListContainer:SetExtent(570, 150)
     customBuffsListContainer:AddAnchor("TOPLEFT", customBuffsListHeader, 0, 35)
     customBuffsListContainer:Show(true)
     settingsControls.customBuffsListContainer = customBuffsListContainer
@@ -898,7 +912,7 @@ local function initSettingsPage()
     local function updateCustomVisibleItems()
         local container = settingsControls.customBuffsListContainer
         local contentHeight = 0
-        local containerHeight = container:GetHeight() or 115
+        local containerHeight = container:GetHeight() or 150
 
         local customBuffs = settings.customBuffs or {}
 
@@ -916,7 +930,7 @@ local function initSettingsPage()
 
         -- Размер видимой области и прокрутка
         local itemHeight = 23
-        local visibleCount = math.min(5, math.floor(containerHeight / itemHeight))
+        local visibleCount = math.floor(containerHeight / itemHeight)
         local startIndex = math.floor(customBuffsScrollPosition / itemHeight) + 1
 
         -- Если список пуст, показываем сообщение
@@ -933,9 +947,16 @@ local function initSettingsPage()
         -- Создаем видимые элементы
         local yOffset = 8 - (customBuffsScrollPosition % itemHeight)
         local displayedCount = 0
-        local maxVisibleItems = 5
-
-        for i = startIndex, math.min(startIndex + visibleCount - 1, #customBuffs) do
+        
+        -- Рассчитываем максимальное количество видимых элементов с учетом отступов
+        -- Вычитаем 16 пикселей для учета верхнего и нижнего отступов
+        local maxVisibleItems = math.floor((containerHeight - 16) / itemHeight)
+        
+        -- Ограничиваем начальный индекс, чтобы не выйти за пределы списка
+        startIndex = math.max(1, math.min(startIndex, #customBuffs))
+        
+        -- Используем более строгий подход к определению диапазона элементов
+        for i = startIndex, math.min(startIndex + maxVisibleItems - 1, #customBuffs) do
             if displayedCount >= maxVisibleItems then
                 break
             end
@@ -996,19 +1017,32 @@ local function initSettingsPage()
         end
 
         local customBuffs = settings.customBuffs or {}
-        local containerHeight = settingsControls.customBuffsListContainer:GetHeight() or 115
+        local containerHeight = settingsControls.customBuffsListContainer:GetHeight() or 150
         local itemHeight = 23
         local totalContentHeight = #customBuffs * itemHeight
-        local maxScroll = math.max(0, totalContentHeight - containerHeight + 10)
+        
+        -- Добавляем небольшой отступ для полного отображения последнего элемента
+        local maxScroll = math.max(0, totalContentHeight - containerHeight + 15)
 
         if offset and offset ~= 0 then
-            customBuffsScrollPosition = customBuffsScrollPosition + offset
+            -- Учитываем скорость прокрутки для более плавного перемещения
+            local scrollStep = math.min(math.abs(offset), itemHeight)
+            if offset < 0 then
+                scrollStep = -scrollStep
+            end
+            
+            customBuffsScrollPosition = customBuffsScrollPosition + scrollStep
+            
+            -- Строгая проверка границ
             if customBuffsScrollPosition < 0 then
                 customBuffsScrollPosition = 0
             end
+            
             if customBuffsScrollPosition > maxScroll then
                 customBuffsScrollPosition = maxScroll
             end
+            
+            -- Обновляем видимые элементы на каждом шаге прокрутки
             updateCustomVisibleItems()
         end
     end
@@ -1421,6 +1455,23 @@ local function openSettingsWindow()
         
         settingsWindow:Show(true)
         helpers.setSettingsPageOpened(true)
+        
+        -- Дополнительное принудительное обновление списков с небольшой задержкой 
+        -- для гарантированного отображения после полной инициализации окна
+        pcall(function()
+            api.ScriptProcessor:CallLater(300, function()
+                if settingsWindow and settingsWindow:IsVisible() then
+                    -- Сбрасываем позиции прокрутки
+                    scrollPosition = 0
+                    customBuffsScrollPosition = 0
+                    
+                    -- Обновляем оба списка
+                    updateTrackedBuffsList()
+                    updateCustomBuffsList()
+                end
+            end)
+        end)
+        
         return
     end
     
