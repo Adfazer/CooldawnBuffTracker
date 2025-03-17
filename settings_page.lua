@@ -36,20 +36,6 @@ local scrollPosition = 0 -- Глобальная позиция прокрутк
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
 local customBuffsScrollPosition = 0 -- Позиция прокрутки для списка пользовательских баффов
 
-
-local function settingsWindowClose()
-    if settingsWindow then
-        settingsWindow:Show(false)
-        helpers.setSettingsPageOpened(false)
-    end
-    
-    local F_ETC = nil
-        F_ETC = require('CooldawnBuffTracker/util/etc')
-        if F_ETC then
-            F_ETC.HidePallet()
-    end
-end
-
 -- Updates the list of tracked buffs in the interface
 local function updateTrackedBuffsList()
     -- Clear previous list elements
@@ -104,11 +90,6 @@ local function updateTrackedBuffsList()
         if settingsControls.posY then settingsControls.posY:Show(true) end
         if settingsControls.lockPositioning then settingsControls.lockPositioning:Show(true) end
         if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-        
-        -- Проверяем кнопки сохранения/отмены
-        if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-        if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-        if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
     end)
 end
 
@@ -181,9 +162,21 @@ local function saveSettings()
     end
     
     -- Сохраняем пользовательские баффы
+    local currentCustomBuffs = api.GetSettings("CooldawnBuffTracker").customBuffs or {}
     mainSettings.customBuffs = {}
-    if settingsControls.customBuffsContentContainer then
-        for i, buffData in ipairs(settings.customBuffs or {}) do
+    
+    -- Если есть баффы в текущих настройках, используем их
+    if settings.customBuffs and #settings.customBuffs > 0 then
+        for i, buffData in ipairs(settings.customBuffs) do
+            local buff = {}
+            for k, v in pairs(buffData) do
+                buff[k] = v
+            end
+            table.insert(mainSettings.customBuffs, buff)
+        end
+    -- Иначе сохраняем текущие кастомные баффы из mainSettings
+    elseif currentCustomBuffs and #currentCustomBuffs > 0 then
+        for i, buffData in ipairs(currentCustomBuffs) do
             local buff = {}
             for k, v in pairs(buffData) do
                 buff[k] = v
@@ -192,7 +185,7 @@ local function saveSettings()
         end
     end
     
-    -- Сохраняем состояние режима отладки баффов
+    -- Сохраняем состояние режима отладки баффов (сохраняем в корневой структуре настроек)
     if settingsControls.debugBuffId then
         mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
     end
@@ -204,77 +197,30 @@ local function saveSettings()
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
     end
-    
-    -- Close settings window
-    settingsWindowClose()
 end
 
-local function resetSettings()
-    pcall(function()
-        -- Reset settings to default values
-        settings = helpers.resetSettingsToDefault()
-        
-        -- Update values in interface for current unit type
-        local unitSettings = settings[currentUnitType] or {}
-        
-        -- Update settings fields for selected unit type
-        if settingsControls.iconSize then
-            settingsControls.iconSize:SetText(tostring(unitSettings.iconSize or 40))
-        end
-        
-        if settingsControls.iconSpacing then
-            settingsControls.iconSpacing:SetText(tostring(unitSettings.iconSpacing or 5))
-        end
-        
-        if settingsControls.posX then
-            settingsControls.posX:SetText(tostring(unitSettings.posX or 0))
-        end
-        
-        if settingsControls.posY then
-            settingsControls.posY:SetText(tostring(unitSettings.posY or 0))
-        end
-        
-        if settingsControls.lockPositioning then
-            settingsControls.lockPositioning:SetChecked(unitSettings.lockPositioning or false)
-        end
-        
-        -- Update timer settings
-        if settingsControls.timerFontSize then
-            settingsControls.timerFontSize:SetText(tostring(unitSettings.timerFontSize or 16))
-        end
-        
-        -- Update timer text color
-        if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
-            local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-            settingsControls.timerTextColor.colorBG:SetColor(
-                textColor.r or 1,
-                textColor.g or 1,
-                textColor.b or 1,
-                1
-            )
-        end
-        
-        -- Обновляем состояние чекбокса отладки баффов
-        if settingsControls.debugBuffId then
-            settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
-        end
-        
-        -- Update tracked buffs list
-        updateTrackedBuffsList()
-
-        -- Обновляем список пользовательских баффов
-        updateCustomBuffsList()
-        
-        -- Update main interface
-        if helpers and helpers.updateSettings then
-            helpers.updateSettings()
-        end
-        
-        -- Explicitly call buffs list update event
-        pcall(function()
-            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
-        end)
-    end)
+local function settingsWindowClose()
+    -- Обновляем настройки перед сохранением
+    settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
+    
+    -- Теперь обновляем переменную settings текущим значением чекбокса
+    if settingsControls.debugBuffId then
+        settings.debugBuffId = settingsControls.debugBuffId:GetChecked()
+    end
+    
+    -- Сохраняем настройки перед закрытием окна
+    saveSettings()
+    
+    if settingsWindow then
+        settingsWindow:Show(false)
+        helpers.setSettingsPageOpened(false)
+    end
+    
+    local F_ETC = nil
+        F_ETC = require('CooldawnBuffTracker/util/etc')
+        if F_ETC then
+            F_ETC.HidePallet()
+    end
 end
 
 -- Add new buff
@@ -1259,17 +1205,6 @@ local function initSettingsPage()
     
     settingsControls.timerTextColor = timerTextColor
     
-    -- Create save and cancel buttons
-    local saveButton = helpers.createButton("saveButton", settingsWindow, "Save", 0, 0)
-    saveButton:SetExtent(120, 30)
-    saveButton:RemoveAllAnchors()
-    saveButton:AddAnchor("BOTTOMRIGHT", settingsWindow, "BOTTOMRIGHT", -20, -20)
-    saveButton:SetHandler("OnClick", function()
-      saveSettings()
-    end)
-    saveButton:Show(true)
-    settingsControls.saveButton = saveButton
-    
     -- Debug Buff ID checkbox
     local debugBuffId = helpers.createCheckbox('debugBuffId', settingsWindow, "Debug BuffId", 20, -25)
     if debugBuffId then
@@ -1279,26 +1214,6 @@ local function initSettingsPage()
         debugBuffId:Show(true)
     end
     settingsControls.debugBuffId = debugBuffId
-    
-    local resetButton = helpers.createButton("resetButton", settingsWindow, "Reset", 0, 0)
-    resetButton:SetExtent(120, 30)
-    resetButton:RemoveAllAnchors()
-    resetButton:AddAnchor("RIGHT", saveButton, "LEFT", -10, 0)
-    resetButton:SetHandler("OnClick", function()
-      resetSettings()
-    end)
-    resetButton:Show(true)
-    settingsControls.resetButton = resetButton
-    
-    local cancelButton = helpers.createButton("cancelButton", settingsWindow, "Cancel", 0, 0)
-    cancelButton:SetExtent(120, 30)
-    cancelButton:RemoveAllAnchors()
-    cancelButton:AddAnchor("RIGHT", resetButton, "LEFT", -10, 0)
-    cancelButton:SetHandler("OnClick", function()
-      settingsWindowClose()
-    end)
-    cancelButton:Show(true)
-    settingsControls.cancelButton = cancelButton
     
     -- Final check - call update one more time for confidence
     pcall(function()
@@ -1329,11 +1244,6 @@ local function initSettingsPage()
         if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
         if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
         
-        if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-        if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-        if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
-        
-        -- Hide error panel on first opening
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
@@ -1407,10 +1317,6 @@ local function openSettingsWindow()
             
             if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
             if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-            
-            if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-            if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-            if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
         end)
         
         settingsWindow:Show(true)
