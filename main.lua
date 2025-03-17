@@ -151,7 +151,7 @@ local function initBuffData()
       if not trackedBuffsMap[buffId] then
         -- Если бафф больше не отслеживается, удаляем его из данных
         buffDataTable[buffId] = nil
-        safeLog(unitType .. " бафф удален из отслеживания: " .. tostring(buffId))
+        safeLog(unitType .. " buff removed from tracking: " .. tostring(buffId))
       end
     end
     
@@ -180,7 +180,7 @@ local function initBuffData()
           status = "ready"
         }
         
-        safeLog(unitType .. " бафф добавлен для отслеживания: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
+        safeLog(unitType .. " buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
       end
     end
   end
@@ -927,7 +927,7 @@ local function updateBuffIcons(unitType)
   end)
   
   if not status then
-    safeLog("Ошибка обновления иконок: " .. tostring(err))
+    safeLog("Error updating icons: " .. tostring(err))
   end
 end
 
@@ -1052,7 +1052,7 @@ local function checkBuffs(unitType)
           isPlayerCanvasInitialized = true
         end)
         if not success then
-          safeLog("Ошибка инициализации канваса баффов игрока")
+          safeLog("Error initializing player buff canvas")
         end
       elseif unitType == "playerpet" and not isCanvasInitialized then
         local success, _ = pcall(function()
@@ -1060,7 +1060,7 @@ local function checkBuffs(unitType)
           isCanvasInitialized = true
         end)
         if not success then
-          safeLog("Ошибка инициализации канваса баффов маунта")
+          safeLog("Error initializing mount buff canvas")
         end
       end
       
@@ -1071,7 +1071,7 @@ local function checkBuffs(unitType)
   end)
   
   if not status then
-    safeLog("Ошибка проверки баффов для " .. unitType .. ": " .. tostring(err))
+    safeLog("Error checking buffs for " .. unitType .. ": " .. tostring(err))
   end
 end
 
@@ -1114,7 +1114,7 @@ local function initializeUI()
   
   for _, unitType in ipairs(unitTypes) do
     local shouldShowUI = hasTrackedBuffs(unitType)
-    safeLog("Инициализация UI для " .. unitType .. ": " .. (shouldShowUI and "показать" or "скрыть"))
+    safeLog("UI initialization for " .. unitType .. ": " .. (shouldShowUI and "show" or "hide"))
     
     if shouldShowUI then
       local canvasCreator = unitType == "player" and createPlayerBuffCanvas or createBuffCanvas
@@ -1133,7 +1133,7 @@ local function initializeUI()
           updateBuffIcons("playerpet")
         end
       else
-        safeLog("Ошибка создания канваса для " .. unitType .. ": " .. tostring(result))
+        safeLog("Error creating canvas for " .. unitType .. ": " .. tostring(result))
         
         -- Повторная попытка создания канваса с задержкой
         api:DoIn(1000, function()
@@ -1149,7 +1149,7 @@ local function initializeUI()
               updateBuffIcons("playerpet")
             end
           else
-            safeLog("Повторная ошибка создания канваса для " .. unitType .. ": " .. tostring(retryResult))
+            safeLog("Repeated error creating canvas for " .. unitType .. ": " .. tostring(retryResult))
           end
         end)
       end
@@ -1503,7 +1503,7 @@ end
 -- Handler for event when tracked buffs list is updated
 pcall(function()
   api.On("MOUNT_BUFF_TRACKER_UPDATE_BUFFS", function()
-    safeLog("Получено событие обновления списка баффов")
+    safeLog("Received buff list update event")
     
     -- Обновляем данные баффов (включая удаление ненужных)
     local oldMountBuffsCount = 0
@@ -1522,8 +1522,8 @@ pcall(function()
     local newPlayerBuffsCount = 0
     for _ in pairs(playerBuffData) do newPlayerBuffsCount = newPlayerBuffsCount + 1 end
     
-    safeLog("Список баффов маунта обновлен: было " .. oldMountBuffsCount .. ", стало " .. newMountBuffsCount)
-    safeLog("Список баффов игрока обновлен: было " .. oldPlayerBuffsCount .. ", стало " .. newPlayerBuffsCount)
+    safeLog("Mount buff list updated: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
+    safeLog("Player buff list updated: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
     
     -- Проверяем необходимость отображения каждого из канвасов
     local unitTypes = {"playerpet", "player"}
@@ -1564,7 +1564,7 @@ pcall(function()
   api.On("MOUNT_BUFF_TRACKER_EMPTY_LIST", function(unitType)
     unitType = unitType or "playerpet"
     
-    safeLog("Получено событие о пустом списке баффов для " .. unitType .. " - принудительно скрываем канвас")
+    safeLog("Received empty buff list event for " .. unitType .. " - forcibly hiding canvas")
     
     local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
     local buffDataTable = unitType == "player" and playerBuffData or buffData
@@ -1573,7 +1573,7 @@ pcall(function()
     pcall(function()
       if canvas then
         canvas:Show(false)
-        safeLog("Канвас скрыт успешно")
+        safeLog("Canvas hidden successfully")
       end
     end)
     

@@ -25,7 +25,7 @@ local function PrintBuffId(buffId, unitId, event)
     if not buffId then return end
     
     -- Получаем название баффа, если оно доступно
-    local buffName = "Неизвестный"
+    local buffName = "Unknown"
     pcall(function()
         -- Попытка получить имя баффа из BuffList
         local BuffList = require("CooldawnBuffTracker/buff_helper")
@@ -253,7 +253,7 @@ function BuffDebugger.Initialize()
         
         -- Выводим сообщение о включении режима отладки
         pcall(function()
-            api.Log:Info("[BuffTracker] Режим отладки баффов включен. ID баффов будут выводиться в чат.")
+            api.Log:Info("[BuffTracker] Buff debug mode enabled. Buff IDs will be displayed in chat.")
         end)
     end
 end
@@ -274,7 +274,7 @@ local function PrintAllActiveBuffs(unitId)
     local buffList = {}
     
     pcall(function()
-        api.Log:Info(string.format("[BuffTracker] Активные баффы для %s (%d):", unitId, buffCount))
+        api.Log:Info(string.format("[BuffTracker] Active buffs for %s (%d):", unitId, buffCount))
     end)
     
     for i = 1, buffCount do
@@ -292,7 +292,7 @@ local function PrintAllActiveBuffs(unitId)
             
             if buffId then
                 -- Получаем название баффа
-                local buffName = "Неизвестный"
+                local buffName = "Unknown"
                 pcall(function()
                     local BuffList = require("CooldawnBuffTracker/buff_helper")
                     if BuffList and BuffList.GetBuffName then
@@ -315,7 +315,7 @@ local function PrintAllActiveBuffs(unitId)
     -- Если баффов нет, выводим соответствующее сообщение
     if buffCount == 0 then
         pcall(function()
-            api.Log:Info("[BuffTracker] Нет активных баффов")
+            api.Log:Info("[BuffTracker] No active buffs")
         end)
     end
 end
@@ -326,7 +326,7 @@ function BuffDebugger.PrintCurrentBuffs()
     if not settings or not settings.debugBuffId then
         -- Проверяем, включен ли режим отладки
         pcall(function()
-            api.Log:Info("[BuffTracker] Режим отладки баффов отключен. Включите его в настройках.")
+            api.Log:Info("[BuffTracker] Buff debug mode is disabled. Enable it in settings.")
         end)
         return
     end
