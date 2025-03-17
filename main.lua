@@ -20,6 +20,12 @@ pcall(function()
   settingsPage = require("CooldawnBuffTracker/settings_page")
 end)
 
+-- Загружаем модуль отладки баффов
+local BuffDebugger
+pcall(function()
+  BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
+end)
+
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
@@ -989,13 +995,6 @@ local function checkMountBuffs()
         -- Record current buff IDs for later comparison
         currentBuffsOnMount[buff.buff_id] = true
         
-        -- For debug mode register new mount buffs
-        if settings.debugBuffId and not cachedMountBuffs[buff.buff_id] then
-          pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] New mount buff: " .. tostring(buff.buff_id))
-          end)
-        end
-        
         -- Add only tracked buffs to active buffs
         if BuffsToTrack.ShouldTrackBuff(buff.buff_id) then
           activeBuffsOnMount[buff.buff_id] = true
@@ -1016,13 +1015,6 @@ local function checkMountBuffs()
           setBuffStatus(buffId, "active", currentTime, "playerpet")
           hasChanges = true
           
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "active" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: active", buffId))
-            end)
-          end
-          
           -- Update cached status
           cachedBuffStatus[buffId] = "active"
         end
@@ -1034,13 +1026,6 @@ local function checkMountBuffs()
             setBuffStatus(buffId, expectedStatus, currentTime, "playerpet")
             hasChanges = true
             
-            -- Log only status change for tracked buffs
-            if settings.debugBuffId and cachedBuffStatus[buffId] ~= expectedStatus then
-              pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: %s", buffId, expectedStatus))
-              end)
-            end
-            
             -- Update cached status
             cachedBuffStatus[buffId] = expectedStatus
           end
@@ -1048,26 +1033,8 @@ local function checkMountBuffs()
           setBuffStatus(buffId, "ready", nil, "playerpet")
           hasChanges = true
           
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: ready", buffId))
-            end)
-          end
-          
           -- Update cached status
           cachedBuffStatus[buffId] = "ready"
-        end
-      end
-    end
-    
-    -- Check if any buffs have disappeared from mount
-    if settings.debugBuffId then
-      for buffId in pairs(cachedMountBuffs) do
-        if not currentBuffsOnMount[buffId] then
-          pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] Buff disappeared from mount: " .. tostring(buffId))
-          end)
         end
       end
     end
@@ -1120,14 +1087,6 @@ local function checkPlayerBuffs()
           -- Record current buff IDs for later comparison
           currentBuffsOnPlayer[buff.buff_id] = true
           
-          -- For debug mode register new player buffs
-          if settings.debugBuffId and not cachedPlayerBuffs[buff.buff_id] then
-            pcall(function()
-              api.Log:Info("[CooldawnBuffTracker] New player buff: " .. tostring(buff.buff_id))
-            end)
-            cachedPlayerBuffs[buff.buff_id] = true
-          end
-          
           -- Check if we need to track this buff
           if BuffsToTrack.ShouldTrackBuff(buff.buff_id, "player") then
             -- If the buff is not in data yet or it's not active, update its status
@@ -1135,13 +1094,6 @@ local function checkPlayerBuffs()
               -- Buff became active, update its status
               setBuffStatus(buff.buff_id, "active", getCurrentTime(), "player")
               hasChanges = true
-              
-              -- Log only status change for tracked buffs
-              if settings.debugBuffId then
-                pcall(function()
-                  api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: active", buff.buff_id))
-                end)
-              end
               
               -- Update cached status
               cachedBuffStatus[buff.buff_id] = "active"
@@ -1164,13 +1116,6 @@ local function checkPlayerBuffs()
           setBuffStatus(buffId, "cooldown", currentTime, "player")
           hasChanges = true
           
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "cooldown" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: cooldown", buffId))
-            end)
-          end
-          
           -- Update cached status
           cachedBuffStatus[buffId] = "cooldown"
         elseif buffInfo.status == "cooldown" then
@@ -1182,13 +1127,6 @@ local function checkPlayerBuffs()
             -- If cooldown time has passed, buff is ready to use again
             setBuffStatus(buffId, "ready", currentTime, "player")
             hasChanges = true
-            
-            -- Log only status change for tracked buffs
-            if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
-              pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: ready", buffId))
-              end)
-            end
             
             -- Update cached status
             cachedBuffStatus[buffId] = "ready"
@@ -1251,281 +1189,319 @@ local function OnUpdate(dt)
 end
 
 local function OnLoad()
-  pcall(function()
-    safeLog("Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
-  end)
-  
-  -- Load module for working with buffs
-  pcall(function()
-    BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
-  end)
-  
-  -- Load module with information about available buffs
-  pcall(function()
-    BuffList = require("CooldawnBuffTracker/buff_helper")
-  end)
-  
-  -- Load module for working with helper functions
-  pcall(function()
-    helpers = require("CooldawnBuffTracker/helpers")
-  end)
-  
-  -- Load module for settings page
-  pcall(function()
-    settingsPage = require("CooldawnBuffTracker/settings_page")
-  end)
-  
-  if not BuffsToTrack then
-    -- If module for working with buffs couldn't be loaded, create a placeholder
-    BuffsToTrack = {
-      GetAllTrackedBuffIds = function() return {} end,
-      ShouldTrackBuff = function(id) return false end
-    }
-    pcall(function() api.Log:Info("Failed to load buffs_to_track.lua, using placeholder") end)
-  end
-  
-  if not BuffList then
-    BuffList = {
-      GetBuffName = function(id) return "Buff #" .. id end,
-      GetBuffIcon = function(id) return nil end,
-      GetBuffCooldown = function(id) return 0 end,
-      GetBuffTimeOfAction = function(id) return 0 end
-    }
-    pcall(function() api.Log:Info("Failed to load buff_helper.lua, using placeholder") end)
-  end
-  
-  -- Load settings if available
-  if helpers and helpers.getSettings then
-    settings = helpers.getSettings()
-  else
-    settings = api.GetSettings("CooldawnBuffTracker") or {}
-  end
-  
-  -- Check settings correctness and migrate to new structure if necessary
-  if not settings.playerpet then
-    
-    -- Create structure for playerpet
-    settings.playerpet = {
-      posX = settings.posX or defaultPositionX,
-      posY = settings.posY or defaultPositionY,
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = settings.enabled ~= false, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = settings.trackedBuffs or {}
-    }
-    
-    -- Create structure for player
-    settings.player = {
-      posX = settings.posX or defaultPositionX,
-      posY = (settings.posY or defaultPositionY) + 70, -- Slightly below the mount
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = true, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = {}
-    }
-    
-    -- Remove old keys
-    settings.posX = nil
-    settings.posY = nil
-    settings.iconSize = nil
-    settings.iconSpacing = nil
-    settings.lockPositioning = nil
-    settings.enabled = nil
-    settings.timerTextColor = nil
-    settings.labelTextColor = nil
-    settings.showLabel = nil
-    settings.labelFontSize = nil
-    settings.labelX = nil
-    settings.labelY = nil
-    settings.showTimer = nil
-    settings.timerFontSize = nil
-    settings.timerX = nil
-    settings.timerY = nil
-    settings.trackedBuffs = nil
-    
-    -- Save updated settings
-    if helpers and helpers.updateSettings then
-      helpers.updateSettings(settings)
+  local status, err = pcall(function()
+    -- Load settings
+    if helpers then
+      settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
     else
-      api.SaveSettings()
+      safeLog("Helpers module not loaded, using basic settings")
+      settings = {
+        playerpet = {
+          posX = defaultPositionX,
+          posY = defaultPositionY,
+          iconSize = iconSize,
+          iconSpacing = iconSpacing,
+          enabled = true,
+          lockPositioning = false
+        },
+        player = {
+          posX = defaultPositionX,
+          posY = defaultPositionY + 70,  -- Slightly lower than mount
+          iconSize = iconSize,
+          iconSpacing = iconSpacing,
+          enabled = true,
+          lockPositioning = false
+        }
+      }
     end
     
-    safeLog("Settings migrated to new structure with separation for playerpet and player")
-  end
-  
-  -- Check for presence of debugBuffId key
-  if settings.debugBuffId == nil then
-    settings.debugBuffId = false
-  end
-  
-  -- Check if settings are correct
-  if settings.iconSize == nil then
-    safeLog("Missing iconSize key in settings, setting default value")
-    settings.iconSize = iconSize
-  end
-  
-  if settings.iconSpacing == nil then
-    safeLog("Missing iconSpacing key in settings, setting default value")
-    settings.iconSpacing = 5
-  end
-  
-  if settings.posX == nil then
-    safeLog("Missing posX key in settings, setting default value")
-    settings.posX = defaultPositionX
-  end
-  
-  if settings.posY == nil then
-    safeLog("Missing posY key in settings, setting default value")
-    settings.posY = defaultPositionY
-  end
-  
-  -- Initialize settings page if module is loaded
-  if settingsPage and settingsPage.Load then
-    pcall(function() settingsPage.Load() end)
-  end
-  
-  pcall(initBuffData)
-  
-  -- Check if there are tracked mount buffs when loading
-  local shouldShowMountUI = hasTrackedBuffs("playerpet")
-  safeLog("Mount UI initialization: " .. (shouldShowMountUI and "show" or "hide"))
-  
-  -- Check if there are tracked player buffs when loading
-  local shouldShowPlayerUI = hasTrackedBuffs("player")
-  safeLog("Player UI initialization: " .. (shouldShowPlayerUI and "show" or "hide"))
-  
-  -- Create canvas for mount if there are tracked buffs
-  if shouldShowMountUI then
-    local success, result = pcall(createBuffCanvas)
-    if success and result then
-      buffCanvas = result
-      isCanvasInitialized = true
-      updateBuffIcons()
-    else
-      safeLog("Error creating mount buff canvas: " .. tostring(result))
+    -- Инициализация модуля отладки баффов
+    if BuffDebugger and BuffDebugger.Initialize then
+      pcall(function() BuffDebugger.Initialize() end)
+    end
+    
+    -- Initialize buff data
+    initBuffData()
+
+    pcall(function()
+      safeLog("Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
+    end)
+    
+    -- Load module for working with buffs
+    pcall(function()
+      BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
+    end)
+    
+    -- Load module with information about available buffs
+    pcall(function()
+      BuffList = require("CooldawnBuffTracker/buff_helper")
+    end)
+    
+    -- Load module for working with helper functions
+    pcall(function()
+      helpers = require("CooldawnBuffTracker/helpers")
+    end)
+    
+    -- Load module for settings page
+    pcall(function()
+      settingsPage = require("CooldawnBuffTracker/settings_page")
+    end)
+    
+    if not BuffsToTrack then
+      -- If module for working with buffs couldn't be loaded, create a placeholder
+      BuffsToTrack = {
+        GetAllTrackedBuffIds = function() return {} end,
+        ShouldTrackBuff = function(id) return false end
+      }
+      pcall(function() api.Log:Info("Failed to load buffs_to_track.lua, using placeholder") end)
+    end
+    
+    if not BuffList then
+      BuffList = {
+        GetBuffName = function(id) return "Buff #" .. id end,
+        GetBuffIcon = function(id) return nil end,
+        GetBuffCooldown = function(id) return 0 end,
+        GetBuffTimeOfAction = function(id) return 0 end
+      }
+      pcall(function() api.Log:Info("Failed to load buff_helper.lua, using placeholder") end)
+    end
+    
+    -- Check settings correctness and migrate to new structure if necessary
+    if not settings.playerpet then
       
-      -- Repeat attempt to create canvas with delay
-      api:DoIn(1000, function()
-        local retrySuccess, retryResult = pcall(createBuffCanvas)
-        if retrySuccess and retryResult then
-          buffCanvas = retryResult
-          isCanvasInitialized = true
-          updateBuffIcons()
-        else
-          safeLog("Repeated error creating mount buff canvas: " .. tostring(retryResult))
-        end
-      end)
-    end
-  end
-  
-  -- Create canvas for player if there are tracked buffs
-  if shouldShowPlayerUI then
-    local success, result = pcall(createPlayerBuffCanvas)
-    if success and result then
-      playerBuffCanvas = result
-      isPlayerCanvasInitialized = true
-      updatePlayerBuffIcons()
-    else
-      safeLog("Error creating player buff canvas: " .. tostring(result))
+      -- Create structure for playerpet
+      settings.playerpet = {
+        posX = settings.posX or defaultPositionX,
+        posY = settings.posY or defaultPositionY,
+        iconSize = settings.iconSize or iconSize,
+        iconSpacing = settings.iconSpacing or 5,
+        lockPositioning = settings.lockPositioning or false,
+        enabled = settings.enabled ~= false, -- Enabled by default
+        timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
+        labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
+        showLabel = settings.showLabel or false,
+        labelFontSize = settings.labelFontSize or 14,
+        labelX = settings.labelX or 0,
+        labelY = settings.labelY or -30,
+        showTimer = settings.showTimer ~= false, -- Enabled by default
+        timerFontSize = settings.timerFontSize or 16,
+        timerX = settings.timerX or 0,
+        timerY = settings.timerY or 0,
+        trackedBuffs = settings.trackedBuffs or {}
+      }
       
-      -- Repeat attempt to create canvas with delay
-      api:DoIn(1000, function()
-        local retrySuccess, retryResult = pcall(createPlayerBuffCanvas)
-        if retrySuccess and retryResult then
-          playerBuffCanvas = retryResult
-          isPlayerCanvasInitialized = true
-          updatePlayerBuffIcons()
-        else
-          safeLog("Repeated error creating player buff canvas: " .. tostring(retryResult))
-        end
-      end)
-    end
-  end
-  
-  pcall(function() 
-    api.On("UPDATE", OnUpdate)
-  end)
-  
-  -- Create association with settings update handler
-  pcall(function()
-    CooldawnBuffTracker.OnSettingsSaved = function()
-      -- Completely recreate UI when settings change
-      if helpers then
-        settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
+      -- Create structure for player
+      settings.player = {
+        posX = settings.posX or defaultPositionX,
+        posY = (settings.posY or defaultPositionY) + 70, -- Slightly below the mount
+        iconSize = settings.iconSize or iconSize,
+        iconSpacing = settings.iconSpacing or 5,
+        lockPositioning = settings.lockPositioning or false,
+        enabled = true, -- Enabled by default
+        timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
+        labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
+        showLabel = settings.showLabel or false,
+        labelFontSize = settings.labelFontSize or 14,
+        labelX = settings.labelX or 0,
+        labelY = settings.labelY or -30,
+        showTimer = settings.showTimer ~= false, -- Enabled by default
+        timerFontSize = settings.timerFontSize or 16,
+        timerX = settings.timerX or 0,
+        timerY = settings.timerY or 0,
+        trackedBuffs = {}
+      }
+      
+      -- Remove old keys
+      settings.posX = nil
+      settings.posY = nil
+      settings.iconSize = nil
+      settings.iconSpacing = nil
+      settings.lockPositioning = nil
+      settings.enabled = nil
+      settings.timerTextColor = nil
+      settings.labelTextColor = nil
+      settings.showLabel = nil
+      settings.labelFontSize = nil
+      settings.labelX = nil
+      settings.labelY = nil
+      settings.showTimer = nil
+      settings.timerFontSize = nil
+      settings.timerX = nil
+      settings.timerY = nil
+      settings.trackedBuffs = nil
+      
+      -- Save updated settings
+      if helpers and helpers.updateSettings then
+        helpers.updateSettings(settings)
+      else
+        api.SaveSettings()
       end
       
-      -- Update mount canvas
-      local shouldShowMountUI = hasTrackedBuffs("playerpet")
-      
-      -- If there are no buffs to track, hide mount canvas
-      if not shouldShowMountUI and buffCanvas then
-        pcall(function() buffCanvas:Show(false) end)
-      elseif shouldShowMountUI then
-        -- If buffs exist but canvas is not created, create it
-        if not isCanvasInitialized then
-          local success, result = pcall(createBuffCanvas)
-          if success and result then
-            buffCanvas = result
+      safeLog("Settings migrated to new structure with separation for playerpet and player")
+    end
+    
+    -- Check if settings are correct
+    if settings.iconSize == nil then
+      safeLog("Missing iconSize key in settings, setting default value")
+      settings.iconSize = iconSize
+    end
+    
+    if settings.iconSpacing == nil then
+      safeLog("Missing iconSpacing key in settings, setting default value")
+      settings.iconSpacing = 5
+    end
+    
+    if settings.posX == nil then
+      safeLog("Missing posX key in settings, setting default value")
+      settings.posX = defaultPositionX
+    end
+    
+    if settings.posY == nil then
+      safeLog("Missing posY key in settings, setting default value")
+      settings.posY = defaultPositionY
+    end
+    
+    -- Initialize settings page if module is loaded
+    if settingsPage and settingsPage.Load then
+      pcall(function() settingsPage.Load() end)
+    end
+    
+    -- Check if there are tracked mount buffs when loading
+    local shouldShowMountUI = hasTrackedBuffs("playerpet")
+    safeLog("Mount UI initialization: " .. (shouldShowMountUI and "show" or "hide"))
+    
+    -- Check if there are tracked player buffs when loading
+    local shouldShowPlayerUI = hasTrackedBuffs("player")
+    safeLog("Player UI initialization: " .. (shouldShowPlayerUI and "show" or "hide"))
+    
+    -- Create canvas for mount if there are tracked buffs
+    if shouldShowMountUI then
+      local success, result = pcall(createBuffCanvas)
+      if success and result then
+        buffCanvas = result
+        isCanvasInitialized = true
+        updateBuffIcons()
+      else
+        safeLog("Error creating mount buff canvas: " .. tostring(result))
+        
+        -- Repeat attempt to create canvas with delay
+        api:DoIn(1000, function()
+          local retrySuccess, retryResult = pcall(createBuffCanvas)
+          if retrySuccess and retryResult then
+            buffCanvas = retryResult
             isCanvasInitialized = true
+            updateBuffIcons()
+          else
+            safeLog("Repeated error creating mount buff canvas: " .. tostring(retryResult))
           end
-        end
-        
-        -- Update icons
-        if isCanvasInitialized then
-          updateBuffIcons()
-        end
-      end
-      
-      -- Update player canvas
-      local shouldShowPlayerUI = hasTrackedBuffs("player")
-      
-      -- If there are no buffs to track, hide player canvas
-      if not shouldShowPlayerUI and playerBuffCanvas then
-        pcall(function() playerBuffCanvas:Show(false) end)
-      elseif shouldShowPlayerUI then
-        -- If buffs exist but canvas is not created, create it
-        if not isPlayerCanvasInitialized then
-          local success, result = pcall(createPlayerBuffCanvas)
-          if success and result then
-            playerBuffCanvas = result
-            isPlayerCanvasInitialized = true
-          end
-        end
-        
-        -- Update icons
-        if isPlayerCanvasInitialized then
-          updatePlayerBuffIcons()
-        end
+        end)
       end
     end
+    
+    -- Create canvas for player if there are tracked buffs
+    if shouldShowPlayerUI then
+      local success, result = pcall(createPlayerBuffCanvas)
+      if success and result then
+        playerBuffCanvas = result
+        isPlayerCanvasInitialized = true
+        updatePlayerBuffIcons()
+      else
+        safeLog("Error creating player buff canvas: " .. tostring(result))
+        
+        -- Repeat attempt to create canvas with delay
+        api:DoIn(1000, function()
+          local retrySuccess, retryResult = pcall(createPlayerBuffCanvas)
+          if retrySuccess and retryResult then
+            playerBuffCanvas = retryResult
+            isPlayerCanvasInitialized = true
+            updatePlayerBuffIcons()
+          else
+            safeLog("Repeated error creating player buff canvas: " .. tostring(retryResult))
+          end
+        end)
+      end
+    end
+    
+    pcall(function() 
+      api.On("UPDATE", OnUpdate)
+    end)
+    
+    -- Create association with settings update handler
+    pcall(function()
+      CooldawnBuffTracker.OnSettingsSaved = function()
+        -- Completely recreate UI when settings change
+        if helpers then
+          settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
+        end
+        
+        -- Обновляем модуль отладки баффов после изменения настроек
+        if BuffDebugger then
+          -- Сначала отключаем
+          pcall(function() BuffDebugger.Shutdown() end)
+          -- Затем инициализируем заново с новыми настройками
+          pcall(function() BuffDebugger.Initialize() end)
+        end
+        
+        -- Update mount canvas
+        local shouldShowMountUI = hasTrackedBuffs("playerpet")
+        
+        -- If there are no buffs to track, hide mount canvas
+        if not shouldShowMountUI and buffCanvas then
+          pcall(function() buffCanvas:Show(false) end)
+        elseif shouldShowMountUI then
+          -- If buffs exist but canvas is not created, create it
+          if not isCanvasInitialized then
+            local success, result = pcall(createBuffCanvas)
+            if success and result then
+              buffCanvas = result
+              isCanvasInitialized = true
+            end
+          end
+          
+          -- Update icons
+          if isCanvasInitialized then
+            updateBuffIcons()
+          end
+        end
+        
+        -- Update player canvas
+        local shouldShowPlayerUI = hasTrackedBuffs("player")
+        
+        -- If there are no buffs to track, hide player canvas
+        if not shouldShowPlayerUI and playerBuffCanvas then
+          pcall(function() playerBuffCanvas:Show(false) end)
+        elseif shouldShowPlayerUI then
+          -- If buffs exist but canvas is not created, create it
+          if not isPlayerCanvasInitialized then
+            local success, result = pcall(createPlayerBuffCanvas)
+            if success and result then
+              playerBuffCanvas = result
+              isPlayerCanvasInitialized = true
+            end
+          end
+          
+          -- Update icons
+          if isPlayerCanvasInitialized then
+            updatePlayerBuffIcons()
+          end
+        end
+      end
+    end)
   end)
+  
+  if not status then
+    safeLog("Error initializing: " .. tostring(err))
+  end
 end
 
 local function OnUnload()
   -- Only keep initialization/unload log
   pcall(function() api.On("UPDATE", function() end) end)
+  
+  -- Отключаем модуль отладки баффов
+  if BuffDebugger and BuffDebugger.Shutdown then
+    pcall(function() BuffDebugger.Shutdown() end)
+  end
   
   buffData = {}
   playerBuffData = {}  -- Очистить данные баффов игрока

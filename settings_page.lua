@@ -169,7 +169,7 @@ local function saveSettings()
     mainSettings[currentUnitType].posY = tonumber(settingsControls.posY:GetText())
     mainSettings[currentUnitType].lockPositioning = settingsControls.lockPositioning:GetChecked()
     
-    -- Update timer settings
+    -- Update timer settings (common for all unit types)
     if settingsControls.timerFontSize then
         mainSettings[currentUnitType].timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
     end
@@ -180,11 +180,6 @@ local function saveSettings()
             settingsControls.timerTextColor.colorBG:GetColor()
     end
     
-    -- Update debug settings (common for all unit types)
-    if settingsControls.debugBuffId then
-        mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
-    end
-
     -- Сохраняем пользовательские баффы
     mainSettings.customBuffs = {}
     if settingsControls.customBuffsContentContainer then
@@ -195,6 +190,11 @@ local function saveSettings()
             end
             table.insert(mainSettings.customBuffs, buff)
         end
+    end
+    
+    -- Сохраняем состояние режима отладки баффов
+    if settingsControls.debugBuffId then
+        mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
     end
     
     -- Save settings and explicitly apply
@@ -254,7 +254,7 @@ local function resetSettings()
             )
         end
         
-        -- Update debug settings (common)
+        -- Обновляем состояние чекбокса отладки баффов
         if settingsControls.debugBuffId then
             settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
         end
@@ -303,10 +303,6 @@ local function addTrackedBuff()
                 break
             end
         end
-    end
-
-    if buffId == 3523 then
-        isInCustomBuffs = true
     end
     
     if not isInCustomBuffs then
@@ -511,6 +507,11 @@ local function updateSettingsFields()
     
     if settingsControls.showTimer then
         settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- Default enabled
+    end
+    
+    -- Обновляем чекбокс отладки баффов
+    if settingsControls.debugBuffId then
+        settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
     end
     
     -- Update tracked buffs list
@@ -1258,25 +1259,6 @@ local function initSettingsPage()
     
     settingsControls.timerTextColor = timerTextColor
     
-    -- Debug settings group
-    local debugGroupLabel = helpers.createLabel('debugGroupLabel', timerTextColorLabel,
-                                             'Debug settings', 0, 35, 18)
-    debugGroupLabel:SetWidth(570)
-    debugGroupLabel:Show(true)
-    
-    -- Явно устанавливаем якорь для группы отладочных настроек
-    debugGroupLabel:RemoveAllAnchors()
-    debugGroupLabel:AddAnchor("TOPLEFT", timerTextColorLabel, "BOTTOMLEFT", 0, 20)
-    
-    -- Checkbox for debug buff ID - change position for better display
-    local debugBuffId = helpers.createCheckbox('debugBuffId', debugGroupLabel,
-                                            "Debug buffId", 0, 25)
-    if debugBuffId then 
-        debugBuffId:SetChecked(settings.debugBuffId or false)
-        debugBuffId:Show(true)
-    end
-    settingsControls.debugBuffId = debugBuffId
-    
     -- Create save and cancel buttons
     local saveButton = helpers.createButton("saveButton", settingsWindow, "Save", 0, 0)
     saveButton:SetExtent(120, 30)
@@ -1287,6 +1269,16 @@ local function initSettingsPage()
     end)
     saveButton:Show(true)
     settingsControls.saveButton = saveButton
+    
+    -- Debug Buff ID checkbox
+    local debugBuffId = helpers.createCheckbox('debugBuffId', settingsWindow, "Debug BuffId", 20, -25)
+    if debugBuffId then
+        debugBuffId:SetChecked(settings.debugBuffId or false)
+        debugBuffId:RemoveAllAnchors()
+        debugBuffId:AddAnchor("BOTTOMLEFT", settingsWindow, "BOTTOMLEFT", 20, -25)
+        debugBuffId:Show(true)
+    end
+    settingsControls.debugBuffId = debugBuffId
     
     local resetButton = helpers.createButton("resetButton", settingsWindow, "Reset", 0, 0)
     resetButton:SetExtent(120, 30)

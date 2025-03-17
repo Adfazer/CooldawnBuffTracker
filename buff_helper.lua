@@ -3,9 +3,7 @@ local BuffList = {}
 
 -- This table contains some examples of buffs that can be tracked
 -- Kept for backwards compatibility and as examples
-BuffList.ALL_BUFFS = {
-    {id = 3523, name = "Dash", cooldown = 30, timeOfAction = 3},
-}
+BuffList.ALL_BUFFS = {}
 
 -- Some common buff icons - also kept for backwards compatibility and as examples
 BuffList.ddsData = {
