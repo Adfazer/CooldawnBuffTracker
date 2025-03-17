@@ -304,6 +304,10 @@ local function addTrackedBuff()
             end
         end
     end
+
+    if buffId == 3523 then
+        isInCustomBuffs = true
+    end
     
     if not isInCustomBuffs then
         -- Показываем ошибку, если баф не найден в списке кастомных бафов
