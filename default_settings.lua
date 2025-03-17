@@ -37,7 +37,8 @@ local defaultSettings = {
         timerY = 0,
         trackedBuffs = {}  -- Empty array - user specifies buffs themselves
     },
-    debugBuffId = false  -- Debug option for buff ID logging - global setting
+    debugBuffId = false,  -- Debug option for buff ID logging - global setting
+    customBuffs = {} -- Таблица для хранения пользовательских баффов
 }
 
 return defaultSettings 
