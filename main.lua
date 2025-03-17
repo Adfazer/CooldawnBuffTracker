@@ -1528,7 +1528,9 @@ local function OnUnload()
   pcall(function() api.On("UPDATE", function() end) end)
   
   buffData = {}
+  playerBuffData = {}  -- Очистить данные баффов игрока
   isCanvasInitialized = false
+  isPlayerCanvasInitialized = false  -- Сбросить флаг инициализации канваса игрока
   
   if buffCanvas then
     pcall(function() 
@@ -1540,6 +1542,18 @@ local function OnUnload()
     end)
   end
   buffCanvas = nil
+  
+  -- Добавляем аналогичную очистку для канваса игрока
+  if playerBuffCanvas then
+    pcall(function() 
+      playerBuffCanvas:Show(false)
+      if playerBuffCanvas.ReleaseHandler then
+        playerBuffCanvas:ReleaseHandler("OnDragStart")
+        playerBuffCanvas:ReleaseHandler("OnDragStop")
+      end
+    end)
+  end
+  playerBuffCanvas = nil
   
   -- Unload settings page if module is loaded
   if settingsPage and settingsPage.Unload then
