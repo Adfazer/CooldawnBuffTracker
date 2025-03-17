@@ -469,7 +469,7 @@ local function initSettingsPage()
     
     -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 1150) -- Увеличиваем высоту окна для всех элементов
+                                             'CooldawnBuffTracker', 600, 950) -- Увеличиваем высоту окна для всех элементов
     if not settingsWindow then
         pcall(function() 
             if api.Log and api.Log.Err then
@@ -985,49 +985,48 @@ local function initSettingsPage()
     customBuffInputsLabel:RemoveAllAnchors()
     customBuffInputsLabel:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 0, 20)
     
-    -- Каждое поле в блоке Add Custom Buff начинается с новой строки
     -- Поле ID
     local newCustomBuffIdLabel = helpers.createLabel('newCustomBuffIdLabel', customBuffInputsLabel, 'ID:', 0, 30, 14)
     newCustomBuffIdLabel:SetWidth(100)
     newCustomBuffIdLabel:Show(true)
     
-    local newCustomBuffId = helpers.createEdit('newCustomBuffId', newCustomBuffIdLabel, "", 110, 0)
+    local newCustomBuffId = helpers.createEdit('newCustomBuffId', newCustomBuffIdLabel, "", 20, 0)
     newCustomBuffId:SetWidth(100)
     newCustomBuffId:Show(true)
     settingsControls.newCustomBuffId = newCustomBuffId
     
     -- Поле Name
-    local newCustomBuffNameLabel = helpers.createLabel('newCustomBuffNameLabel', customBuffInputsLabel, 'Name:', 0, 70, 14)
+    local newCustomBuffNameLabel = helpers.createLabel('newCustomBuffNameLabel', customBuffInputsLabel, 'NM:', 125, 30, 14)
     newCustomBuffNameLabel:SetWidth(100)
     newCustomBuffNameLabel:Show(true)
     
-    local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 110, 0)
-    newCustomBuffName:SetWidth(250)
+    local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 30, 0)
+    newCustomBuffName:SetWidth(100)
     newCustomBuffName:Show(true)
     settingsControls.newCustomBuffName = newCustomBuffName
     
     -- Поле Cooldown
-    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'Cooldown:', 0, 110, 14)
+    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 260, 30, 14)
     newCustomBuffCooldownLabel:SetWidth(100)
     newCustomBuffCooldownLabel:Show(true)
     
-    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 110, 0)
+    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 30, 0)
     newCustomBuffCooldown:SetWidth(100)
     newCustomBuffCooldown:Show(true)
     settingsControls.newCustomBuffCooldown = newCustomBuffCooldown
     
     -- Поле Duration
-    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'Duration:', 0, 150, 14)
+    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 395, 30, 14)
     newCustomBuffTimeOfActionLabel:SetWidth(100)
     newCustomBuffTimeOfActionLabel:Show(true)
     
-    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 110, 0)
+    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 25, 0)
     newCustomBuffTimeOfAction:SetWidth(100)
     newCustomBuffTimeOfAction:Show(true)
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
     
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 190)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 60)
     addCustomBuffButton:SetWidth(150)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
@@ -1159,7 +1158,7 @@ local function initSettingsPage()
     
     -- Явно устанавливаем якорь для группы настроек таймера
     timerGroupLabel:RemoveAllAnchors()
-    timerGroupLabel:AddAnchor("TOPLEFT", lockPositioning, "BOTTOMLEFT", 0, 20)
+    timerGroupLabel:AddAnchor("TOPLEFT", lockPositioning, "BOTTOMLEFT", 0, 10)
     
     -- Timer font size
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
@@ -1206,11 +1205,11 @@ local function initSettingsPage()
     settingsControls.timerTextColor = timerTextColor
     
     -- Debug Buff ID checkbox
-    local debugBuffId = helpers.createCheckbox('debugBuffId', settingsWindow, "Debug BuffId", 20, -25)
+    local debugBuffId = helpers.createCheckbox('debugBuffId', timerTextColorLabel, "Debug BuffId", 0, 20)
     if debugBuffId then
         debugBuffId:SetChecked(settings.debugBuffId or false)
         debugBuffId:RemoveAllAnchors()
-        debugBuffId:AddAnchor("BOTTOMLEFT", settingsWindow, "BOTTOMLEFT", 20, -25)
+        debugBuffId:AddAnchor("BOTTOMLEFT", timerTextColorLabel, "BOTTOMLEFT", 0, 20)
         debugBuffId:Show(true)
     end
     settingsControls.debugBuffId = debugBuffId
