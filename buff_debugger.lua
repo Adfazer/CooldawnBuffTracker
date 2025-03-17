@@ -11,6 +11,15 @@ local debugTimerActive = false
 local lastUpdateTime = 0
 local updateInterval = 500 -- миллисекунды между проверками
 
+-- Функция-помощник для форматирования ID баффа (без экспоненты)
+local function formatBuffId(buffId)
+    if type(buffId) == "number" then
+        return string.format("%.0f", buffId)
+    else
+        return tostring(buffId)
+    end
+end
+
 -- Функция для вывода ID баффа в чат
 local function PrintBuffId(buffId, unitId, event)
     if not buffId then return end
@@ -21,14 +30,17 @@ local function PrintBuffId(buffId, unitId, event)
         -- Попытка получить имя баффа из BuffList
         local BuffList = require("CooldawnBuffTracker/buff_helper")
         if BuffList and BuffList.GetBuffName then
-            buffName = BuffList.GetBuffName(buffId) or tostring(buffId)
+            buffName = BuffList.GetBuffName(buffId) or formatBuffId(buffId)
         end
     end)
+    
+    -- Форматируем ID баффа, чтобы большие числа отображались полностью без экспоненты
+    local formattedBuffId = formatBuffId(buffId)
     
     -- Формируем и выводим сообщение в чат
     local message = string.format("[BuffTracker] %s - Buff ID: %s, Unit: %s", 
                                  event or "BUFF_EVENT", 
-                                 tostring(buffId), 
+                                 formattedBuffId, 
                                  unitId or "unknown")
     
     -- Выводим сообщение в чат
@@ -138,7 +150,8 @@ local function CheckUnitBuffs(unitId)
             end
             
             if buffId then
-                currentBuffs[tostring(buffId)] = true
+                -- Используем строковый ключ для таблицы, но сохраняем оригинальный формат
+                currentBuffs[tostring(buffId)] = buffId
             end
         end
     end
@@ -151,9 +164,9 @@ local function CheckUnitBuffs(unitId)
         if not previousBuffs[buffId] then
             -- Новый бафф найден
             if unitId == "player" then
-                PrintBuffId(tonumber(buffId), unitId, "BUFF_ADDED")
+                PrintBuffId(currentBuffs[buffId], unitId, "BUFF_ADDED")
             else
-                PrintBuffId(tonumber(buffId), unitId, "BUFF_ADDED")
+                PrintBuffId(currentBuffs[buffId], unitId, "BUFF_ADDED")
             end
         end
     end
@@ -163,9 +176,9 @@ local function CheckUnitBuffs(unitId)
         if not currentBuffs[buffId] then
             -- Бафф был удален
             if unitId == "player" then
-                PrintBuffId(tonumber(buffId), unitId, "BUFF_REMOVED")
+                PrintBuffId(previousBuffs[buffId], unitId, "BUFF_REMOVED")
             else
-                PrintBuffId(tonumber(buffId), unitId, "BUFF_REMOVED")
+                PrintBuffId(previousBuffs[buffId], unitId, "BUFF_REMOVED")
             end
         end
     end
@@ -283,14 +296,17 @@ local function PrintAllActiveBuffs(unitId)
                 pcall(function()
                     local BuffList = require("CooldawnBuffTracker/buff_helper")
                     if BuffList and BuffList.GetBuffName then
-                        buffName = BuffList.GetBuffName(buffId) or tostring(buffId)
+                        buffName = BuffList.GetBuffName(buffId) or formatBuffId(buffId)
                     end
                 end)
                 
                 -- Выводим информацию о баффе
                 pcall(function()
+                    -- Форматируем ID баффа, чтобы большие числа отображались полностью
+                    local formattedBuffId = formatBuffId(buffId)
+                    
                     api.Log:Info(string.format("[BuffTracker] %d. Buff ID: %s", 
-                                i, tostring(buffId)))
+                                i, formattedBuffId))
                 end)
             end
         end
