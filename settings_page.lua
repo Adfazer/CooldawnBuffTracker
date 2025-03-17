@@ -294,26 +294,21 @@ local function addTrackedBuff()
         return
     end
     
-    -- Check buff existence in BuffList
-    local isValidBuff = false
-    pcall(function()
-        -- Use more reliable function for checking buff existence
-        if BuffList and BuffList.IsValidBuff then
-            isValidBuff = BuffList.IsValidBuff(buffId)
-        else
-            -- Backup option: try to get buff icon or name through BuffList
-            local buffIcon = BuffList.GetBuffIcon(buffId)
-            local buffName = BuffList.GetBuffName(buffId)
-            
-            -- Check buff existence - if there's at least an icon or specific name
-            isValidBuff = buffIcon ~= nil or (buffName and buffName ~= "Buff #" .. buffId)
+    -- Проверяем, есть ли баф с таким ID в списке кастомных бафов
+    local isInCustomBuffs = false
+    if settings and settings.customBuffs then
+        for _, buffInfo in ipairs(settings.customBuffs) do
+            if buffInfo.id == buffId then
+                isInCustomBuffs = true
+                break
+            end
         end
-    end)
+    end
     
-    if not isValidBuff then
-        -- Show error if buff ID not found in BuffList
+    if not isInCustomBuffs then
+        -- Показываем ошибку, если баф не найден в списке кастомных бафов
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: Buff with ID " .. buffId .. " not found in buff library")
+            settingsControls.addBuffError:SetText("Error: Buff ID " .. buffId .. " not found in custom buffs list")
             settingsControls.errorPanel:Show(true)
         end
         return
@@ -378,8 +373,8 @@ local function addCustomBuff()
         return
     end
 
-     -- Проверяем, существует ли уже бафф с таким ID
-     if settings and settings.customBuffs then
+    -- Проверяем, существует ли уже бафф с таким ID
+    if settings and settings.customBuffs then
         for _, buffInfo in ipairs(settings.customBuffs) do
             if buffInfo.id == id then
                 if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
@@ -389,6 +384,22 @@ local function addCustomBuff()
                 return
             end
         end
+    end
+    
+    -- Проверяем наличие иконки с таким ID
+    local iconExists = false
+    pcall(function()
+        -- Используем BuffList для проверки наличия иконки
+        local buffIcon = BuffList.GetBuffIcon(id)
+        iconExists = buffIcon ~= nil
+    end)
+    
+    if not iconExists then
+        if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
+            settingsControls.addCustomBuffError:SetText("Error: Icon for buff ID " .. id .. " not found")
+            settingsControls.customBuffErrorPanel:Show(true)
+        end
+        return
     end
 
     local newBuff = {
@@ -407,12 +418,11 @@ local function addCustomBuff()
     -- Обновляем список пользовательских баффов
     updateCustomBuffsList()
 
-     -- Очищаем поля ввода
-     settingsControls.newCustomBuffId:SetText("")
-     settingsControls.newCustomBuffName:SetText("")
-     settingsControls.newCustomBuffCooldown:SetText("")
-     settingsControls.newCustomBuffTimeOfAction:SetText("")
-
+    -- Очищаем поля ввода
+    settingsControls.newCustomBuffId:SetText("")
+    settingsControls.newCustomBuffName:SetText("")
+    settingsControls.newCustomBuffCooldown:SetText("")
+    settingsControls.newCustomBuffTimeOfAction:SetText("")
 
     -- Скрываем сообщение об ошибке
     if settingsControls.customBuffErrorPanel then

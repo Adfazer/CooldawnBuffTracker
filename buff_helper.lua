@@ -11912,7 +11912,7 @@ function BuffList.GetBuffInfo(buffId)
         id = buffId, 
         name = "Buff #" .. buffId, 
         cooldown = 30, 
-        timeOfAction = 5
+        timeOfAction = 50
     }
 end
 
