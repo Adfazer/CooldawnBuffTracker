@@ -11,6 +11,9 @@ pcall(function()
     BuffList = require("CooldawnBuffTracker/buff_helper")
 end)
 
+-- Импортируем модуль для отображения пиксельного изображения
+local pixelViewer = require('CooldawnBuffTracker/util/pixel_viewer')
+
 -- If failed to load the module for working with buffs, create a placeholder
 if not BuffsToTrack then
     BuffsToTrack = {
@@ -462,6 +465,20 @@ local function updateSettingsFields()
     
     -- Update tracked buffs list
     updateTrackedBuffsList()
+end
+
+-- Функция для добавления кнопки просмотра пиксельного изображения
+local function addPixelViewerButton()
+    if settingsWindow and settingsControls.debugBuffId then
+        -- Создаем кнопку для открытия окна просмотра пиксельного изображения
+        local pixelViewButton = helpers.createButton('pixelViewButton', settingsControls.debugBuffId, 'Thank you for your hard work!', 330, -250)
+        pixelViewButton:SetExtent(200, 200)
+        pixelViewButton:SetHandler("OnClick", function()
+            pixelViewer.openPixelWindow()
+        end)
+        pixelViewButton:Show(true)
+        settingsControls.pixelViewButton = pixelViewButton
+    end
 end
 
 local function initSettingsPage()
@@ -1251,6 +1268,9 @@ local function initSettingsPage()
             settingsControls.customBuffErrorPanel:Show(false)
         end
     end)
+
+    -- Добавляем вызов функции создания кнопки в конец функции инициализации окна настроек
+    addPixelViewerButton()
 end
 
 local function Unload()
@@ -1348,7 +1368,8 @@ local settings_page = {
     Load = initSettingsPage,
     Unload = Unload,
     openSettingsWindow = openSettingsWindow,
-    updatePositionFields = updatePositionFields
+    updatePositionFields = updatePositionFields,
+    openPixelWindow = pixelViewer.openPixelWindow
 }
 
 return settings_page 

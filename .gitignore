@@ -1,4 +1,6 @@
 .cursor/
+.myenv/
+.venv/
 .cursorignore 
 # Ignore PowerShell scripts
 *.ps1 
