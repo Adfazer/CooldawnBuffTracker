@@ -20,6 +20,12 @@ pcall(function()
   settingsPage = require("CooldawnBuffTracker/settings_page")
 end)
 
+-- Загружаем модуль отладки баффов
+local BuffDebugger
+pcall(function()
+  BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
+end)
+
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
@@ -127,138 +133,80 @@ local function getCurrentTime()
 end
 
 local function initBuffData()
-  -- Initialize data for mount (playerpet)
-  local trackedMountBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
+  -- Инициализируем данные для обоих типов юнитов
+  local unitTypes = {"playerpet", "player"}
   
-  -- Create a table to check existing mount buffs
-  local trackedMountBuffsMap = {}
-  for _, buffId in ipairs(trackedMountBuffIds) do
-    trackedMountBuffsMap[buffId] = true
-  end
-  
-  -- Remove buffs that are no longer tracked from buffData
-  for buffId in pairs(buffData) do
-    if not trackedMountBuffsMap[buffId] then
-      -- If buff is no longer tracked, remove it from data
-      buffData[buffId] = nil
-      safeLog("Mount buff removed from tracking: " .. tostring(buffId))
+  for _, unitType in ipairs(unitTypes) do
+    local buffDataTable = unitType == "player" and playerBuffData or buffData
+    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
+    
+    -- Создаем таблицу для проверки существующих баффов
+    local trackedBuffsMap = {}
+    for _, buffId in ipairs(trackedBuffIds) do
+      trackedBuffsMap[buffId] = true
     end
-  end
-  
-  -- Add new mount buffs
-  for _, buffId in ipairs(trackedMountBuffIds) do
-    if not buffData[buffId] then
-      local buffName = BuffList.GetBuffName(buffId)
-      local buffIcon = BuffList.GetBuffIcon(buffId)
-      local buffCooldown = BuffList.GetBuffCooldown(buffId)
-      local buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
-      
-      if not buffCooldown or tonumber(buffCooldown) <= 0 then
-        buffCooldown = 30
+    
+    -- Удаляем баффы, которые больше не отслеживаются
+    for buffId in pairs(buffDataTable) do
+      if not trackedBuffsMap[buffId] then
+        -- Если бафф больше не отслеживается, удаляем его из данных
+        buffDataTable[buffId] = nil
+        safeLog(unitType .. " buff removed from tracking: " .. tostring(buffId))
       end
-      
-      if not buffTimeOfAction or tonumber(buffTimeOfAction) <= 0 then
-        buffTimeOfAction = 3
-      end
-      
-      buffData[buffId] = {
-        name = buffName,
-        icon = buffIcon,
-        cooldown = buffCooldown,
-        timeOfAction = buffTimeOfAction,
-        fixedTime = nil,
-        status = "ready"
-      }
-      
-      safeLog("Mount buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
     end
-  end
-  
-  -- Initialize data for player (player)
-  local trackedPlayerBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
-  
-  -- Create a table to check existing player buffs
-  local trackedPlayerBuffsMap = {}
-  for _, buffId in ipairs(trackedPlayerBuffIds) do
-    trackedPlayerBuffsMap[buffId] = true
-  end
-  
-  -- Remove buffs that are no longer tracked from playerBuffData
-  for buffId in pairs(playerBuffData) do
-    if not trackedPlayerBuffsMap[buffId] then
-      -- If buff is no longer tracked, remove it from data
-      playerBuffData[buffId] = nil
-      safeLog("Player buff removed from tracking: " .. tostring(buffId))
-    end
-  end
-  
-  -- Add new player buffs
-  for _, buffId in ipairs(trackedPlayerBuffIds) do
-    if not playerBuffData[buffId] then
-      local buffName = BuffList.GetBuffName(buffId)
-      local buffIcon = BuffList.GetBuffIcon(buffId)
-      local buffCooldown = BuffList.GetBuffCooldown(buffId)
-      local buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
-      
-      if not buffCooldown or tonumber(buffCooldown) <= 0 then
-        buffCooldown = 30
+    
+    -- Добавляем новые баффы
+    for _, buffId in ipairs(trackedBuffIds) do
+      if not buffDataTable[buffId] then
+        local buffName = BuffList.GetBuffName(buffId)
+        local buffIcon = BuffList.GetBuffIcon(buffId)
+        local buffCooldown = BuffList.GetBuffCooldown(buffId)
+        local buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
+        
+        if not buffCooldown or tonumber(buffCooldown) <= 0 then
+          buffCooldown = 30
+        end
+        
+        if not buffTimeOfAction or tonumber(buffTimeOfAction) <= 0 then
+          buffTimeOfAction = 3
+        end
+        
+        buffDataTable[buffId] = {
+          name = buffName,
+          icon = buffIcon,
+          cooldown = buffCooldown,
+          timeOfAction = buffTimeOfAction,
+          fixedTime = nil,
+          status = "ready"
+        }
+        
+        safeLog(unitType .. " buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
       end
-      
-      if not buffTimeOfAction or tonumber(buffTimeOfAction) <= 0 then
-        buffTimeOfAction = 3
-      end
-      
-      playerBuffData[buffId] = {
-        name = buffName,
-        icon = buffIcon,
-        cooldown = buffCooldown,
-        timeOfAction = buffTimeOfAction,
-        fixedTime = nil,
-        status = "ready"
-      }
-      
-      safeLog("Player buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
     end
   end
 end
 
 local function setBuffStatus(buffId, status, currentTime, unitType)
-  if unitType == "player" then
-    if not playerBuffData[buffId] then return end
-    
-    local buff = playerBuffData[buffId]
-    local oldStatus = buff.status
-    
-    buff.status = status
-    
-    if status == "active" then
-      buff.fixedTime = currentTime
-    elseif status == "cooldown" and not buff.fixedTime then
-      -- If buff transitions to cooldown, but fixedTime is not set,
-      -- set current time as cooldown start time
-      buff.fixedTime = currentTime
-    end
-    
-    buff.statusChangeTime = currentTime
-  else
-    -- Default work with mount
-    if not buffData[buffId] then return end
-    
-    local buff = buffData[buffId]
-    local oldStatus = buff.status
-    
-    buff.status = status
-    
-    if status == "active" then
-      buff.fixedTime = currentTime
-    elseif status == "cooldown" and not buff.fixedTime then
-      -- If buff transitions to cooldown, but fixedTime is not set,
-      -- set current time as cooldown start time
-      buff.fixedTime = currentTime
-    end
-    
-    buff.statusChangeTime = currentTime
+  unitType = unitType or "playerpet"  -- По умолчанию используем mount
+  
+  local buffDataTable = unitType == "player" and playerBuffData or buffData
+  
+  if not buffDataTable[buffId] then return end
+  
+  local buff = buffDataTable[buffId]
+  local oldStatus = buff.status
+  
+  buff.status = status
+  
+  if status == "active" then
+    buff.fixedTime = currentTime
+  elseif status == "cooldown" and not buff.fixedTime then
+    -- Если бафф переходит в состояние кулдауна, но fixedTime не установлено,
+    -- устанавливаем текущее время как время начала кулдауна
+    buff.fixedTime = currentTime
   end
+  
+  buff.statusChangeTime = currentTime
 end
 
 local function checkBuffStatus(buff, currentTime)
@@ -730,223 +678,251 @@ local function hasTrackedBuffs(unitType)
   end
 end
 
-local function updateBuffIcons()
+local function updateBuffIcons(unitType)
+  unitType = unitType or "playerpet"  -- По умолчанию используем mount
+  
   local status, err = pcall(function()
-    if not buffCanvas or not isCanvasInitialized then return end
+    local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+    local isCanvasInit = unitType == "player" and isPlayerCanvasInitialized or isCanvasInitialized
+    local buffDataTable = unitType == "player" and playerBuffData or buffData
     
-    -- Check if there are buffs to track
-    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
+    if not canvas or not isCanvasInit then return end
+    
+    -- Проверяем, есть ли баффы для отслеживания
+    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
     if #trackedBuffIds == 0 then
-      buffCanvas:Show(false)
+      canvas:Show(false)
       return
     end
     
-    -- Create an ordered list of buffs according to the order of addition
+    -- Создаем упорядоченный список баффов согласно порядку добавления
     local activeBuffs = {}
     for i, buffId in ipairs(trackedBuffIds) do
-      if buffData[buffId] then
-        table.insert(activeBuffs, {id = buffId, buff = buffData[buffId], order = i})
+      if buffDataTable[buffId] then
+        table.insert(activeBuffs, {id = buffId, buff = buffDataTable[buffId], order = i})
       end
     end
     
-    -- If there are no buffs to track, hide the canvas
+    -- Если нет баффов для отслеживания, скрываем canvas
     if #activeBuffs == 0 then
-      buffCanvas:Show(false)
+      canvas:Show(false)
       return
     end
     
-    for i, icon in ipairs(buffCanvas.buffIcons or {}) do
+    -- Обновляем все иконки и скрываем неиспользуемые
+    for i, icon in ipairs(canvas.buffIcons or {}) do
       if icon and icon.Show then
-        pcall(function() 
-          -- Update size for each icon and position based on interval
-          icon:SetExtent(settings.playerpet.iconSize, settings.playerpet.iconSize)
+        -- Показываем и настраиваем только иконки, которые используются
+        if i <= #activeBuffs then
+          local buffInfo = activeBuffs[i]
+          local buffId = buffInfo.id
+          local buff = buffInfo.buff
           
-          -- Recalculate position based on current interval
-          icon:RemoveAllAnchors()
-          local xPosition = (i-1) * (settings.playerpet.iconSize + settings.playerpet.iconSpacing)
-          icon:AddAnchor("LEFT", buffCanvas, xPosition, 0)
-          
-          icon:Show(false) 
-        end)
-      end
-    end
-    
-    -- Get current time for status updates
-    local currentTime = tonumber(getCurrentTime()) or 0
-    
-    -- Update all icons according to current buff list
-    for i, buffInfo in ipairs(activeBuffs) do
-      local icon = buffCanvas.buffIcons[i]
-      if icon then
-        local buffId = buffInfo.id
-        local buff = buffInfo.buff
-        
-        pcall(function()
-          -- Get icon for buff
-          local iconPath = BuffList.GetBuffIcon(buffId) or "icon_default"
-          F_SLOT.SetIconBackGround(icon, buff.icon)
-          
-          -- Explicitly set icon visible
-          icon:SetVisible(true)
-        end)
-        
-        -- Save buff ID for use in event handlers
-        icon.buffId = buffId
-        icon:Show(true)
-        
-        -- Display buff name if enabled in settings
-        if icon.nameLabel and settings.playerpet.showLabel then
-          pcall(function()
-            icon.nameLabel:SetText(buff.name or "")
-            icon.nameLabel:Show(true)
-          end)
-        elseif icon.nameLabel then
-          pcall(function()
-            icon.nameLabel:Show(false)
-          end)
-        end
-        
-        -- Determine current buff status
-        local currentStatus = buff.status
-        if buff.fixedTime then
-          currentStatus = checkBuffStatus(buff, currentTime)
-        end
-        
-        -- Set icon color based on status
-        if currentStatus == "ready" then
-          -- For ready buff - transparent overlay (no highlight)
           pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(1, 1, 1, 0) -- Completely transparent
-            end
+            -- Обновляем размер иконки согласно текущим настройкам
+            pcall(function()
+              icon:SetExtent(settings[unitType].iconSize, settings[unitType].iconSize)
+              
+              -- Пересчитываем позицию на основе текущего интервала
+              icon:RemoveAllAnchors()
+              local xPosition = (i-1) * (settings[unitType].iconSize + settings[unitType].iconSpacing)
+              icon:AddAnchor("LEFT", canvas, xPosition, 0)
+            end)
             
-            -- Invisible border for ready state
-            if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
-            if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
-            if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
-            
-            -- Also restore normal white color to icon
-            icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
-          end)
-        elseif currentStatus == "active" then
-          -- For active buff - green highlight
-          pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(0, 1, 0, 0.3) -- Semi-transparent green
-            end
-            
-            -- Bright green border for active state
-            local borderColor = {0, 1, 0, 0.8} -- Bright green
-            if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            
-            -- Also set green color for icon
-            icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
-          end)
-        elseif currentStatus == "cooldown" then
-          -- For buff on cooldown - red highlight
-          pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(1, 0, 0, 0.3) -- Semi-transparent red
-            end
-            
-            -- Bright red border for cooldown state
-            local borderColor = {1, 0, 0, 0.8} -- Bright red
-            if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            
-            -- Also set red color for icon
-            icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
-          end)
-        end
-        
-        -- Display timer if enabled in settings
-        if icon.timerLabel and settings.playerpet.showTimer then
-          pcall(function()
-            local timerText = ""
-            
-            if currentStatus == "active" and buff.fixedTime then
-              local remainingActive = buff.timeOfAction - (currentTime - buff.fixedTime)
-              if remainingActive > 0 then
-                timerText = formatTimerSeconds(remainingActive)
+            -- Устанавливаем изображение для иконки
+            pcall(function()
+              F_SLOT.SetIconBackGround(icon, buff.icon)
+              
+              -- Явно устанавливаем иконку видимой
+              icon:Show(true)
+              
+              -- Сохраняем ID баффа для использования в обработчиках событий и отладчике
+              icon.buffId = buffId
+              
+              -- Добавляем debug ID для отладчика баффов
+              if BuffDebugger and BuffDebugger.SetBuffIdForIcon then
+                pcall(function() 
+                  BuffDebugger.SetBuffIdForIcon(icon, buffId, unitType) 
+                end)
               end
-            elseif currentStatus == "cooldown" and buff.fixedTime then
-              local remainingCooldown = buff.cooldown - (currentTime - buff.fixedTime)
-              if remainingCooldown > 0 then
-                timerText = formatTimerSeconds(remainingCooldown)
-              end
+            end)
+            
+            -- Отображаем имя баффа, если включено в настройках
+            if icon.nameLabel and settings[unitType].showLabel then
+              pcall(function()
+                -- Обновляем размер шрифта метки на основе текущих настроек
+                icon.nameLabel.style:SetFontSize(settings[unitType].labelFontSize or 14)
+                
+                -- Обновляем позицию метки на основе текущих настроек
+                icon.nameLabel:RemoveAllAnchors()
+                icon.nameLabel:AddAnchor("CENTER", icon, settings[unitType].labelX or 0, settings[unitType].labelY or -30)
+                
+                -- Обновляем цвет текста метки из настроек
+                local labelTextColor = settings[unitType].labelTextColor or {r = 1, g = 1, b = 1, a = 1}
+                icon.nameLabel.style:SetColor(labelTextColor.r, labelTextColor.g, labelTextColor.b, labelTextColor.a)
+                
+                icon.nameLabel:SetText(buff.name or "")
+                icon.nameLabel:Show(true)
+              end)
+            elseif icon.nameLabel then
+              pcall(function()
+                icon.nameLabel:Show(false)
+              end)
             end
             
-            icon.timerLabel:SetText(timerText)
+            -- Определяем текущий статус баффа
+            local currentTime = tonumber(getCurrentTime()) or 0
+            local currentStatus = buff.status
+            if buff.fixedTime then
+              currentStatus = checkBuffStatus(buff, currentTime)
+            end
             
-            -- Set timer text color from settings
-            local timerTextColor = settings.playerpet.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-            icon.timerLabel.style:SetColor(timerTextColor.r, timerTextColor.g, timerTextColor.b, timerTextColor.a)
+            -- Устанавливаем цвет иконки в зависимости от статуса
+            if currentStatus == "ready" then
+              -- Для готового баффа - прозрачный оверлей (без подсветки)
+              pcall(function()
+                if icon.statusOverlay then
+                  icon.statusOverlay:SetColor(1, 1, 1, 0) -- Полностью прозрачный
+                end
+                
+                -- Невидимая граница для состояния готовности
+                if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
+                if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
+                if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
+                if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
+                
+                -- Также восстанавливаем нормальный белый цвет иконки
+                icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
+              end)
+            elseif currentStatus == "active" then
+              -- Для активного баффа - зеленая подсветка
+              pcall(function()
+                if icon.statusOverlay then
+                  icon.statusOverlay:SetColor(0, 1, 0, 0.3) -- Полупрозрачный зеленый
+                end
+                
+                -- Яркая зеленая граница для активного состояния
+                local borderColor = {0, 1, 0, 0.8} -- Яркий зеленый
+                if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                
+                -- Также устанавливаем зеленый цвет для иконки
+                icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
+              end)
+            elseif currentStatus == "cooldown" then
+              -- Для баффа на кулдауне - красная подсветка
+              pcall(function()
+                if icon.statusOverlay then
+                  icon.statusOverlay:SetColor(1, 0, 0, 0.3) -- Полупрозрачный красный
+                end
+                
+                -- Яркая красная граница для состояния кулдауна
+                local borderColor = {1, 0, 0, 0.8} -- Яркий красный
+                if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
+                
+                -- Также устанавливаем красный цвет для иконки
+                icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
+              end)
+            end
             
-            -- Show timer only if there is text
-            icon.timerLabel:Show(timerText ~= "")
-            
-            -- Show timer background if there is text
-            if icon.timerBg then
-              icon.timerBg:Show(timerText ~= "")
+            -- Отображаем таймер, если включено в настройках
+            if icon.timerLabel and settings[unitType].showTimer then
+              pcall(function()
+                local timerText = ""
+                
+                if currentStatus == "active" and buff.fixedTime then
+                  local remainingActive = buff.timeOfAction - (currentTime - buff.fixedTime)
+                  if remainingActive > 0 then
+                    timerText = formatTimerSeconds(remainingActive)
+                  end
+                elseif currentStatus == "cooldown" and buff.fixedTime then
+                  local remainingCooldown = buff.cooldown - (currentTime - buff.fixedTime)
+                  if remainingCooldown > 0 then
+                    timerText = formatTimerSeconds(remainingCooldown)
+                  end
+                end
+                
+                -- Обновляем размер шрифта таймера на основе текущих настроек
+                icon.timerLabel.style:SetFontSize(settings[unitType].timerFontSize or 16)
+                
+                -- Обновляем позицию таймера на основе текущих настроек
+                icon.timerLabel:RemoveAllAnchors()
+                icon.timerLabel:AddAnchor("CENTER", icon, settings[unitType].timerX or 0, settings[unitType].timerY or 0)
+                
+                icon.timerLabel:SetText(timerText)
+                
+                -- Устанавливаем цвет текста таймера из настроек
+                local timerTextColor = settings[unitType].timerTextColor or {r = 1, g = 1, b = 1, a = 1}
+                icon.timerLabel.style:SetColor(timerTextColor.r, timerTextColor.g, timerTextColor.b, timerTextColor.a)
+                
+                -- Показываем таймер только если есть текст
+                icon.timerLabel:Show(timerText ~= "")
+                
+                -- Показываем фон таймера, если есть текст
+                if icon.timerBg then
+                  pcall(function()
+                    -- Обновляем размер фона таймера
+                    icon.timerBg:SetExtent(settings[unitType].iconSize, settings[unitType].iconSize/2)
+                    icon.timerBg:RemoveAllAnchors()
+                    icon.timerBg:AddAnchor("BOTTOM", icon, 0, 0)
+                    
+                    icon.timerBg:Show(timerText ~= "")
+                  end)
+                end
+              end)
+            elseif icon.timerLabel then
+              pcall(function()
+                icon.timerLabel:Show(false)
+                if icon.timerBg then
+                  icon.timerBg:Show(false)
+                end
+              end)
             end
           end)
-        elseif icon.timerLabel then
+        else
+          -- Скрываем неиспользуемые иконки
           pcall(function()
-            icon.timerLabel:Show(false)
-            if icon.timerBg then
-              icon.timerBg:Show(false)
-            end
+            icon:Show(false)
+            if icon.nameLabel then icon.nameLabel:Show(false) end
+            if icon.timerLabel then icon.timerLabel:Show(false) end
+            if icon.timerBg then icon.timerBg:Show(false) end
           end)
         end
       end
     end
     
-    -- Hide extra icons
-    for i = #activeBuffs + 1, #buffCanvas.buffIcons do
-      local icon = buffCanvas.buffIcons[i]
-      if icon then
-        pcall(function()
-          icon:Show(false)
-          if icon.nameLabel then icon.nameLabel:Show(false) end
-          if icon.timerLabel then icon.timerLabel:Show(false) end
-          if icon.timerBg then icon.timerBg:Show(false) end
-        end)
-      end
-    end
-    
-    -- Update canvas size
+    -- Обновляем размер canvas
     local totalWidth = 0
     pcall(function()
-      totalWidth = (#activeBuffs) * settings.playerpet.iconSize + (#activeBuffs - 1) * settings.playerpet.iconSpacing
-      totalWidth = math.max(totalWidth, settings.playerpet.iconSize * 2)
+      totalWidth = (#activeBuffs) * settings[unitType].iconSize + (#activeBuffs - 1) * settings[unitType].iconSpacing
+      totalWidth = math.max(totalWidth, settings[unitType].iconSize * 2)
       
-      -- Set new canvas size
-      buffCanvas:SetWidth(totalWidth)
-      buffCanvas:SetHeight(settings.playerpet.iconSize * 1.2)
+      -- Устанавливаем новый размер canvas
+      canvas:SetWidth(totalWidth)
+      canvas:SetHeight(settings[unitType].iconSize * 1.2)
       
-      -- Set position only if canvas is not being dragged
-      if buffCanvas.isDragging ~= true then
-        buffCanvas:RemoveAllAnchors()
-        buffCanvas:AddAnchor("TOPLEFT", "UIParent", settings.playerpet.posX, settings.playerpet.posY)
+      -- Устанавливаем позицию только если canvas не перетаскивается
+      if canvas.isDragging ~= true then
+        canvas:RemoveAllAnchors()
+        canvas:AddAnchor("TOPLEFT", "UIParent", settings[unitType].posX, settings[unitType].posY)
         
-        -- Make sure that dragging is still enabled/disabled correctly
+        -- Убеждаемся, что перетаскивание все еще правильно включено/выключено
         pcall(function()
-          if buffCanvas.EnableDrag ~= nil then
-            buffCanvas:EnableDrag(not settings.playerpet.lockPositioning)
+          if canvas.EnableDrag ~= nil then
+            canvas:EnableDrag(not settings[unitType].lockPositioning)
           end
         end)
       end
       
-      if buffCanvas.bg then
-        buffCanvas.bg:SetColor(0, 0, 0, 0.4)
+      if canvas.bg then
+        canvas.bg:SetColor(0, 0, 0, 0.4)
       end
-      buffCanvas:Show(true)
+      canvas:Show(true)
     end)
   end)
   
@@ -955,195 +931,62 @@ local function updateBuffIcons()
   end
 end
 
-local function checkMountBuffs()
-  local status, err = pcall(function()
-    -- Hide window if addon is disabled in settings
-    if not settings.playerpet.enabled then
-      if buffCanvas then
-        buffCanvas:Show(false)
-      end
-      return
-    end
-    
-    -- Check if there are buffs to track
-    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
-    
-    -- If the list of tracked buffs is empty, hide the canvas 
-    if #trackedBuffIds == 0 then
-      if buffCanvas then
-        buffCanvas:Show(false)
-      end
-      return
-    end
-    
-    local activeBuffsOnMount = {}
-    local hasChanges = false
-    local currentBuffsOnMount = {}
-    
-    -- Check active buffs on mount
-    for i = 1, api.Unit:UnitBuffCount("playerpet") do
-      local buff = api.Unit:UnitBuff("playerpet", i)
-      
-      -- Correct access to buff ID - using buff.buff_id instead of buff.id
-      if buff and buff.buff_id then
-        -- Record current buff IDs for later comparison
-        currentBuffsOnMount[buff.buff_id] = true
-        
-        -- For debug mode register new mount buffs
-        if settings.debugBuffId and not cachedMountBuffs[buff.buff_id] then
-          pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] New mount buff: " .. tostring(buff.buff_id))
-          end)
-        end
-        
-        -- Add only tracked buffs to active buffs
-        if BuffsToTrack.ShouldTrackBuff(buff.buff_id) then
-          activeBuffsOnMount[buff.buff_id] = true
-        end
-      end
-    end
-    
-    -- Update cached buffs of mount
-    cachedMountBuffs = currentBuffsOnMount
-    
-    local currentTime = tonumber(getCurrentTime()) or 0
-    
-    for buffId, buffInfo in pairs(buffData) do
-      local oldStatus = buffInfo.status
-      
-      if activeBuffsOnMount[buffId] then
-        if buffInfo.status ~= "active" then
-          setBuffStatus(buffId, "active", currentTime, "playerpet")
-          hasChanges = true
-          
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "active" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: active", buffId))
-            end)
-          end
-          
-          -- Update cached status
-          cachedBuffStatus[buffId] = "active"
-        end
-      else
-        if buffInfo.fixedTime then
-          local expectedStatus = checkBuffStatus(buffInfo, currentTime)
-          
-          if expectedStatus ~= buffInfo.status then
-            setBuffStatus(buffId, expectedStatus, currentTime, "playerpet")
-            hasChanges = true
-            
-            -- Log only status change for tracked buffs
-            if settings.debugBuffId and cachedBuffStatus[buffId] ~= expectedStatus then
-              pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: %s", buffId, expectedStatus))
-              end)
-            end
-            
-            -- Update cached status
-            cachedBuffStatus[buffId] = expectedStatus
-          end
-        elseif buffInfo.status ~= "ready" then
-          setBuffStatus(buffId, "ready", nil, "playerpet")
-          hasChanges = true
-          
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d changed status to: ready", buffId))
-            end)
-          end
-          
-          -- Update cached status
-          cachedBuffStatus[buffId] = "ready"
-        end
-      end
-    end
-    
-    -- Check if any buffs have disappeared from mount
-    if settings.debugBuffId then
-      for buffId in pairs(cachedMountBuffs) do
-        if not currentBuffsOnMount[buffId] then
-          pcall(function()
-            api.Log:Info("[CooldawnBuffTracker] Buff disappeared from mount: " .. tostring(buffId))
-          end)
-        end
-      end
-    end
-    
-    if hasChanges and isCanvasInitialized then
-      updateBuffIcons()
-    end
-  end)
+local function checkBuffs(unitType)
+  unitType = unitType or "playerpet"  -- По умолчанию работаем с маунтом
   
-  if not status then
-    safeLog("Error checking buffs: " .. tostring(err))
-  end
-end
-
--- Function to check for player buffs
-local function checkPlayerBuffs()
   local status, err = pcall(function()
-    -- Hide window if addon is disabled in settings
-    if not settings.player.enabled then
-      if playerBuffCanvas then
-        playerBuffCanvas:Show(false)
+    -- Определяем, какие переменные использовать в зависимости от типа юнита
+    local unitSettings = settings[unitType]
+    local buffDataTable = unitType == "player" and playerBuffData or buffData
+    local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+    local isCanvasInit = unitType == "player" and isPlayerCanvasInitialized or isCanvasInitialized
+    
+    -- Скрываем окно, если аддон отключен в настройках
+    if not unitSettings.enabled then
+      if canvas then
+        canvas:Show(false)
       end
       return
     end
     
-    -- Check if there are buffs to track
-    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
+    -- Проверяем, есть ли баффы для отслеживания
+    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
     
-    -- If the list of tracked buffs is empty, hide the canvas 
+    -- Если список отслеживаемых баффов пуст, скрываем канвас
     if #trackedBuffIds == 0 then
-      if playerBuffCanvas then
-        playerBuffCanvas:Show(false)
+      if canvas then
+        canvas:Show(false)
       end
       return
     end
     
-    local activeBuffsOnPlayer = {}
+    local activeBuffsOnUnit = {}
     local hasChanges = false
-    local currentBuffsOnPlayer = {}
+    local currentBuffsOnUnit = {}
     
-    -- Check active buffs on player
+    -- Проверяем активные баффы на юните
     pcall(function()
-      -- Get all active buffs on player
-      local buffCount = api.Unit:UnitBuffCount("player") or 0
+      -- Получаем все активные баффы на юните
+      local buffCount = api.Unit:UnitBuffCount(unitType) or 0
       for i = 1, buffCount do
-        local buff = api.Unit:UnitBuff("player", i)
+        local buff = api.Unit:UnitBuff(unitType, i)
         
-        -- Check if buff exists and has an identifier
+        -- Проверяем, существует ли бафф и есть ли у него идентификатор
         if buff and buff.buff_id then
-          -- Record current buff IDs for later comparison
-          currentBuffsOnPlayer[buff.buff_id] = true
+          -- Записываем текущие ID баффов для последующего сравнения
+          currentBuffsOnUnit[buff.buff_id] = true
           
-          -- For debug mode register new player buffs
-          if settings.debugBuffId and not cachedPlayerBuffs[buff.buff_id] then
-            pcall(function()
-              api.Log:Info("[CooldawnBuffTracker] New player buff: " .. tostring(buff.buff_id))
-            end)
-            cachedPlayerBuffs[buff.buff_id] = true
-          end
-          
-          -- Check if we need to track this buff
-          if BuffsToTrack.ShouldTrackBuff(buff.buff_id, "player") then
-            -- If the buff is not in data yet or it's not active, update its status
-            if not playerBuffData[buff.buff_id] or (playerBuffData[buff.buff_id].status ~= "active") then
-              -- Buff became active, update its status
-              setBuffStatus(buff.buff_id, "active", getCurrentTime(), "player")
+          -- Проверяем, нужно ли отслеживать этот бафф
+          if BuffsToTrack.ShouldTrackBuff(buff.buff_id, unitType) then
+            activeBuffsOnUnit[buff.buff_id] = true
+            
+            -- Если баффа еще нет в данных или он не активен, обновляем его статус
+            if not buffDataTable[buff.buff_id] or (buffDataTable[buff.buff_id].status ~= "active") then
+              -- Бафф стал активным, обновляем его статус
+              setBuffStatus(buff.buff_id, "active", getCurrentTime(), unitType)
               hasChanges = true
               
-              -- Log only status change for tracked buffs
-              if settings.debugBuffId then
-                pcall(function()
-                  api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: active", buff.buff_id))
-                end)
-              end
-              
-              -- Update cached status
+              -- Обновляем кэшированный статус
               cachedBuffStatus[buff.buff_id] = "active"
             end
           end
@@ -1151,61 +994,59 @@ local function checkPlayerBuffs()
       end
     end)
     
-    -- Check buffs that were active but are no longer there
-    local currentTime = tonumber(getCurrentTime())
-    for _, buffId in ipairs(trackedBuffIds) do
-      if playerBuffData[buffId] then
-        local buffInfo = playerBuffData[buffId]
-        
-        if currentBuffsOnPlayer[buffId] then
-          -- Buff is active on player, nothing to do
-        elseif buffInfo.status == "active" then
-          -- If the buff was active but is now off - it's on cooldown
-          setBuffStatus(buffId, "cooldown", currentTime, "player")
+    -- Обновляем кэшированные баффы юнита
+    if unitType == "player" then
+      cachedPlayerBuffs = currentBuffsOnUnit
+    else
+      cachedMountBuffs = currentBuffsOnUnit
+    end
+    
+    -- Проверяем баффы, которые были активны, но больше не существуют
+    local currentTime = tonumber(getCurrentTime()) or 0
+    
+    for buffId, buffInfo in pairs(buffDataTable) do
+      local oldStatus = buffInfo.status
+      
+      if currentBuffsOnUnit[buffId] then
+        -- Бафф активен на юните, ничего делать не нужно
+        if buffInfo.status ~= "active" then
+          setBuffStatus(buffId, "active", currentTime, unitType)
           hasChanges = true
           
-          -- Log only status change for tracked buffs
-          if settings.debugBuffId and cachedBuffStatus[buffId] ~= "cooldown" then
-            pcall(function()
-              api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: cooldown", buffId))
-            end)
-          end
+          -- Обновляем кэшированный статус
+          cachedBuffStatus[buffId] = "active"
+        end
+      else
+        -- Если баффа больше нет на юните
+        if buffInfo.fixedTime then
+          local expectedStatus = checkBuffStatus(buffInfo, currentTime)
           
-          -- Update cached status
-          cachedBuffStatus[buffId] = "cooldown"
-        elseif buffInfo.status == "cooldown" then
-          -- If the buff is already on cooldown, check if it's over
-          local timeSinceLastStatus = currentTime - (buffInfo.statusChangeTime or 0)
-          local cooldownTime = BuffList.GetBuffCooldown(buffId) or 0
-          
-          if cooldownTime > 0 and timeSinceLastStatus >= cooldownTime then
-            -- If cooldown time has passed, buff is ready to use again
-            setBuffStatus(buffId, "ready", currentTime, "player")
+          if expectedStatus ~= buffInfo.status then
+            setBuffStatus(buffId, expectedStatus, currentTime, unitType)
             hasChanges = true
             
-            -- Log only status change for tracked buffs
-            if settings.debugBuffId and cachedBuffStatus[buffId] ~= "ready" then
-              pcall(function()
-                api.Log:Info(string.format("[CooldawnBuffTracker] Buff ID %d (player) changed status to: ready", buffId))
-              end)
-            end
-            
-            -- Update cached status
-            cachedBuffStatus[buffId] = "ready"
+            -- Обновляем кэшированный статус
+            cachedBuffStatus[buffId] = expectedStatus
           end
+        elseif buffInfo.status ~= "ready" then
+          setBuffStatus(buffId, "ready", nil, unitType)
+          hasChanges = true
+          
+          -- Обновляем кэшированный статус
+          cachedBuffStatus[buffId] = "ready"
         end
       end
     end
     
-    -- Show window only if there are tracked buffs and if tracking is allowed in settings
+    -- Показываем окно только если есть отслеживаемые баффы и если отслеживание разрешено в настройках
     local hasBuffs = false
-    for _ in pairs(playerBuffData) do
+    for _ in pairs(buffDataTable) do
         hasBuffs = true
         break
     end
     
-    if hasBuffs and settings.player.enabled then
-      if not isPlayerCanvasInitialized then
+    if hasBuffs and unitSettings.enabled then
+      if unitType == "player" and not isPlayerCanvasInitialized then
         local success, _ = pcall(function()
           playerBuffCanvas = createPlayerBuffCanvas()
           isPlayerCanvasInitialized = true
@@ -1213,354 +1054,417 @@ local function checkPlayerBuffs()
         if not success then
           safeLog("Error initializing player buff canvas")
         end
-      end
-      
-      if playerBuffCanvas then
-        playerBuffCanvas:Show(true)
+      elseif unitType == "playerpet" and not isCanvasInitialized then
+        local success, _ = pcall(function()
+          buffCanvas = createBuffCanvas()
+          isCanvasInitialized = true
+        end)
+        if not success then
+          safeLog("Error initializing mount buff canvas")
+        end
       end
       
       if hasChanges then
-        updatePlayerBuffIcons()
+        updateBuffIcons(unitType)
       end
     end
   end)
   
   if not status then
-    safeLog("Error checking player buffs: " .. tostring(err))
+    safeLog("Error checking buffs for " .. unitType .. ": " .. tostring(err))
   end
 end
 
 local function OnUpdate(dt)
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
-    checkMountBuffs()
-    checkPlayerBuffs()
+    checkBuffs("playerpet")  -- Проверяем баффы маунта
+    checkBuffs("player")     -- Проверяем баффы игрока
     updateTimer = 0
   end
   
   refreshUITimer = refreshUITimer + dt
   if refreshUITimer >= refreshUIInterval then
     if isCanvasInitialized then
-      pcall(updateBuffIcons)
+      pcall(function() updateBuffIcons("playerpet") end)
     end
     if isPlayerCanvasInitialized then
-      pcall(updatePlayerBuffIcons)
+      pcall(function() updateBuffIcons("player") end)
     end
+    
+    -- Обновляем отладчик баффов, если он существует
+    if BuffDebugger and BuffDebugger.Update then
+      pcall(function() 
+        BuffDebugger.Update({
+          playerCanvas = playerBuffCanvas,
+          mountCanvas = buffCanvas,
+          currentTime = getCurrentTime()
+        }) 
+      end)
+    end
+    
     refreshUITimer = 0
   end
 end
 
-local function OnLoad()
-  pcall(function()
-    safeLog("Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
-  end)
+-- Определяем функции инициализации интерфейса
+local function initializeUI()
+  -- Проверяем необходимость отображения каждого из канвасов
+  local unitTypes = {"playerpet", "player"}
   
-  -- Load module for working with buffs
-  pcall(function()
-    BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
-  end)
-  
-  -- Load module with information about available buffs
-  pcall(function()
-    BuffList = require("CooldawnBuffTracker/buff_helper")
-  end)
-  
-  -- Load module for working with helper functions
-  pcall(function()
-    helpers = require("CooldawnBuffTracker/helpers")
-  end)
-  
-  -- Load module for settings page
-  pcall(function()
-    settingsPage = require("CooldawnBuffTracker/settings_page")
-  end)
-  
-  if not BuffsToTrack then
-    -- If module for working with buffs couldn't be loaded, create a placeholder
-    BuffsToTrack = {
-      GetAllTrackedBuffIds = function() return {} end,
-      ShouldTrackBuff = function(id) return false end
-    }
-    pcall(function() api.Log:Info("Failed to load buffs_to_track.lua, using placeholder") end)
-  end
-  
-  if not BuffList then
-    BuffList = {
-      GetBuffName = function(id) return "Buff #" .. id end,
-      GetBuffIcon = function(id) return nil end,
-      GetBuffCooldown = function(id) return 0 end,
-      GetBuffTimeOfAction = function(id) return 0 end
-    }
-    pcall(function() api.Log:Info("Failed to load buff_helper.lua, using placeholder") end)
-  end
-  
-  -- Load settings if available
-  if helpers and helpers.getSettings then
-    settings = helpers.getSettings()
-  else
-    settings = api.GetSettings("CooldawnBuffTracker") or {}
-  end
-  
-  -- Check settings correctness and migrate to new structure if necessary
-  if not settings.playerpet then
+  for _, unitType in ipairs(unitTypes) do
+    local shouldShowUI = hasTrackedBuffs(unitType)
+    safeLog("UI initialization for " .. unitType .. ": " .. (shouldShowUI and "show" or "hide"))
     
-    -- Create structure for playerpet
-    settings.playerpet = {
-      posX = settings.posX or defaultPositionX,
-      posY = settings.posY or defaultPositionY,
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = settings.enabled ~= false, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = settings.trackedBuffs or {}
-    }
-    
-    -- Create structure for player
-    settings.player = {
-      posX = settings.posX or defaultPositionX,
-      posY = (settings.posY or defaultPositionY) + 70, -- Slightly below the mount
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = true, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = {}
-    }
-    
-    -- Remove old keys
-    settings.posX = nil
-    settings.posY = nil
-    settings.iconSize = nil
-    settings.iconSpacing = nil
-    settings.lockPositioning = nil
-    settings.enabled = nil
-    settings.timerTextColor = nil
-    settings.labelTextColor = nil
-    settings.showLabel = nil
-    settings.labelFontSize = nil
-    settings.labelX = nil
-    settings.labelY = nil
-    settings.showTimer = nil
-    settings.timerFontSize = nil
-    settings.timerX = nil
-    settings.timerY = nil
-    settings.trackedBuffs = nil
-    
-    -- Save updated settings
-    if helpers and helpers.updateSettings then
-      helpers.updateSettings(settings)
-    else
-      api.SaveSettings()
-    end
-    
-    safeLog("Settings migrated to new structure with separation for playerpet and player")
-  end
-  
-  -- Check for presence of debugBuffId key
-  if settings.debugBuffId == nil then
-    settings.debugBuffId = false
-  end
-  
-  -- Check if settings are correct
-  if settings.iconSize == nil then
-    safeLog("Missing iconSize key in settings, setting default value")
-    settings.iconSize = iconSize
-  end
-  
-  if settings.iconSpacing == nil then
-    safeLog("Missing iconSpacing key in settings, setting default value")
-    settings.iconSpacing = 5
-  end
-  
-  if settings.posX == nil then
-    safeLog("Missing posX key in settings, setting default value")
-    settings.posX = defaultPositionX
-  end
-  
-  if settings.posY == nil then
-    safeLog("Missing posY key in settings, setting default value")
-    settings.posY = defaultPositionY
-  end
-  
-  -- Initialize settings page if module is loaded
-  if settingsPage and settingsPage.Load then
-    pcall(function() settingsPage.Load() end)
-  end
-  
-  pcall(initBuffData)
-  
-  -- Check if there are tracked mount buffs when loading
-  local shouldShowMountUI = hasTrackedBuffs("playerpet")
-  safeLog("Mount UI initialization: " .. (shouldShowMountUI and "show" or "hide"))
-  
-  -- Check if there are tracked player buffs when loading
-  local shouldShowPlayerUI = hasTrackedBuffs("player")
-  safeLog("Player UI initialization: " .. (shouldShowPlayerUI and "show" or "hide"))
-  
-  -- Create canvas for mount if there are tracked buffs
-  if shouldShowMountUI then
-    local success, result = pcall(createBuffCanvas)
-    if success and result then
-      buffCanvas = result
-      isCanvasInitialized = true
-      updateBuffIcons()
-    else
-      safeLog("Error creating mount buff canvas: " .. tostring(result))
+    if shouldShowUI then
+      local canvasCreator = unitType == "player" and createPlayerBuffCanvas or createBuffCanvas
+      local canvasVariable = unitType == "player" and "playerBuffCanvas" or "buffCanvas"
+      local canvasInitVariable = unitType == "player" and "isPlayerCanvasInitialized" or "isCanvasInitialized"
       
-      -- Repeat attempt to create canvas with delay
-      api:DoIn(1000, function()
-        local retrySuccess, retryResult = pcall(createBuffCanvas)
-        if retrySuccess and retryResult then
-          buffCanvas = retryResult
-          isCanvasInitialized = true
-          updateBuffIcons()
-        else
-          safeLog("Repeated error creating mount buff canvas: " .. tostring(retryResult))
-        end
-      end)
-    end
-  end
-  
-  -- Create canvas for player if there are tracked buffs
-  if shouldShowPlayerUI then
-    local success, result = pcall(createPlayerBuffCanvas)
-    if success and result then
-      playerBuffCanvas = result
-      isPlayerCanvasInitialized = true
-      updatePlayerBuffIcons()
-    else
-      safeLog("Error creating player buff canvas: " .. tostring(result))
-      
-      -- Repeat attempt to create canvas with delay
-      api:DoIn(1000, function()
-        local retrySuccess, retryResult = pcall(createPlayerBuffCanvas)
-        if retrySuccess and retryResult then
-          playerBuffCanvas = retryResult
+      local success, result = pcall(canvasCreator)
+      if success and result then
+        if unitType == "player" then
+          playerBuffCanvas = result
           isPlayerCanvasInitialized = true
-          updatePlayerBuffIcons()
+          updateBuffIcons("player")
         else
-          safeLog("Repeated error creating player buff canvas: " .. tostring(retryResult))
+          buffCanvas = result
+          isCanvasInitialized = true
+          updateBuffIcons("playerpet")
         end
-      end)
+      else
+        safeLog("Error creating canvas for " .. unitType .. ": " .. tostring(result))
+        
+        -- Повторная попытка создания канваса с задержкой
+        api:DoIn(1000, function()
+          local retrySuccess, retryResult = pcall(canvasCreator)
+          if retrySuccess and retryResult then
+            if unitType == "player" then
+              playerBuffCanvas = retryResult
+              isPlayerCanvasInitialized = true
+              updateBuffIcons("player")
+            else
+              buffCanvas = retryResult
+              isCanvasInitialized = true
+              updateBuffIcons("playerpet")
+            end
+          else
+            safeLog("Repeated error creating canvas for " .. unitType .. ": " .. tostring(retryResult))
+          end
+        end)
+      end
     end
   end
-  
-  pcall(function() 
-    api.On("UPDATE", OnUpdate)
-  end)
-  
-  -- Create association with settings update handler
-  pcall(function()
-    CooldawnBuffTracker.OnSettingsSaved = function()
-      -- Completely recreate UI when settings change
-      if helpers then
-        settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
-      end
-      
-      -- Update mount canvas
-      local shouldShowMountUI = hasTrackedBuffs("playerpet")
-      
-      -- If there are no buffs to track, hide mount canvas
-      if not shouldShowMountUI and buffCanvas then
-        pcall(function() buffCanvas:Show(false) end)
-      elseif shouldShowMountUI then
-        -- If buffs exist but canvas is not created, create it
-        if not isCanvasInitialized then
-          local success, result = pcall(createBuffCanvas)
-          if success and result then
-            buffCanvas = result
-            isCanvasInitialized = true
-          end
-        end
-        
-        -- Update icons
-        if isCanvasInitialized then
-          updateBuffIcons()
-        end
-      end
-      
-      -- Update player canvas
-      local shouldShowPlayerUI = hasTrackedBuffs("player")
-      
-      -- If there are no buffs to track, hide player canvas
-      if not shouldShowPlayerUI and playerBuffCanvas then
-        pcall(function() playerBuffCanvas:Show(false) end)
-      elseif shouldShowPlayerUI then
-        -- If buffs exist but canvas is not created, create it
-        if not isPlayerCanvasInitialized then
-          local success, result = pcall(createPlayerBuffCanvas)
-          if success and result then
-            playerBuffCanvas = result
-            isPlayerCanvasInitialized = true
-          end
-        end
-        
-        -- Update icons
-        if isPlayerCanvasInitialized then
-          updatePlayerBuffIcons()
-        end
-      end
+end
+
+local function OnLoad()
+  local status, err = pcall(function()
+    -- Загружаем настройки
+    if helpers then
+      settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
+    else
+      safeLog("Helpers module not loaded, using basic settings")
+      settings = {
+        playerpet = {
+          posX = defaultPositionX,
+          posY = defaultPositionY,
+          iconSize = iconSize,
+          iconSpacing = iconSpacing,
+          enabled = true,
+          lockPositioning = false
+        },
+        player = {
+          posX = defaultPositionX,
+          posY = defaultPositionY + 70,  -- Slightly lower than mount
+          iconSize = iconSize,
+          iconSpacing = iconSpacing,
+          enabled = true,
+          lockPositioning = false
+        }
+      }
     end
+    
+    -- Инициализация модуля отладки баффов
+    if BuffDebugger and BuffDebugger.Initialize then
+      pcall(function() 
+        -- Передаем информацию о обоих канвасах в отладчик
+        BuffDebugger.Initialize({
+          playerCanvas = playerBuffCanvas,
+          mountCanvas = buffCanvas,
+          settings = settings
+        }) 
+      end)
+    end
+    
+    -- Инициализируем данные баффов
+    initBuffData()
+
+    pcall(function()
+      safeLog("Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
+    end)
+    
+    -- Загружаем модуль для работы с баффами
+    pcall(function()
+      BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
+    end)
+    
+    -- Загружаем модуль с информацией о доступных баффах
+    pcall(function()
+      BuffList = require("CooldawnBuffTracker/buff_helper")
+    end)
+    
+    -- Загружаем модуль для работы с вспомогательными функциями
+    pcall(function()
+      helpers = require("CooldawnBuffTracker/helpers")
+    end)
+    
+    -- Загружаем модуль для страницы настроек
+    pcall(function()
+      settingsPage = require("CooldawnBuffTracker/settings_page")
+    end)
+    
+    if not BuffsToTrack then
+      -- Если модуль для работы с баффами не может быть загружен, создаем заглушку
+      BuffsToTrack = {
+        GetAllTrackedBuffIds = function() return {} end,
+        ShouldTrackBuff = function(id) return false end
+      }
+      pcall(function() api.Log:Info("Failed to load buffs_to_track.lua, using placeholder") end)
+    end
+    
+    if not BuffList then
+      BuffList = {
+        GetBuffName = function(id) return "Buff #" .. id end,
+        GetBuffIcon = function(id) return nil end,
+        GetBuffCooldown = function(id) return 0 end,
+        GetBuffTimeOfAction = function(id) return 0 end
+      }
+      pcall(function() api.Log:Info("Failed to load buff_helper.lua, using placeholder") end)
+    end
+    
+    -- Проверяем корректность настроек и мигрируем в новую структуру при необходимости
+    if not settings.playerpet then
+      
+      -- Создаем структуру для playerpet
+      settings.playerpet = {
+        posX = settings.posX or defaultPositionX,
+        posY = settings.posY or defaultPositionY,
+        iconSize = settings.iconSize or iconSize,
+        iconSpacing = settings.iconSpacing or 5,
+        lockPositioning = settings.lockPositioning or false,
+        enabled = settings.enabled ~= false, -- Enabled by default
+        timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
+        labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
+        showLabel = settings.showLabel or false,
+        labelFontSize = settings.labelFontSize or 14,
+        labelX = settings.labelX or 0,
+        labelY = settings.labelY or -30,
+        showTimer = settings.showTimer ~= false, -- Enabled by default
+        timerFontSize = settings.timerFontSize or 16,
+        timerX = settings.timerX or 0,
+        timerY = settings.timerY or 0,
+        trackedBuffs = settings.trackedBuffs or {}
+      }
+      
+      -- Создаем структуру для player
+      settings.player = {
+        posX = settings.posX or defaultPositionX,
+        posY = (settings.posY or defaultPositionY) + 70, -- Slightly below the mount
+        iconSize = settings.iconSize or iconSize,
+        iconSpacing = settings.iconSpacing or 5,
+        lockPositioning = settings.lockPositioning or false,
+        enabled = true, -- Enabled by default
+        timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
+        labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
+        showLabel = settings.showLabel or false,
+        labelFontSize = settings.labelFontSize or 14,
+        labelX = settings.labelX or 0,
+        labelY = settings.labelY or -30,
+        showTimer = settings.showTimer ~= false, -- Enabled by default
+        timerFontSize = settings.timerFontSize or 16,
+        timerX = settings.timerX or 0,
+        timerY = settings.timerY or 0,
+        trackedBuffs = {}
+      }
+      
+      -- Удаляем старые ключи
+      settings.posX = nil
+      settings.posY = nil
+      settings.iconSize = nil
+      settings.iconSpacing = nil
+      settings.lockPositioning = nil
+      settings.enabled = nil
+      settings.timerTextColor = nil
+      settings.labelTextColor = nil
+      settings.showLabel = nil
+      settings.labelFontSize = nil
+      settings.labelX = nil
+      settings.labelY = nil
+      settings.showTimer = nil
+      settings.timerFontSize = nil
+      settings.timerX = nil
+      settings.timerY = nil
+      settings.trackedBuffs = nil
+      
+      -- Сохраняем обновленные настройки
+      if helpers and helpers.updateSettings then
+        helpers.updateSettings(settings)
+      else
+        api.SaveSettings()
+      end
+      
+      safeLog("Settings migrated to new structure with separation for playerpet and player")
+    end
+    
+    -- Проверяем корректность настроек
+    if settings.iconSize == nil then
+      safeLog("Missing iconSize key in settings, setting default value")
+      settings.iconSize = iconSize
+    end
+    
+    if settings.iconSpacing == nil then
+      safeLog("Missing iconSpacing key in settings, setting default value")
+      settings.iconSpacing = 5
+    end
+    
+    if settings.posX == nil then
+      safeLog("Missing posX key in settings, setting default value")
+      settings.posX = defaultPositionX
+    end
+    
+    if settings.posY == nil then
+      safeLog("Missing posY key in settings, setting default value")
+      settings.posY = defaultPositionY
+    end
+    
+    -- Инициализируем страницу настроек, если модуль загружен
+    if settingsPage and settingsPage.Load then
+      pcall(function() settingsPage.Load() end)
+    end
+    
+    -- Инициализируем UI
+    initializeUI()
+    
+    pcall(function() 
+      api.On("UPDATE", OnUpdate)
+    end)
+    
+    -- Создаем ассоциацию с обработчиком обновления настроек
+    pcall(function()
+      CooldawnBuffTracker.OnSettingsSaved = function()
+        -- Полностью пересоздаем UI при изменении настроек
+        if helpers then
+          settings = helpers.getSettings(buffCanvas, playerBuffCanvas)
+        end
+        
+        -- Обновляем модуль отладки баффов после изменения настроек
+        if BuffDebugger then
+          -- Сначала отключаем
+          pcall(function() 
+            BuffDebugger.Shutdown({
+              playerCanvas = playerBuffCanvas,
+              mountCanvas = buffCanvas
+            }) 
+          end)
+          -- Затем инициализируем заново с новыми настройками
+          pcall(function() 
+            BuffDebugger.Initialize({
+              playerCanvas = playerBuffCanvas,
+              mountCanvas = buffCanvas,
+              settings = settings
+            }) 
+          end)
+        end
+        
+        -- Проверяем необходимость отображения каждого из канвасов
+        local unitTypes = {"playerpet", "player"}
+        
+        for _, unitType in ipairs(unitTypes) do
+          local shouldShowUI = hasTrackedBuffs(unitType)
+          local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+          local isCanvasInit = unitType == "player" and isPlayerCanvasInitialized or isCanvasInitialized
+          
+          -- Если баффов для отслеживания нет, скрываем канвас
+          if not shouldShowUI and canvas then
+            pcall(function() canvas:Show(false) end)
+          elseif shouldShowUI then
+            -- Если баффы существуют, но канвас не создан, создаем его
+            if not isCanvasInit then
+              local canvasCreator = unitType == "player" and createPlayerBuffCanvas or createBuffCanvas
+              local success, result = pcall(canvasCreator)
+              if success and result then
+                if unitType == "player" then
+                  playerBuffCanvas = result
+                  isPlayerCanvasInitialized = true
+                else
+                  buffCanvas = result
+                  isCanvasInitialized = true 
+                end
+              end
+            end
+            
+            -- Обновляем иконки
+            updateBuffIcons(unitType)
+          end
+        end
+      end
+    end)
   end)
+  
+  if not status then
+    safeLog("Error initializing: " .. tostring(err))
+  end
 end
 
 local function OnUnload()
-  -- Only keep initialization/unload log
+  -- Отключаем обработчик обновления
   pcall(function() api.On("UPDATE", function() end) end)
   
+  -- Отключаем модуль отладки баффов
+  if BuffDebugger and BuffDebugger.Shutdown then
+    pcall(function() 
+      -- Передаем информацию о выгрузке всех канвасов
+      BuffDebugger.Shutdown({
+        playerCanvas = playerBuffCanvas,
+        mountCanvas = buffCanvas
+      }) 
+    end)
+  end
+  
+  -- Очищаем данные
   buffData = {}
-  playerBuffData = {}  -- Очистить данные баффов игрока
+  playerBuffData = {}
   isCanvasInitialized = false
-  isPlayerCanvasInitialized = false  -- Сбросить флаг инициализации канваса игрока
+  isPlayerCanvasInitialized = false
   
-  if buffCanvas then
-    pcall(function() 
-      buffCanvas:Show(false)
-      if buffCanvas.ReleaseHandler then
-        buffCanvas:ReleaseHandler("OnDragStart")
-        buffCanvas:ReleaseHandler("OnDragStop")
-      end
-    end)
+  -- Очищаем канвасы
+  local unitTypes = {"playerpet", "player"}
+  for _, unitType in ipairs(unitTypes) do
+    local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+    if canvas then
+      pcall(function() 
+        canvas:Show(false)
+        if canvas.ReleaseHandler then
+          canvas:ReleaseHandler("OnDragStart")
+          canvas:ReleaseHandler("OnDragStop")
+        end
+      end)
+    end
+    
+    -- Обнуляем переменные канвасов
+    if unitType == "player" then
+      playerBuffCanvas = nil
+    else
+      buffCanvas = nil
+    end
   end
-  buffCanvas = nil
   
-  -- Добавляем аналогичную очистку для канваса игрока
-  if playerBuffCanvas then
-    pcall(function() 
-      playerBuffCanvas:Show(false)
-      if playerBuffCanvas.ReleaseHandler then
-        playerBuffCanvas:ReleaseHandler("OnDragStart")
-        playerBuffCanvas:ReleaseHandler("OnDragStop")
-      end
-    end)
-  end
-  playerBuffCanvas = nil
-  
-  -- Unload settings page if module is loaded
+  -- Выгружаем страницу настроек, если модуль загружен
   if settingsPage and settingsPage.Unload then
     pcall(function() settingsPage.Unload() end)
   end
   
-  -- Save settings through helpers
+  -- Сохраняем настройки через вспомогательные функции
   if helpers and helpers.updateSettings then
     helpers.updateSettings()
   end
@@ -1599,69 +1503,57 @@ end
 -- Handler for event when tracked buffs list is updated
 pcall(function()
   api.On("MOUNT_BUFF_TRACKER_UPDATE_BUFFS", function()
-    safeLog("Received buffs list update event")
+    safeLog("Received buff list update event")
     
-    -- Update buff data (including removing unnecessary ones)
+    -- Обновляем данные баффов (включая удаление ненужных)
     local oldMountBuffsCount = 0
     for _ in pairs(buffData) do oldMountBuffsCount = oldMountBuffsCount + 1 end
     
     local oldPlayerBuffsCount = 0
     for _ in pairs(playerBuffData) do oldPlayerBuffsCount = oldPlayerBuffsCount + 1 end
     
-    -- Initialize buff data
+    -- Инициализируем данные баффов
     initBuffData()
     
-    -- Count new number of buffs
+    -- Считаем новое количество баффов
     local newMountBuffsCount = 0
     for _ in pairs(buffData) do newMountBuffsCount = newMountBuffsCount + 1 end
     
     local newPlayerBuffsCount = 0
     for _ in pairs(playerBuffData) do newPlayerBuffsCount = newPlayerBuffsCount + 1 end
     
-    safeLog("Mount buffs list update: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
-    safeLog("Player buffs list update: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
+    safeLog("Mount buff list updated: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
+    safeLog("Player buff list updated: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
     
-    -- Check if we need to show mount canvas
-    local shouldShowMountUI = hasTrackedBuffs("playerpet")
+    -- Проверяем необходимость отображения каждого из канвасов
+    local unitTypes = {"playerpet", "player"}
     
-    -- If there are no buffs to track, hide mount canvas
-    if not shouldShowMountUI and buffCanvas then
-      pcall(function() buffCanvas:Show(false) end)
-    elseif shouldShowMountUI then
-      -- If buffs exist but canvas is not created, create it
-      if not isCanvasInitialized then
-        local success, result = pcall(createBuffCanvas)
-        if success and result then
-          buffCanvas = result
-          isCanvasInitialized = true
-        end
-      end
+    for _, unitType in ipairs(unitTypes) do
+      local shouldShowUI = hasTrackedBuffs(unitType)
+      local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+      local isCanvasInit = unitType == "player" and isPlayerCanvasInitialized or isCanvasInitialized
       
-      -- Update icons
-      if isCanvasInitialized then
-        updateBuffIcons()
-      end
-    end
-    
-    -- Check if we need to show player canvas
-    local shouldShowPlayerUI = hasTrackedBuffs("player")
-    
-    -- If there are no buffs to track, hide player canvas
-    if not shouldShowPlayerUI and playerBuffCanvas then
-      pcall(function() playerBuffCanvas:Show(false) end)
-    elseif shouldShowPlayerUI then
-      -- If buffs exist but canvas is not created, create it
-      if not isPlayerCanvasInitialized then
-        local success, result = pcall(createPlayerBuffCanvas)
-        if success and result then
-          playerBuffCanvas = result
-          isPlayerCanvasInitialized = true
+      -- Если баффов для отслеживания нет, скрываем канвас
+      if not shouldShowUI and canvas then
+        pcall(function() canvas:Show(false) end)
+      elseif shouldShowUI then
+        -- Если баффы существуют, но канвас не создан, создаем его
+        if not isCanvasInit then
+          local canvasCreator = unitType == "player" and createPlayerBuffCanvas or createBuffCanvas
+          local success, result = pcall(canvasCreator)
+          if success and result then
+            if unitType == "player" then
+              playerBuffCanvas = result
+              isPlayerCanvasInitialized = true
+            else
+              buffCanvas = result
+              isCanvasInitialized = true 
+            end
+          end
         end
-      end
-      
-      -- Update icons
-      if isPlayerCanvasInitialized then
-        updatePlayerBuffIcons()
+        
+        -- Обновляем иконки
+        updateBuffIcons(unitType)
       end
     end
   end)
@@ -1669,242 +1561,29 @@ end)
 
 -- Handler for event when buffs list becomes empty
 pcall(function()
-  api.On("MOUNT_BUFF_TRACKER_EMPTY_LIST", function()
-    safeLog("Received event about empty buff list - forcibly hiding canvas")
+  api.On("MOUNT_BUFF_TRACKER_EMPTY_LIST", function(unitType)
+    unitType = unitType or "playerpet"
     
-    -- Force hide canvas
+    safeLog("Received empty buff list event for " .. unitType .. " - forcibly hiding canvas")
+    
+    local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
+    local buffDataTable = unitType == "player" and playerBuffData or buffData
+    
+    -- Принудительно скрываем канвас
     pcall(function()
-      if buffCanvas then
-        buffCanvas:Show(false)
+      if canvas then
+        canvas:Show(false)
         safeLog("Canvas hidden successfully")
       end
     end)
     
-    -- For safety, reset data
+    -- Для безопасности сбрасываем данные
     pcall(function()
-      for buffId in pairs(buffData) do
-        buffData[buffId] = nil
+      for buffId in pairs(buffDataTable) do
+        buffDataTable[buffId] = nil
       end
     end)
   end)
 end)
-
--- Add new function for updating player buff icons
-function updatePlayerBuffIcons()
-  local status, err = pcall(function()
-    if not playerBuffCanvas or not isPlayerCanvasInitialized then return end
-    
-    -- Check if there are buffs to track
-    local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
-    if #trackedBuffIds == 0 then
-      playerBuffCanvas:Show(false)
-      return
-    end
-    
-    -- Create ordered list of buffs in accordance with addition order
-    local activeBuffs = {}
-    for i, buffId in ipairs(trackedBuffIds) do
-      if playerBuffData[buffId] then
-        table.insert(activeBuffs, {id = buffId, buff = playerBuffData[buffId], order = i})
-      end
-    end
-    
-    -- If there are no buffs to track, hide the canvas
-    if #activeBuffs == 0 then
-      playerBuffCanvas:Show(false)
-      return
-    end
-    
-    -- Sort buffs by order
-    table.sort(activeBuffs, function(a, b) return a.order < b.order end)
-    
-    -- Get current time for status updates
-    local currentTime = tonumber(getCurrentTime()) or 0
-    
-    -- Update all icons in accordance with current buff list
-    for i, buffInfo in ipairs(activeBuffs) do
-      local icon = playerBuffCanvas.buffIcons[i]
-      if icon then
-        local buffId = buffInfo.id
-        local buff = buffInfo.buff
-        
-        pcall(function()
-          -- Make sure the icon is positioned correctly before displaying
-          icon:RemoveAllAnchors()
-          local xPosition = (i-1) * (settings.player.iconSize + settings.player.iconSpacing)
-          icon:AddAnchor("LEFT", playerBuffCanvas, xPosition, 0)
-          
-          -- Set icon for buff
-          F_SLOT.SetIconBackGround(icon, buff.icon)
-          icon:SetVisible(true)
-        end)
-        
-        -- Save buff ID for later use
-        icon.buffId = buffId
-        icon:Show(true)
-        
-        -- Display buff name if enabled
-        if icon.nameLabel and settings.player.showLabel then
-          pcall(function()
-            icon.nameLabel:SetText(buff.name or "")
-            icon.nameLabel:Show(true)
-          end)
-        elseif icon.nameLabel then
-          pcall(function()
-            icon.nameLabel:Show(false)
-          end)
-        end
-        
-        -- Determine current status of buff
-        local currentStatus = "ready"
-        
-        if buff.fixedTime then
-          currentStatus = checkBuffStatus(buff, currentTime)
-        else
-          currentStatus = buff.status
-        end
-        
-        -- Set icon color based on status
-        if currentStatus == "ready" then
-          -- For ready buff - transparent overlay (no highlight)
-          pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(1, 1, 1, 0) -- Completely transparent
-            end
-            
-            -- Invisible border for ready state
-            if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
-            if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
-            if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
-            
-            -- Also return normal white color to icon
-            icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
-          end)
-        elseif currentStatus == "active" then
-          -- For active buff - green highlight
-          pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(0, 1, 0, 0.3) -- Green semi-transparent
-            end
-            
-            -- Bright green border for active state
-            local borderColor = {0, 1, 0, 0.8} -- Bright green
-            if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            
-            -- Also set green color for icon
-            icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
-          end)
-        elseif currentStatus == "cooldown" then
-          -- For buff on cooldown - red highlight
-          pcall(function() 
-            if icon.statusOverlay then
-              icon.statusOverlay:SetColor(1, 0, 0, 0.3) -- Red semi-transparent
-            end
-            
-            -- Bright red border for cooldown state
-            local borderColor = {1, 0, 0, 0.8} -- Bright red
-            if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-            
-            -- Also set red color for icon
-            icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
-          end)
-        end
-        
-        -- Display timer if enabled
-        if icon.timerLabel and settings.player.showTimer then
-          pcall(function()
-            local timerText = ""
-            
-            if currentStatus == "active" and buff.fixedTime then
-              local remainingActive = buff.timeOfAction - (currentTime - buff.fixedTime)
-              if remainingActive > 0 then
-                timerText = formatTimerSeconds(remainingActive)
-              end
-            elseif currentStatus == "cooldown" and buff.fixedTime then
-              local remainingCooldown = buff.cooldown - (currentTime - buff.fixedTime)
-              if remainingCooldown > 0 then
-                timerText = formatTimerSeconds(remainingCooldown)
-              end
-            end
-            
-            icon.timerLabel:SetText(timerText)
-            
-            -- Set timer text color from settings
-            local timerTextColor = settings.player.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-            icon.timerLabel.style:SetColor(timerTextColor.r, timerTextColor.g, timerTextColor.b, timerTextColor.a)
-            
-            -- Show timer only if there is text
-            icon.timerLabel:Show(timerText ~= "")
-            
-            -- Show timer background if there is text
-            if icon.timerBg then
-              icon.timerBg:Show(timerText ~= "")
-            end
-          end)
-        elseif icon.timerLabel then
-          pcall(function()
-            icon.timerLabel:Show(false)
-            if icon.timerBg then
-              icon.timerBg:Show(false)
-            end
-          end)
-        end
-      end
-    end
-    
-    -- Hide extra icons
-    for i = #activeBuffs + 1, #playerBuffCanvas.buffIcons do
-      local icon = playerBuffCanvas.buffIcons[i]
-      if icon then
-        pcall(function()
-          icon:Show(false)
-          if icon.nameLabel then icon.nameLabel:Show(false) end
-          if icon.timerLabel then icon.timerLabel:Show(false) end
-          if icon.timerBg then icon.timerBg:Show(false) end
-        end)
-      end
-    end
-    
-    -- Update canvas size
-    local totalWidth = 0
-    pcall(function()
-      totalWidth = (#activeBuffs) * settings.player.iconSize + (#activeBuffs - 1) * settings.player.iconSpacing
-      totalWidth = math.max(totalWidth, settings.player.iconSize * 2)
-      
-      -- Set new canvas size
-      playerBuffCanvas:SetWidth(totalWidth)
-      playerBuffCanvas:SetHeight(settings.player.iconSize * 1.2)
-      
-      -- Set position only if canvas is not being dragged
-      if playerBuffCanvas.isDragging ~= true then
-        playerBuffCanvas:RemoveAllAnchors()
-        playerBuffCanvas:AddAnchor("TOPLEFT", "UIParent", settings.player.posX, settings.player.posY)
-        
-        -- Make sure that dragging is still enabled/disabled correctly
-        pcall(function()
-          if playerBuffCanvas.EnableDrag ~= nil then
-            playerBuffCanvas:EnableDrag(not settings.player.lockPositioning)
-          end
-        end)
-      end
-      
-      if playerBuffCanvas.bg then
-        playerBuffCanvas.bg:SetColor(0, 0, 0, 0.4)
-      end
-      playerBuffCanvas:Show(true)
-    end)
-  end)
-  
-  if not status then
-    safeLog("Error updating player buff icons: " .. tostring(err))
-  end
-end
 
 return CooldawnBuffTracker

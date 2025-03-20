@@ -28,11 +28,6 @@ function helpers.getSettings(cnv, playerCnv)
         end
     end
     
-    -- Check global settings
-    if settings.debugBuffId == nil then
-        settings.debugBuffId = defaultSettings.debugBuffId
-    end
-    
     return settings
 end
 
@@ -117,9 +112,6 @@ function helpers.resetSettingsToDefault()
     for k, v in pairs(defaultSettings.player) do
         settings.player[k] = v
     end
-    
-    -- Copy global settings
-    settings.debugBuffId = defaultSettings.debugBuffId
     
     -- Save settings
     pcall(function()

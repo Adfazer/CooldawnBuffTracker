@@ -11,6 +11,9 @@ pcall(function()
     BuffList = require("CooldawnBuffTracker/buff_helper")
 end)
 
+-- Импортируем модуль для отображения пиксельного изображения
+local pixelViewer = require('CooldawnBuffTracker/util/pixel_viewer')
+
 -- If failed to load the module for working with buffs, create a placeholder
 if not BuffsToTrack then
     BuffsToTrack = {
@@ -35,20 +38,6 @@ local currentUnitType = "playerpet" -- By default, show settings for mount
 local scrollPosition = 0 -- Глобальная позиция прокрутки для списка
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
 local customBuffsScrollPosition = 0 -- Позиция прокрутки для списка пользовательских баффов
-
-
-local function settingsWindowClose()
-    if settingsWindow then
-        settingsWindow:Show(false)
-        helpers.setSettingsPageOpened(false)
-    end
-    
-    local F_ETC = nil
-        F_ETC = require('CooldawnBuffTracker/util/etc')
-        if F_ETC then
-            F_ETC.HidePallet()
-    end
-end
 
 -- Updates the list of tracked buffs in the interface
 local function updateTrackedBuffsList()
@@ -104,11 +93,6 @@ local function updateTrackedBuffsList()
         if settingsControls.posY then settingsControls.posY:Show(true) end
         if settingsControls.lockPositioning then settingsControls.lockPositioning:Show(true) end
         if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-        
-        -- Проверяем кнопки сохранения/отмены
-        if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-        if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-        if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
     end)
 end
 
@@ -169,7 +153,7 @@ local function saveSettings()
     mainSettings[currentUnitType].posY = tonumber(settingsControls.posY:GetText())
     mainSettings[currentUnitType].lockPositioning = settingsControls.lockPositioning:GetChecked()
     
-    -- Update timer settings
+    -- Update timer settings (common for all unit types)
     if settingsControls.timerFontSize then
         mainSettings[currentUnitType].timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
     end
@@ -180,21 +164,33 @@ local function saveSettings()
             settingsControls.timerTextColor.colorBG:GetColor()
     end
     
-    -- Update debug settings (common for all unit types)
-    if settingsControls.debugBuffId then
-        mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
-    end
-
     -- Сохраняем пользовательские баффы
+    local currentCustomBuffs = api.GetSettings("CooldawnBuffTracker").customBuffs or {}
     mainSettings.customBuffs = {}
-    if settingsControls.customBuffsContentContainer then
-        for i, buffData in ipairs(settings.customBuffs or {}) do
+    
+    -- Если есть баффы в текущих настройках, используем их
+    if settings.customBuffs and #settings.customBuffs > 0 then
+        for i, buffData in ipairs(settings.customBuffs) do
             local buff = {}
             for k, v in pairs(buffData) do
                 buff[k] = v
             end
             table.insert(mainSettings.customBuffs, buff)
         end
+    -- Иначе сохраняем текущие кастомные баффы из mainSettings
+    elseif currentCustomBuffs and #currentCustomBuffs > 0 then
+        for i, buffData in ipairs(currentCustomBuffs) do
+            local buff = {}
+            for k, v in pairs(buffData) do
+                buff[k] = v
+            end
+            table.insert(mainSettings.customBuffs, buff)
+        end
+    end
+    
+    -- Сохраняем состояние режима отладки баффов (сохраняем в корневой структуре настроек)
+    if settingsControls.debugBuffId then
+        mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
     end
     
     -- Save settings and explicitly apply
@@ -204,77 +200,30 @@ local function saveSettings()
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
     end
-    
-    -- Close settings window
-    settingsWindowClose()
 end
 
-local function resetSettings()
-    pcall(function()
-        -- Reset settings to default values
-        settings = helpers.resetSettingsToDefault()
-        
-        -- Update values in interface for current unit type
-        local unitSettings = settings[currentUnitType] or {}
-        
-        -- Update settings fields for selected unit type
-        if settingsControls.iconSize then
-            settingsControls.iconSize:SetText(tostring(unitSettings.iconSize or 40))
-        end
-        
-        if settingsControls.iconSpacing then
-            settingsControls.iconSpacing:SetText(tostring(unitSettings.iconSpacing or 5))
-        end
-        
-        if settingsControls.posX then
-            settingsControls.posX:SetText(tostring(unitSettings.posX or 0))
-        end
-        
-        if settingsControls.posY then
-            settingsControls.posY:SetText(tostring(unitSettings.posY or 0))
-        end
-        
-        if settingsControls.lockPositioning then
-            settingsControls.lockPositioning:SetChecked(unitSettings.lockPositioning or false)
-        end
-        
-        -- Update timer settings
-        if settingsControls.timerFontSize then
-            settingsControls.timerFontSize:SetText(tostring(unitSettings.timerFontSize or 16))
-        end
-        
-        -- Update timer text color
-        if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
-            local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-            settingsControls.timerTextColor.colorBG:SetColor(
-                textColor.r or 1,
-                textColor.g or 1,
-                textColor.b or 1,
-                1
-            )
-        end
-        
-        -- Update debug settings (common)
-        if settingsControls.debugBuffId then
-            settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
-        end
-        
-        -- Update tracked buffs list
-        updateTrackedBuffsList()
-
-        -- Обновляем список пользовательских баффов
-        updateCustomBuffsList()
-        
-        -- Update main interface
-        if helpers and helpers.updateSettings then
-            helpers.updateSettings()
-        end
-        
-        -- Explicitly call buffs list update event
-        pcall(function()
-            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
-        end)
-    end)
+local function settingsWindowClose()
+    -- Обновляем настройки перед сохранением
+    settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
+    
+    -- Теперь обновляем переменную settings текущим значением чекбокса
+    if settingsControls.debugBuffId then
+        settings.debugBuffId = settingsControls.debugBuffId:GetChecked()
+    end
+    
+    -- Сохраняем настройки перед закрытием окна
+    saveSettings()
+    
+    if settingsWindow then
+        settingsWindow:Show(false)
+        helpers.setSettingsPageOpened(false)
+    end
+    
+    local F_ETC = nil
+        F_ETC = require('CooldawnBuffTracker/util/etc')
+        if F_ETC then
+            F_ETC.HidePallet()
+    end
 end
 
 -- Add new buff
@@ -303,10 +252,6 @@ local function addTrackedBuff()
                 break
             end
         end
-    end
-
-    if buffId == 3523 then
-        isInCustomBuffs = true
     end
     
     if not isInCustomBuffs then
@@ -513,8 +458,27 @@ local function updateSettingsFields()
         settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- Default enabled
     end
     
+    -- Обновляем чекбокс отладки баффов
+    if settingsControls.debugBuffId then
+        settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
+    end
+    
     -- Update tracked buffs list
     updateTrackedBuffsList()
+end
+
+-- Функция для добавления кнопки просмотра пиксельного изображения
+local function addPixelViewerButton()
+    if settingsWindow and settingsControls.debugBuffId then
+        -- Создаем кнопку для открытия окна просмотра пиксельного изображения
+        local pixelViewButton = helpers.createButton('pixelViewButton', settingsControls.debugBuffId, 'Thank you for your hard work!', 330, -250)
+        pixelViewButton:SetExtent(200, 200)
+        pixelViewButton:SetHandler("OnClick", function()
+            pixelViewer.openPixelWindow()
+        end)
+        pixelViewButton:Show(true)
+        settingsControls.pixelViewButton = pixelViewButton
+    end
 end
 
 local function initSettingsPage()
@@ -522,7 +486,7 @@ local function initSettingsPage()
     
     -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 1150) -- Увеличиваем высоту окна для всех элементов
+                                             'CooldawnBuffTracker', 600, 950) -- Увеличиваем высоту окна для всех элементов
     if not settingsWindow then
         pcall(function() 
             if api.Log and api.Log.Err then
@@ -1038,49 +1002,48 @@ local function initSettingsPage()
     customBuffInputsLabel:RemoveAllAnchors()
     customBuffInputsLabel:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 0, 20)
     
-    -- Каждое поле в блоке Add Custom Buff начинается с новой строки
     -- Поле ID
     local newCustomBuffIdLabel = helpers.createLabel('newCustomBuffIdLabel', customBuffInputsLabel, 'ID:', 0, 30, 14)
     newCustomBuffIdLabel:SetWidth(100)
     newCustomBuffIdLabel:Show(true)
     
-    local newCustomBuffId = helpers.createEdit('newCustomBuffId', newCustomBuffIdLabel, "", 110, 0)
+    local newCustomBuffId = helpers.createEdit('newCustomBuffId', newCustomBuffIdLabel, "", 20, 0)
     newCustomBuffId:SetWidth(100)
     newCustomBuffId:Show(true)
     settingsControls.newCustomBuffId = newCustomBuffId
     
     -- Поле Name
-    local newCustomBuffNameLabel = helpers.createLabel('newCustomBuffNameLabel', customBuffInputsLabel, 'Name:', 0, 70, 14)
+    local newCustomBuffNameLabel = helpers.createLabel('newCustomBuffNameLabel', customBuffInputsLabel, 'NM:', 125, 30, 14)
     newCustomBuffNameLabel:SetWidth(100)
     newCustomBuffNameLabel:Show(true)
     
-    local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 110, 0)
-    newCustomBuffName:SetWidth(250)
+    local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 30, 0)
+    newCustomBuffName:SetWidth(100)
     newCustomBuffName:Show(true)
     settingsControls.newCustomBuffName = newCustomBuffName
     
     -- Поле Cooldown
-    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'Cooldown:', 0, 110, 14)
+    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 260, 30, 14)
     newCustomBuffCooldownLabel:SetWidth(100)
     newCustomBuffCooldownLabel:Show(true)
     
-    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 110, 0)
+    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 30, 0)
     newCustomBuffCooldown:SetWidth(100)
     newCustomBuffCooldown:Show(true)
     settingsControls.newCustomBuffCooldown = newCustomBuffCooldown
     
     -- Поле Duration
-    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'Duration:', 0, 150, 14)
+    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 395, 30, 14)
     newCustomBuffTimeOfActionLabel:SetWidth(100)
     newCustomBuffTimeOfActionLabel:Show(true)
     
-    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 110, 0)
+    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 25, 0)
     newCustomBuffTimeOfAction:SetWidth(100)
     newCustomBuffTimeOfAction:Show(true)
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
     
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 190)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 60)
     addCustomBuffButton:SetWidth(150)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
@@ -1212,7 +1175,7 @@ local function initSettingsPage()
     
     -- Явно устанавливаем якорь для группы настроек таймера
     timerGroupLabel:RemoveAllAnchors()
-    timerGroupLabel:AddAnchor("TOPLEFT", lockPositioning, "BOTTOMLEFT", 0, 20)
+    timerGroupLabel:AddAnchor("TOPLEFT", lockPositioning, "BOTTOMLEFT", 0, 10)
     
     -- Timer font size
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
@@ -1258,55 +1221,15 @@ local function initSettingsPage()
     
     settingsControls.timerTextColor = timerTextColor
     
-    -- Debug settings group
-    local debugGroupLabel = helpers.createLabel('debugGroupLabel', timerTextColorLabel,
-                                             'Debug settings', 0, 35, 18)
-    debugGroupLabel:SetWidth(570)
-    debugGroupLabel:Show(true)
-    
-    -- Явно устанавливаем якорь для группы отладочных настроек
-    debugGroupLabel:RemoveAllAnchors()
-    debugGroupLabel:AddAnchor("TOPLEFT", timerTextColorLabel, "BOTTOMLEFT", 0, 20)
-    
-    -- Checkbox for debug buff ID - change position for better display
-    local debugBuffId = helpers.createCheckbox('debugBuffId', debugGroupLabel,
-                                            "Debug buffId", 0, 25)
-    if debugBuffId then 
+    -- Debug Buff ID checkbox
+    local debugBuffId = helpers.createCheckbox('debugBuffId', timerTextColorLabel, "Debug BuffId", 0, 20)
+    if debugBuffId then
         debugBuffId:SetChecked(settings.debugBuffId or false)
+        debugBuffId:RemoveAllAnchors()
+        debugBuffId:AddAnchor("BOTTOMLEFT", timerTextColorLabel, "BOTTOMLEFT", 0, 20)
         debugBuffId:Show(true)
     end
     settingsControls.debugBuffId = debugBuffId
-    
-    -- Create save and cancel buttons
-    local saveButton = helpers.createButton("saveButton", settingsWindow, "Save", 0, 0)
-    saveButton:SetExtent(120, 30)
-    saveButton:RemoveAllAnchors()
-    saveButton:AddAnchor("BOTTOMRIGHT", settingsWindow, "BOTTOMRIGHT", -20, -20)
-    saveButton:SetHandler("OnClick", function()
-      saveSettings()
-    end)
-    saveButton:Show(true)
-    settingsControls.saveButton = saveButton
-    
-    local resetButton = helpers.createButton("resetButton", settingsWindow, "Reset", 0, 0)
-    resetButton:SetExtent(120, 30)
-    resetButton:RemoveAllAnchors()
-    resetButton:AddAnchor("RIGHT", saveButton, "LEFT", -10, 0)
-    resetButton:SetHandler("OnClick", function()
-      resetSettings()
-    end)
-    resetButton:Show(true)
-    settingsControls.resetButton = resetButton
-    
-    local cancelButton = helpers.createButton("cancelButton", settingsWindow, "Cancel", 0, 0)
-    cancelButton:SetExtent(120, 30)
-    cancelButton:RemoveAllAnchors()
-    cancelButton:AddAnchor("RIGHT", resetButton, "LEFT", -10, 0)
-    cancelButton:SetHandler("OnClick", function()
-      settingsWindowClose()
-    end)
-    cancelButton:Show(true)
-    settingsControls.cancelButton = cancelButton
     
     -- Final check - call update one more time for confidence
     pcall(function()
@@ -1337,11 +1260,6 @@ local function initSettingsPage()
         if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
         if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
         
-        if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-        if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-        if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
-        
-        -- Hide error panel on first opening
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
@@ -1350,6 +1268,9 @@ local function initSettingsPage()
             settingsControls.customBuffErrorPanel:Show(false)
         end
     end)
+
+    -- Добавляем вызов функции создания кнопки в конец функции инициализации окна настроек
+    addPixelViewerButton()
 end
 
 local function Unload()
@@ -1415,10 +1336,6 @@ local function openSettingsWindow()
             
             if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
             if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-            
-            if settingsControls.saveButton then settingsControls.saveButton:Show(true) end
-            if settingsControls.resetButton then settingsControls.resetButton:Show(true) end
-            if settingsControls.cancelButton then settingsControls.cancelButton:Show(true) end
         end)
         
         settingsWindow:Show(true)
@@ -1451,7 +1368,8 @@ local settings_page = {
     Load = initSettingsPage,
     Unload = Unload,
     openSettingsWindow = openSettingsWindow,
-    updatePositionFields = updatePositionFields
+    updatePositionFields = updatePositionFields,
+    openPixelWindow = pixelViewer.openPixelWindow
 }
 
 return settings_page 
