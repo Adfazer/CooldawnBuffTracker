@@ -11,15 +11,6 @@ local debugTimerActive = false
 local lastUpdateTime = 0
 local updateInterval = 500 -- миллисекунды между проверками
 
--- Функция-помощник для форматирования ID баффа (без экспоненты)
-local function formatBuffId(buffId)
-    if type(buffId) == "number" then
-        return string.format("%.0f", buffId)
-    else
-        return tostring(buffId)
-    end
-end
-
 -- Функция для вывода ID баффа в чат
 local function PrintBuffId(buffId, unitId, event)
     if not buffId then return end
@@ -30,12 +21,12 @@ local function PrintBuffId(buffId, unitId, event)
         -- Попытка получить имя баффа из BuffList
         local BuffList = require("CooldawnBuffTracker/buff_helper")
         if BuffList and BuffList.GetBuffName then
-            buffName = BuffList.GetBuffName(buffId) or formatBuffId(buffId)
+            buffName = BuffList.GetBuffName(helpers.formatBuffId(buffId))
         end
     end)
     
     -- Форматируем ID баффа, чтобы большие числа отображались полностью без экспоненты
-    local formattedBuffId = formatBuffId(buffId)
+    local formattedBuffId = helpers.formatBuffId(buffId)
     
     -- Формируем и выводим сообщение в чат
     local message = string.format("[BuffTracker] %s - Buff ID: %s, Unit: %s", 
@@ -296,14 +287,14 @@ local function PrintAllActiveBuffs(unitId)
                 pcall(function()
                     local BuffList = require("CooldawnBuffTracker/buff_helper")
                     if BuffList and BuffList.GetBuffName then
-                        buffName = BuffList.GetBuffName(buffId) or formatBuffId(buffId)
+                        buffName = BuffList.GetBuffName(helpers.formatBuffId(buffId))
                     end
                 end)
                 
                 -- Выводим информацию о баффе
                 pcall(function()
                     -- Форматируем ID баффа, чтобы большие числа отображались полностью
-                    local formattedBuffId = formatBuffId(buffId)
+                    local formattedBuffId = helpers.formatBuffId(buffId)
                     
                     api.Log:Info(string.format("[BuffTracker] %d. Buff ID: %s", 
                                 i, formattedBuffId))

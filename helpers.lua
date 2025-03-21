@@ -6,6 +6,15 @@ local PLAYER_CANVAS
 
 local settingsOpened = false
 
+-- Функция-помощник для форматирования ID баффа (без экспоненты)
+function helpers.formatBuffId(buffId)
+    if type(buffId) == "number" then
+        return string.format("%.0f", buffId)
+    else
+        return tostring(buffId)
+    end
+end
+
 -- Main functions for working with settings
 function helpers.getSettings(cnv, playerCnv)
     if cnv ~= nil then CANVAS = cnv end

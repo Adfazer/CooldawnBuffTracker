@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "CooldawnBuffTracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.0.0"
+  version = "1.1.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -973,6 +973,7 @@ local function checkBuffs(unitType)
         
         -- Проверяем, существует ли бафф и есть ли у него идентификатор
         if buff and buff.buff_id then
+          buff.buff_id = helpers.formatBuffId(buff.buff_id)
           -- Записываем текущие ID баффов для последующего сравнения
           currentBuffsOnUnit[buff.buff_id] = true
           

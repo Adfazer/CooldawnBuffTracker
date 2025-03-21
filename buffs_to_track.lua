@@ -62,7 +62,6 @@ end
 function BuffsToTrack.AddTrackedBuff(buffId, unitType)
     unitType = unitType or "playerpet" -- Use mount by default
     
-    buffId = tonumber(buffId)
     if not buffId then return false end
     
     local trackedBuffs = loadTrackedBuffsFromSettings(unitType)
@@ -87,7 +86,6 @@ end
 function BuffsToTrack.RemoveTrackedBuff(buffId, unitType)
     unitType = unitType or "playerpet" -- Use mount by default
     
-    buffId = tonumber(buffId)
     if not buffId then return false end
     
     local trackedBuffs = loadTrackedBuffsFromSettings(unitType)
