@@ -231,8 +231,7 @@ local function addTrackedBuff()
     -- Always update list on any interaction
     updateTrackedBuffsList()
     
-    local buffIdText = settingsControls.newBuffId:GetText()
-    local buffId = tonumber(buffIdText)
+    local buffId = settingsControls.newBuffId:GetText()
     
     if not buffId then
         -- Show error if buff ID is not a number
@@ -309,7 +308,7 @@ end
 
 -- Добавляет пользовательский бафф
 local function addCustomBuff()
-    local id = tonumber(settingsControls.newCustomBuffId:GetText())
+    local id = settingsControls.newCustomBuffId:GetText()
     local name = settingsControls.newCustomBuffName:GetText()
     local cooldown = tonumber(settingsControls.newCustomBuffCooldown:GetText())
     local timeOfAction = tonumber(settingsControls.newCustomBuffTimeOfAction:GetText())
@@ -471,7 +470,7 @@ end
 local function addPixelViewerButton()
     if settingsWindow and settingsControls.debugBuffId then
         -- Создаем кнопку для открытия окна просмотра пиксельного изображения
-        local pixelViewButton = helpers.createButton('pixelViewButton', settingsControls.debugBuffId, 'Thank you for your hard work!', 330, -250)
+        local pixelViewButton = helpers.createButton('pixelViewButton', settingsControls.addCustomBuffButton, 'Thank you for your hard work!', -25, 80)
         pixelViewButton:SetExtent(200, 200)
         pixelViewButton:SetHandler("OnClick", function()
             pixelViewer.openPixelWindow()
@@ -486,7 +485,7 @@ local function initSettingsPage()
     
     -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 950) -- Увеличиваем высоту окна для всех элементов
+                                             'CooldawnBuffTracker', 600, 820) -- Увеличиваем высоту окна для всех элементов
     if not settingsWindow then
         pcall(function() 
             if api.Log and api.Log.Err then
@@ -555,7 +554,7 @@ local function initSettingsPage()
     
     -- SECOND BLOCK - Tracked buffs list
     local trackedBuffsListHeader = helpers.createLabel('trackedBuffsListHeader', trackedBuffsGroupLabel,
-                                                    'Buff list:', 0, 30, 16)
+                                                    'Buff list:', 0, 10, 16)
     trackedBuffsListHeader:Show(true)
     trackedBuffsListHeader:SetWidth(570)
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
@@ -776,7 +775,7 @@ local function initSettingsPage()
     newBuffIdLabel:RemoveAllAnchors()
     newBuffIdLabel:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 0, 20)
     
-    local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 110, 0)
+    local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 52, 0)
     if newBuffId then 
         newBuffId:SetMaxTextLength(10) 
         newBuffId:SetWidth(80)
@@ -785,7 +784,7 @@ local function initSettingsPage()
     settingsControls.newBuffId = newBuffId
     
     -- Add buff button
-    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 200, 0)
+    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 140, -7)
     addBuffButton:SetWidth(100)
     addBuffButton:Show(true)
     settingsControls.addBuffButton = addBuffButton
@@ -793,9 +792,9 @@ local function initSettingsPage()
     
     -- Create highlighted panel for error messages
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
-    errorPanel:SetExtent(570, 25)
+    errorPanel:SetExtent(320, 25)
     errorPanel:RemoveAllAnchors()
-    errorPanel:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 0, 15)
+    errorPanel:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 250, -22)
     
     -- Frame for error panel for better highlighting
     local errorPanelBorder = errorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
@@ -829,7 +828,7 @@ local function initSettingsPage()
     
     -- Явно размещаем заголовок для пользовательских баффов после панели ошибок ввода Buff ID
     customBuffsListHeader:RemoveAllAnchors()
-    customBuffsListHeader:AddAnchor("TOPLEFT", errorPanel, "BOTTOMLEFT", 0, 20)
+    customBuffsListHeader:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 0, 10)
     
     -- Контейнер для списка пользовательских баффов
     local customBuffsListContainer = api.Interface:CreateWidget('window', 'customBuffsListContainer', customBuffsListHeader)
@@ -920,7 +919,7 @@ local function initSettingsPage()
             buffIdLabel:Show(true)
 
             -- Name
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, buffData.name, 60, 0, 14)
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, buffData.name, 80, 0, 14)
             buffNameLabel:SetExtent(200, 20)
             buffNameLabel:Show(true)
 
@@ -1001,6 +1000,15 @@ local function initSettingsPage()
     -- Явно размещаем заголовок блока добавления пользовательских баффов
     customBuffInputsLabel:RemoveAllAnchors()
     customBuffInputsLabel:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 0, 20)
+
+    -- Debug Buff ID checkbox
+    local debugBuffId = helpers.createCheckbox('debugBuffId', customBuffInputsLabel, "Debug BuffId", 250, 0)
+    if debugBuffId then
+        debugBuffId:SetChecked(settings.debugBuffId or false)
+        debugBuffId:SetExtent(30, 20)
+        debugBuffId:Show(true)
+    end
+    settingsControls.debugBuffId = debugBuffId
     
     -- Поле ID
     local newCustomBuffIdLabel = helpers.createLabel('newCustomBuffIdLabel', customBuffInputsLabel, 'ID:', 0, 30, 14)
@@ -1043,7 +1051,7 @@ local function initSettingsPage()
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
     
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 60)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 355, 60)
     addCustomBuffButton:SetWidth(150)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
@@ -1051,9 +1059,9 @@ local function initSettingsPage()
     
     -- Панель ошибок для пользовательских баффов
     local customBuffErrorPanel = api.Interface:CreateWidget('window', 'customBuffErrorPanel', settingsWindow)
-    customBuffErrorPanel:SetExtent(570, 25)
+    customBuffErrorPanel:SetExtent(350, 25)
     customBuffErrorPanel:RemoveAllAnchors()
-    customBuffErrorPanel:AddAnchor("TOPLEFT", addCustomBuffButton, "BOTTOMLEFT", 0, 15)
+    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 45)
     customBuffErrorPanel:Show(false)
     settingsControls.customBuffErrorPanel = customBuffErrorPanel
     
@@ -1220,16 +1228,6 @@ local function initSettingsPage()
     end
     
     settingsControls.timerTextColor = timerTextColor
-    
-    -- Debug Buff ID checkbox
-    local debugBuffId = helpers.createCheckbox('debugBuffId', timerTextColorLabel, "Debug BuffId", 0, 20)
-    if debugBuffId then
-        debugBuffId:SetChecked(settings.debugBuffId or false)
-        debugBuffId:RemoveAllAnchors()
-        debugBuffId:AddAnchor("BOTTOMLEFT", timerTextColorLabel, "BOTTOMLEFT", 0, 20)
-        debugBuffId:Show(true)
-    end
-    settingsControls.debugBuffId = debugBuffId
     
     -- Final check - call update one more time for confidence
     pcall(function()
