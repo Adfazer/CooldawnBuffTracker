@@ -229,21 +229,6 @@ local function checkBuffStatus(buff, currentTime)
   end
 end
 
-local function calculateReuseTime(buff, currentTime)
-  if not buff or not buff.fixedTime then return 0 end
-  
-  local fixedTime = tonumber(buff.fixedTime) or 0
-  local cooldown = tonumber(buff.cooldown) or 0
-  currentTime = tonumber(currentTime) or 0
-  
-  local readyTime = fixedTime + cooldown
-  local remainingCooldown = readyTime - currentTime
-  
-  if remainingCooldown < 0 then remainingCooldown = 0 end
-  
-  return remainingCooldown
-end
-
 local function createChildWidgetSafe(parent, widgetType, name, index)
   if not parent then return nil end
   
@@ -858,7 +843,14 @@ local function updateBuffIcons(unitType)
                 
                 -- Устанавливаем цвет текста таймера из настроек
                 local timerTextColor = settings[unitType].timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-                icon.timerLabel.style:SetColor(timerTextColor.r, timerTextColor.g, timerTextColor.b, timerTextColor.a)
+                
+                -- Добавляем проверку на nil для каждого компонента цвета
+                local r = (timerTextColor and timerTextColor.r) or 1
+                local g = (timerTextColor and timerTextColor.g) or 1
+                local b = (timerTextColor and timerTextColor.b) or 1
+                local a = (timerTextColor and timerTextColor.a) or 1
+                
+                icon.timerLabel.style:SetColor(r, g, b, a)
                 
                 -- Показываем таймер только если есть текст
                 icon.timerLabel:Show(timerText ~= "")

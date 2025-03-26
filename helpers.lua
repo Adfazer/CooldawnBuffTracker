@@ -171,7 +171,7 @@ function helpers.createEdit(id, parent, text, offsetX, offsetY)
     field:SetText(tostring(text))
     field.style:SetColor(0, 0, 0, 1)
     field.style:SetAlign(ALIGN.LEFT)
-    field:SetInitVal(text)
+    field:SetInitVal(tonumber(text) or 0)
     
     return field
 end

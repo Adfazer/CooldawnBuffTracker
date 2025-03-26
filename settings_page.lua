@@ -159,9 +159,8 @@ local function saveSettings()
     end
     
     if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
-        mainSettings[currentUnitType].timerTextColor = {r = 0, g = 0, b = 0, a = 1}
-        mainSettings[currentUnitType].timerTextColor.r, mainSettings[currentUnitType].timerTextColor.g, mainSettings[currentUnitType].timerTextColor.b = 
-            settingsControls.timerTextColor.colorBG:GetColor()
+        local rgb = settingsControls.timerTextColor.colorBG:GetColor()
+        mainSettings[currentUnitType].timerTextColor = rgb
     end
     
     -- Сохраняем пользовательские баффы
@@ -1226,7 +1225,6 @@ local function initSettingsPage()
             mainSettings[currentUnitType].timerTextColor = {r = r, g = g, b = b, a = a or 1}
         end
     end
-    
     settingsControls.timerTextColor = timerTextColor
     
     -- Final check - call update one more time for confidence
