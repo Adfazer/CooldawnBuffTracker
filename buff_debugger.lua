@@ -147,6 +147,32 @@ local function CheckUnitBuffs(unitId)
         end
     end
     
+    -- Если это игрок, также проверяем дебаффы
+    if unitId == "player" then
+        local debuffCount = api.Unit:UnitDeBuffCount(unitId) or 0
+        
+        for i = 1, debuffCount do
+            local debuff = api.Unit:UnitDeBuff(unitId, i)
+            if debuff then
+                local debuffId = nil
+                -- Пробуем разные форматы доступа к ID дебаффа
+                if debuff.buff_id then 
+                    debuffId = debuff.buff_id
+                elseif debuff.id then
+                    debuffId = debuff.id
+                elseif debuff[1] then
+                    debuffId = debuff[1]
+                end
+                
+                if debuffId then
+                    -- Добавляем дебаффы в общий список с префиксом debuff_ для различия
+                    local debuffKey = "debuff_" .. tostring(debuffId)
+                    currentBuffs[debuffKey] = debuffId
+                end
+            end
+        end
+    end
+    
     -- Определяем добавленные и удаленные баффы
     local previousBuffs = unitId == "player" and previousPlayerBuffs or previousPetBuffs
     
@@ -155,7 +181,11 @@ local function CheckUnitBuffs(unitId)
         if not previousBuffs[buffId] then
             -- Новый бафф найден
             if unitId == "player" then
-                PrintBuffId(currentBuffs[buffId], unitId, "BUFF_ADDED")
+                if string.sub(buffId, 1, 7) == "debuff_" then
+                    PrintBuffId(currentBuffs[buffId], unitId, "DEBUFF_ADDED")
+                else
+                    PrintBuffId(currentBuffs[buffId], unitId, "BUFF_ADDED")
+                end
             else
                 PrintBuffId(currentBuffs[buffId], unitId, "BUFF_ADDED")
             end
@@ -167,7 +197,11 @@ local function CheckUnitBuffs(unitId)
         if not currentBuffs[buffId] then
             -- Бафф был удален
             if unitId == "player" then
-                PrintBuffId(previousBuffs[buffId], unitId, "BUFF_REMOVED")
+                if string.sub(buffId, 1, 7) == "debuff_" then
+                    PrintBuffId(previousBuffs[buffId], unitId, "DEBUFF_REMOVED")
+                else
+                    PrintBuffId(previousBuffs[buffId], unitId, "BUFF_REMOVED")
+                end
             else
                 PrintBuffId(previousBuffs[buffId], unitId, "BUFF_REMOVED")
             end
@@ -223,6 +257,21 @@ function BuffDebugger.Initialize()
             api.On("PLAYER_BUFF_REMOVED", OnPlayerBuffRemoved)
             api.On("PLAYERPET_BUFF_ADDED", OnPetBuffAdded)
             api.On("PLAYERPET_BUFF_REMOVED", OnPetBuffRemoved)
+            
+            -- Подписываемся на события дебаффов для игрока, если они доступны
+            pcall(function()
+                api.On("PLAYER_DEBUFF_ADDED", function(event, args)
+                    if args and args.buff_id then
+                        PrintBuffId(args.buff_id, "player", "DEBUFF_ADDED")
+                    end
+                end)
+                
+                api.On("PLAYER_DEBUFF_REMOVED", function(event, args)
+                    if args and args.buff_id then
+                        PrintBuffId(args.buff_id, "player", "DEBUFF_REMOVED")
+                    end
+                end)
+            end)
             
             -- Используем событие UPDATE для проверки баффов с интервалом
             if not debugTimerActive then
@@ -300,6 +349,57 @@ local function PrintAllActiveBuffs(unitId)
                                 i, formattedBuffId))
                 end)
             end
+        end
+    end
+    
+    -- Если unitId это игрок, также выводим дебаффы
+    if unitId == "player" then
+        local debuffCount = api.Unit:UnitDeBuffCount(unitId) or 0
+        
+        pcall(function()
+            api.Log:Info(string.format("[BuffTracker] Active debuffs for %s (%d):", unitId, debuffCount))
+        end)
+        
+        for i = 1, debuffCount do
+            local debuff = api.Unit:UnitDeBuff(unitId, i)
+            if debuff then
+                local debuffId = nil
+                -- Пробуем разные форматы доступа к ID дебаффа
+                if debuff.buff_id then 
+                    debuffId = debuff.buff_id
+                elseif debuff.id then
+                    debuffId = debuff.id
+                elseif debuff[1] then
+                    debuffId = debuff[1]
+                end
+                
+                if debuffId then
+                    -- Получаем название дебаффа
+                    local debuffName = "Unknown"
+                    pcall(function()
+                        local BuffList = require("CooldawnBuffTracker/buff_helper")
+                        if BuffList and BuffList.GetBuffName then
+                            debuffName = BuffList.GetBuffName(helpers.formatBuffId(debuffId))
+                        end
+                    end)
+                    
+                    -- Выводим информацию о дебаффе
+                    pcall(function()
+                        -- Форматируем ID дебаффа, чтобы большие числа отображались полностью
+                        local formattedDebuffId = helpers.formatBuffId(debuffId)
+                        
+                        api.Log:Info(string.format("[BuffTracker] %d. Debuff ID: %s", 
+                                    i, formattedDebuffId))
+                    end)
+                end
+            end
+        end
+        
+        -- Если дебаффов нет, выводим соответствующее сообщение
+        if debuffCount == 0 then
+            pcall(function()
+                api.Log:Info("[BuffTracker] No active debuffs")
+            end)
         end
     end
     
