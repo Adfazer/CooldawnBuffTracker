@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "CooldawnBuffTracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.2.1"
+  version = "1.3.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -986,6 +986,39 @@ local function checkBuffs(unitType)
         end
       end
     end)
+    
+    -- Проверяем активные дебаффы на игроке
+    if unitType == "player" then
+      pcall(function()
+        -- Получаем все активные дебаффы на игроке
+        local debuffCount = api.Unit:UnitDeBuffCount(unitType) or 0
+        for i = 1, debuffCount do
+          local debuff = api.Unit:UnitDeBuff(unitType, i)
+          
+          -- Проверяем, существует ли дебафф и есть ли у него идентификатор
+          if debuff and debuff.buff_id then
+            debuff.buff_id = helpers.formatBuffId(debuff.buff_id)
+            -- Записываем текущие ID дебаффов для последующего сравнения
+            currentBuffsOnUnit[debuff.buff_id] = true
+            
+            -- Проверяем, нужно ли отслеживать этот дебафф
+            if BuffsToTrack.ShouldTrackBuff(debuff.buff_id, unitType) then
+              activeBuffsOnUnit[debuff.buff_id] = true
+              
+              -- Если дебаффа еще нет в данных или он не активен, обновляем его статус
+              if not buffDataTable[debuff.buff_id] or (buffDataTable[debuff.buff_id].status ~= "active") then
+                -- Дебафф стал активным, обновляем его статус
+                setBuffStatus(debuff.buff_id, "active", getCurrentTime(), unitType)
+                hasChanges = true
+                
+                -- Обновляем кэшированный статус
+                cachedBuffStatus[debuff.buff_id] = "active"
+              end
+            end
+          end
+        end
+      end)
+    end
     
     -- Обновляем кэшированные баффы юнита
     if unitType == "player" then
