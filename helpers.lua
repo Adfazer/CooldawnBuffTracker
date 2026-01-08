@@ -3,6 +3,7 @@ local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local helpers = {}
 local CANVAS
 local PLAYER_CANVAS
+local TARGET_CANVAS
 
 local settingsOpened = false
 
@@ -16,9 +17,10 @@ function helpers.formatBuffId(buffId)
 end
 
 -- Main functions for working with settings
-function helpers.getSettings(cnv, playerCnv)
+function helpers.getSettings(cnv, playerCnv, targetCnv)
     if cnv ~= nil then CANVAS = cnv end
     if playerCnv ~= nil then PLAYER_CANVAS = playerCnv end
+    if targetCnv ~= nil then TARGET_CANVAS = targetCnv end
     
     local settings = api.GetSettings("CooldawnBuffTracker")
     
@@ -37,70 +39,90 @@ function helpers.getSettings(cnv, playerCnv)
         end
     end
     
+    if not settings.target then
+        settings.target = {}
+        for k, v in pairs(defaultSettings.target) do
+            settings.target[k] = v
+        end
+    end
+    
     return settings
 end
 
 function helpers.updateSettings(newSettings)
     local settings = newSettings or api.GetSettings("CooldawnBuffTracker")
-    local currentPosX, currentPosY, playerPosX, playerPosY
+    local currentPosX, currentPosY, playerPosX, playerPosY, targetPosX, targetPosY
     
     -- Save current mount canvas position, if it exists
     if CANVAS then
-        pcall(function()
-            currentPosX, currentPosY = CANVAS:GetOffset()
-            if currentPosX and currentPosY then
-                -- Update position in settings only if position has changed
-                if settings.playerpet.posX ~= currentPosX or settings.playerpet.posY ~= currentPosY then
-                    settings.playerpet.posX = currentPosX
-                    settings.playerpet.posY = currentPosY
-                end
+        currentPosX, currentPosY = CANVAS:GetOffset()
+        if currentPosX and currentPosY then
+            -- Update position in settings only if position has changed
+            if settings.playerpet.posX ~= currentPosX or settings.playerpet.posY ~= currentPosY then
+                settings.playerpet.posX = currentPosX
+                settings.playerpet.posY = currentPosY
             end
-        end)
+        end
     end
     
     -- Save current player canvas position, if it exists
     if PLAYER_CANVAS then
-        pcall(function()
-            playerPosX, playerPosY = PLAYER_CANVAS:GetOffset()
-            if playerPosX and playerPosY then
-                -- Update position in settings only if position has changed
-                if settings.player.posX ~= playerPosX or settings.player.posY ~= playerPosY then
-                    settings.player.posX = playerPosX
-                    settings.player.posY = playerPosY
-                end
+        playerPosX, playerPosY = PLAYER_CANVAS:GetOffset()
+        if playerPosX and playerPosY then
+            -- Update position in settings only if position has changed
+            if settings.player.posX ~= playerPosX or settings.player.posY ~= playerPosY then
+                settings.player.posX = playerPosX
+                settings.player.posY = playerPosY
             end
-        end)
+        end
+    end
+    
+    -- Save current target canvas position, if it exists
+    if TARGET_CANVAS then
+        targetPosX, targetPosY = TARGET_CANVAS:GetOffset()
+        if targetPosX and targetPosY then
+            -- Update position in settings only if position has changed
+            if settings.target and (settings.target.posX ~= targetPosX or settings.target.posY ~= targetPosY) then
+                settings.target.posX = targetPosX
+                settings.target.posY = targetPosY
+            end
+        end
     end
     
     -- Ensure changes are saved in settings
-    pcall(function()
-        api.SaveSettings()
-    end)
+    api.SaveSettings()
     
     -- Explicit UI update via handler
     if CANVAS and CANVAS.OnSettingsSaved then
-        pcall(function()
-            CANVAS.OnSettingsSaved()
-            
-            -- Restore position after update
-            if currentPosX and currentPosY then
-                CANVAS:RemoveAllAnchors()
-                CANVAS:AddAnchor("TOPLEFT", "UIParent", currentPosX, currentPosY)
-            end
-        end)
+        CANVAS.OnSettingsSaved()
+        
+        -- Restore position after update
+        if currentPosX and currentPosY then
+            CANVAS:RemoveAllAnchors()
+            CANVAS:AddAnchor("TOPLEFT", "UIParent", currentPosX, currentPosY)
+        end
     end
     
     -- Explicit UI update for player via handler
     if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
-        pcall(function()
-            PLAYER_CANVAS.OnSettingsSaved()
-            
-            -- Restore position after update
-            if playerPosX and playerPosY then
-                PLAYER_CANVAS:RemoveAllAnchors()
-                PLAYER_CANVAS:AddAnchor("TOPLEFT", "UIParent", playerPosX, playerPosY)
-            end
-        end)
+        PLAYER_CANVAS.OnSettingsSaved()
+        
+        -- Restore position after update
+        if playerPosX and playerPosY then
+            PLAYER_CANVAS:RemoveAllAnchors()
+            PLAYER_CANVAS:AddAnchor("TOPLEFT", "UIParent", playerPosX, playerPosY)
+        end
+    end
+    
+    -- Explicit UI update for target via handler
+    if TARGET_CANVAS and TARGET_CANVAS.OnSettingsSaved then
+        TARGET_CANVAS.OnSettingsSaved()
+        
+        -- Restore position after update
+        if targetPosX and targetPosY then
+            TARGET_CANVAS:RemoveAllAnchors()
+            TARGET_CANVAS:AddAnchor("TOPLEFT", "UIParent", targetPosX, targetPosY)
+        end
     end
     
     settings = helpers.getSettings()
@@ -122,23 +144,28 @@ function helpers.resetSettingsToDefault()
         settings.player[k] = v
     end
     
+    -- Copy all default settings for target
+    settings.target = {}
+    for k, v in pairs(defaultSettings.target) do
+        settings.target[k] = v
+    end
+    
     -- Save settings
-    pcall(function()
-        api.SaveSettings()
-    end)
+    api.SaveSettings()
     
     -- Full UI update for mount
     if CANVAS and CANVAS.OnSettingsSaved then
-        pcall(function()
-            CANVAS.OnSettingsSaved()
-        end)
+        CANVAS.OnSettingsSaved()
     end
     
     -- Full UI update for player
     if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
-        pcall(function()
-            PLAYER_CANVAS.OnSettingsSaved()
-        end)
+        PLAYER_CANVAS.OnSettingsSaved()
+    end
+    
+    -- Full UI update for target
+    if TARGET_CANVAS and TARGET_CANVAS.OnSettingsSaved then
+        TARGET_CANVAS.OnSettingsSaved()
     end
     
     return settings
@@ -246,4 +273,4 @@ function helpers.getSettingsPageOpened()
     return settingsOpened 
 end
 
-return helpers 
+return helpers

@@ -2,14 +2,8 @@ local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 
 -- Load module for working with buffs
-pcall(function()
-    BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
-end)
-
-local BuffList
-pcall(function()
-    BuffList = require("CooldawnBuffTracker/buff_helper")
-end)
+local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
+local BuffList = require("CooldawnBuffTracker/buff_helper")
 
 -- Импортируем модуль для отображения пиксельного изображения
 local pixelViewer = require('CooldawnBuffTracker/util/pixel_viewer')
@@ -35,34 +29,32 @@ local settings, settingsWindow
 local settingsControls = {}
 local trackedBuffsList = {} -- For storing buff list widgets
 local currentUnitType = "playerpet" -- By default, show settings for mount
-local scrollPosition = 0 -- Глобальная позиция прокрутки для списка
+local buffListPage = 1 -- Текущая страница пагинации для списка баффов
+local buffsPerPage = 4 -- Количество баффов на странице
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
-local customBuffsScrollPosition = 0 -- Позиция прокрутки для списка пользовательских баффов
+local customBuffPage = 1 -- Текущая страница пагинации для списка пользовательских баффов
+local customsPerPage = 3 -- Количество custom баффов на странице
 
 -- Updates the list of tracked buffs in the interface
-local function updateTrackedBuffsList()
+local function updateTrackedBuffsList(resetPage)
     -- Clear previous list elements
     for _, widget in ipairs(trackedBuffsList) do
-        pcall(function()
-            if widget then
-                widget:Show(false)
-                widget:RemoveAllAnchors()
-                widget = nil
-            end
-        end)
+        if widget then
+            widget:Show(false)
+            widget:RemoveAllAnchors()
+            widget = nil
+        end
     end
     trackedBuffsList = {}
     
-    -- Сбросим позицию прокрутки
-    scrollPosition = 0
+    -- Сбросим страницу только при явном запросе (например при переключении вкладок)
+    if resetPage then
+        buffListPage = 1
+    end
     
     -- Проверяем существование контейнера
     if not settingsControls.buffsListContainer then
-        pcall(function() 
-            if api.Log and api.Log.Err then
-                api.Log:Err("CooldawnBuffTracker: Containers not found!")
-            end
-        end)
+        api.Log:Err("[CBT] Containers not found!")
         return
     end
     
@@ -73,45 +65,39 @@ local function updateTrackedBuffsList()
     if settingsControls.updateVisibleItems then
         settingsControls.updateVisibleItems()
     else
-        pcall(function() 
-            if api.Log and api.Log.Err then
-                api.Log:Err("CooldawnBuffTracker: updateVisibleItems not found!")
-            end
-        end)
+        api.Log:Err("[CBT] updateVisibleItems not found!")
     end
     
     -- Убедимся, что все остальные элементы интерфейса отображаются
-    pcall(function()
-        -- Проверяем поле ввода и кнопку добавления
-        if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
-        if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
-        
-        -- Проверяем группы настроек иконок, позиций и таймера
-        if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
-        if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
-        if settingsControls.posX then settingsControls.posX:Show(true) end
-        if settingsControls.posY then settingsControls.posY:Show(true) end
-        if settingsControls.lockPositioning then settingsControls.lockPositioning:Show(true) end
-        if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-    end)
+    -- Проверяем поле ввода и кнопку добавления
+    if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
+    if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
+    
+    -- Проверяем группы настроек иконок, позиций и таймера
+    if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
+    if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
+    if settingsControls.posX then settingsControls.posX:Show(true) end
+    if settingsControls.posY then settingsControls.posY:Show(true) end
+    if settingsControls.lockButton then settingsControls.lockButton:Show(true) end
+    if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
 end
 
 -- Обновляет список пользовательских баффов
-local function updateCustomBuffsList()
+local function updateCustomBuffsList(resetPage)
     -- Очищаем предыдущие элементы списка
     for _, widget in ipairs(customBuffsList) do
-        pcall(function()
-            if widget then
-                widget:Show(false)
-                widget:RemoveAllAnchors()
-                widget = nil
-            end
-        end)
+        if widget then
+            widget:Show(false)
+            widget:RemoveAllAnchors()
+            widget = nil
+        end
     end
     customBuffsList = {}
 
-    -- Сбрасываем позицию прокрутки
-    customBuffsScrollPosition = 0
+    -- Сбрасываем страницу только при явном запросе
+    if resetPage then
+        customBuffPage = 1
+    end
 
     -- Проверяем существование контейнера
     if not settingsControls.customBuffsListContainer then
@@ -151,7 +137,8 @@ local function saveSettings()
     -- Update position settings
     mainSettings[currentUnitType].posX = tonumber(settingsControls.posX:GetText())
     mainSettings[currentUnitType].posY = tonumber(settingsControls.posY:GetText())
-    mainSettings[currentUnitType].lockPositioning = settingsControls.lockPositioning:GetChecked()
+    -- Lock positioning is saved immediately on button click, use current settings value
+    mainSettings[currentUnitType].lockPositioning = settings[currentUnitType] and settings[currentUnitType].lockPositioning or false
     
     -- Update timer settings (common for all unit types)
     if settingsControls.timerFontSize then
@@ -187,10 +174,8 @@ local function saveSettings()
         end
     end
     
-    -- Сохраняем состояние режима отладки баффов (сохраняем в корневой структуре настроек)
-    if settingsControls.debugBuffId then
-        mainSettings.debugBuffId = settingsControls.debugBuffId:GetChecked()
-    end
+    -- Debug mode is saved immediately on button click, use current settings value
+    mainSettings.debugBuffId = settings.debugBuffId or false
     
     -- Save settings and explicitly apply
     api.SaveSettings()
@@ -205,10 +190,7 @@ local function settingsWindowClose()
     -- Обновляем настройки перед сохранением
     settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
     
-    -- Теперь обновляем переменную settings текущим значением чекбокса
-    if settingsControls.debugBuffId then
-        settings.debugBuffId = settingsControls.debugBuffId:GetChecked()
-    end
+    -- Debug mode is already saved on button click, no need to update here
     
     -- Сохраняем настройки перед закрытием окна
     saveSettings()
@@ -218,10 +200,9 @@ local function settingsWindowClose()
         helpers.setSettingsPageOpened(false)
     end
     
-    local F_ETC = nil
-        F_ETC = require('CooldawnBuffTracker/util/etc')
-        if F_ETC then
-            F_ETC.HidePallet()
+    local F_ETC = require('CooldawnBuffTracker/util/etc')
+    if F_ETC then
+        F_ETC.HidePallet()
     end
 end
 
@@ -263,9 +244,6 @@ local function addTrackedBuff()
     
     -- Try to add buff for selected unit type
     if BuffsToTrack.AddTrackedBuff(buffId, currentUnitType) then
-        -- Update list if buff successfully added
-        updateTrackedBuffsList()
-        
         -- Clear input field
         settingsControls.newBuffId:SetText("")
         
@@ -280,9 +258,15 @@ local function addTrackedBuff()
         end
         
         -- Explicitly call buffs list update event
-        pcall(function()
-            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
-        end)
+        api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+        
+        -- Go to last page to show newly added buff
+        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
+        buffListPage = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
+        
+        if settingsControls.updateVisibleItems then
+            settingsControls.updateVisibleItems()
+        end
     else
         -- Show message that buff already tracked
         if settingsControls.addBuffError and settingsControls.errorPanel then
@@ -290,19 +274,6 @@ local function addTrackedBuff()
             settingsControls.errorPanel:Show(true)
         end
     end
-    
-    -- Forcefully update list one more time
-    pcall(function()
-        updateTrackedBuffsList()
-        if settingsControls.buffsListContainer then
-            settingsControls.buffsListContainer:Show(true)
-            
-            -- Обновить видимые элементы с использованием нового механизма прокрутки
-            if settingsControls.updateVisibleItems then
-                settingsControls.updateVisibleItems()
-            end
-        end
-    end)
 end
 
 -- Добавляет пользовательский бафф
@@ -334,12 +305,8 @@ local function addCustomBuff()
     end
     
     -- Проверяем наличие иконки с таким ID
-    local iconExists = false
-    pcall(function()
-        -- Используем BuffList для проверки наличия иконки
-        local buffIcon = BuffList.GetBuffIcon(id)
-        iconExists = buffIcon ~= nil
-    end)
+    local buffIcon = BuffList.GetBuffIcon(id)
+    local iconExists = buffIcon ~= nil
     
     if not iconExists then
         if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
@@ -362,9 +329,6 @@ local function addCustomBuff()
     end
     table.insert(settings.customBuffs, newBuff)
 
-    -- Обновляем список пользовательских баффов
-    updateCustomBuffsList()
-
     -- Очищаем поля ввода
     settingsControls.newCustomBuffId:SetText("")
     settingsControls.newCustomBuffName:SetText("")
@@ -379,6 +343,14 @@ local function addCustomBuff()
     -- Обновляем интерфейс
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
+    end
+    
+    -- Go to last page to show newly added buff
+    local customBuffs = settings.customBuffs or {}
+    customBuffPage = math.max(1, math.ceil(#customBuffs / customsPerPage))
+    
+    if settingsControls.updateCustomVisibleItems then
+        settingsControls.updateCustomVisibleItems()
     end
 end
 
@@ -404,9 +376,14 @@ local function updateSettingsFields()
         settingsControls.posY:SetText(tostring(unitSettings.posY or 0))
     end
     
-    -- Update lock positioning checkbox
-    if settingsControls.lockPositioning then
-        settingsControls.lockPositioning:SetChecked(unitSettings.lockPositioning or false)
+    -- Update lock button text
+    if settingsControls.lockButton then
+        settingsControls.lockButton:SetText(unitSettings.lockPositioning and "Lock: ON" or "Lock: OFF")
+    end
+    
+    -- Update debug button text (global setting, not per unit type)
+    if settingsControls.debugBuffButton then
+        settingsControls.debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
     end
     
     -- Update timer settings
@@ -456,18 +433,13 @@ local function updateSettingsFields()
         settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- Default enabled
     end
     
-    -- Обновляем чекбокс отладки баффов
-    if settingsControls.debugBuffId then
-        settingsControls.debugBuffId:SetChecked(settings.debugBuffId or false)
-    end
-    
     -- Update tracked buffs list
     updateTrackedBuffsList()
 end
 
 -- Функция для добавления кнопки просмотра пиксельного изображения
 local function addPixelViewerButton()
-    if settingsWindow and settingsControls.debugBuffId then
+    if settingsWindow and settingsControls.debugBuffButton then
         -- Создаем кнопку для открытия окна просмотра пиксельного изображения
         local pixelViewButton = helpers.createButton('pixelViewButton', settingsControls.addCustomBuffButton, 'Thank you for your hard work!', -25, 80)
         pixelViewButton:SetExtent(200, 200)
@@ -484,13 +456,9 @@ local function initSettingsPage()
     
     -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
     settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 820) -- Увеличиваем высоту окна для всех элементов
+                                             'CooldawnBuffTracker', 600, 900) -- Увеличиваем высоту окна для всех элементов
     if not settingsWindow then
-        pcall(function() 
-            if api.Log and api.Log.Err then
-                api.Log:Err("CooldawnBuffTracker: Failed to create settings window!")
-            end
-        end)
+        api.Log:Err("[CBT] Failed to create settings window!")
         return
     end
     
@@ -504,24 +472,35 @@ local function initSettingsPage()
     unitTypeLabel:SetWidth(250)
     unitTypeLabel:Show(true)
     
-    -- Mount settings button (с увеличенным отступом)
-    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount (playerpet)', 300, 30)
-    mountButton:SetWidth(140)
+    -- Mount settings button
+    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 280, 30)
+    mountButton:SetWidth(80)
     mountButton:Show(true)
     
-    -- Player settings button (с увеличенным отступом)
-    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player (player)', 450, 30)
-    playerButton:SetWidth(140)
+    -- Player settings button
+    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 365, 30)
+    playerButton:SetWidth(80)
     playerButton:Show(true)
+    
+    -- Target settings button
+    local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 450, 30)
+    targetButton:SetWidth(80)
+    targetButton:Show(true)
     
     -- Function to update button style depending on selected type
     local function updateUnitTypeButtons()
         if currentUnitType == "playerpet" then
-            mountButton:SetText("* Mount (playerpet)")
-            playerButton:SetText("Player (player)")
+            mountButton:SetText("* Mount")
+            playerButton:SetText("Player")
+            targetButton:SetText("Target")
+        elseif currentUnitType == "player" then
+            mountButton:SetText("Mount")
+            playerButton:SetText("* Player")
+            targetButton:SetText("Target")
         else
-            mountButton:SetText("Mount (playerpet)")
-            playerButton:SetText("* Player (player)")
+            mountButton:SetText("Mount")
+            playerButton:SetText("Player")
+            targetButton:SetText("* Target")
         end
     end
     
@@ -529,7 +508,7 @@ local function initSettingsPage()
     mountButton:SetHandler("OnClick", function()
         currentUnitType = "playerpet"
         updateUnitTypeButtons()
-        updateTrackedBuffsList()
+        updateTrackedBuffsList(true) -- Reset page when switching tabs
         -- Update all settings fields for mount settings display
         updateSettingsFields()
     end)
@@ -537,8 +516,16 @@ local function initSettingsPage()
     playerButton:SetHandler("OnClick", function()
         currentUnitType = "player"
         updateUnitTypeButtons()
-        updateTrackedBuffsList()
+        updateTrackedBuffsList(true) -- Reset page when switching tabs
         -- Update all settings fields for player settings display
+        updateSettingsFields()
+    end)
+    
+    targetButton:SetHandler("OnClick", function()
+        currentUnitType = "target"
+        updateUnitTypeButtons()
+        updateTrackedBuffsList(true) -- Reset page when switching tabs
+        -- Update all settings fields for target settings display
         updateSettingsFields()
     end)
     
@@ -560,9 +547,15 @@ local function initSettingsPage()
     
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
-    buffsListContainer:SetExtent(570, 115) -- Фиксированная высота контейнера для списка
+    buffsListContainer:SetExtent(570, 140) -- Увеличенная высота контейнера для списка (6 элементов)
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 35)
     buffsListContainer:Show(true)
+    buffsListContainer:Clickable(true) -- Включаем кликабельность для обработки колесика мыши
+    
+    -- Enable scissor clipping to prevent elements from rendering outside container bounds
+    if buffsListContainer.EnableScissor then
+        buffsListContainer:EnableScissor(true)
+    end
     
     -- Добавляем рамку для визуального обозначения границ списка
     local containerBorder = buffsListContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
@@ -588,39 +581,45 @@ local function initSettingsPage()
     settingsControls.buffsContentContainer = buffsContentContainer
     
     -- Текущая позиция прокрутки
-    scrollPosition = 0 -- Сброс глобальной переменной
-    
     -- Храним отображаемые в данный момент элементы списка
     local visibleBuffs = {}
     
-    -- Функция обновления видимых элементов списка в зависимости от прокрутки
+    -- Функция обновления видимых элементов списка с пагинацией
     local function updateVisibleItems()
         -- Получаем ссылки на необходимые элементы
         local container = settingsControls.buffsListContainer
-        local contentHeight = 0
-        local containerHeight = container:GetHeight() or 115
         
         -- Получаем список отслеживаемых бафов
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
         
         -- Очищаем предыдущие элементы
         for _, widget in ipairs(visibleBuffs) do
-            pcall(function()
-                if widget then
-                    widget:Show(false)
-                    widget:RemoveAllAnchors()
-                    widget = nil
-                end
-            end)
+            if widget then
+                widget:Show(false)
+                widget:RemoveAllAnchors()
+                widget = nil
+            end
         end
         visibleBuffs = {}
         
         -- Определяем размер видимой области
         local itemHeight = 23
-        local visibleCount = math.min(5, math.floor(containerHeight / itemHeight)) -- Явно ограничиваем до 5 элементов
         
-        -- Определяем индекс первого видимого элемента на основе позиции прокрутки
-        local startIndex = math.floor(scrollPosition / itemHeight) + 1
+        -- Вычисляем общее количество страниц
+        local totalPages = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
+        
+        -- Корректируем текущую страницу если нужно
+        if buffListPage > totalPages then buffListPage = totalPages end
+        if buffListPage < 1 then buffListPage = 1 end
+        
+        -- Вычисляем диапазон элементов для текущей страницы
+        local startIndex = (buffListPage - 1) * buffsPerPage + 1
+        local endIndex = math.min(startIndex + buffsPerPage - 1, #trackedBuffs)
+        
+        -- Обновляем индикатор страницы
+        if settingsControls.buffPageIndicator then
+            settingsControls.buffPageIndicator:SetText(buffListPage .. "/" .. totalPages)
+        end
         
         -- Если список пуст, показываем сообщение
         if #trackedBuffs == 0 then
@@ -633,25 +632,15 @@ local function initSettingsPage()
             return
         end
         
-        -- Создаем видимые элементы списка
-        local yOffset = 8 - (scrollPosition % itemHeight)
-        local displayedCount = 0
-        local maxVisibleItems = 5 -- Максимальное количество отображаемых элементов
+        -- Создаем видимые элементы списка для текущей страницы
+        local yOffset = 8
         
-        for i = startIndex, math.min(startIndex + visibleCount - 1, #trackedBuffs) do
-            -- Проверка на максимальное количество элементов
-            if displayedCount >= maxVisibleItems then
-                break
-            end
-            
+        for i = startIndex, endIndex do
             local buffId = trackedBuffs[i]
             if not buffId then break end
             
             -- Get buff name if possible
-            local buffName = "Buff #" .. buffId
-            pcall(function()
-                buffName = BuffList.GetBuffName(buffId) or buffName
-            end)
+            local buffName = BuffList.GetBuffName(buffId) or ("Buff #" .. buffId)
             
             -- Create row with buff information
             local buffRow = api.Interface:CreateWidget('window', 'trackedBuff_' .. i, container)
@@ -685,84 +674,73 @@ local function initSettingsPage()
                     end
                     
                     -- Explicitly call buffs list update event
-                    pcall(function()
-                        api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
-                    end)
+                    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
                 end
             end)
             
             -- Добавляем элементы в список видимых
             table.insert(visibleBuffs, buffRow)
             yOffset = yOffset + itemHeight
-            displayedCount = displayedCount + 1
         end
         
         -- Убедимся, что остальные элементы интерфейса не были затронуты
-        pcall(function()
-            if settingsControls.newBuffIdLabel then
-                settingsControls.newBuffIdLabel:Show(true)
-            end
-            if settingsControls.iconGroupLabel then
-                settingsControls.iconGroupLabel:Show(true)
-            end
-            if settingsControls.positionLabel then
-                settingsControls.positionLabel:Show(true)
-            end
-            if settingsControls.timerGroupLabel then
-                settingsControls.timerGroupLabel:Show(true)
-            end
-        end)
+        if settingsControls.newBuffIdLabel then
+            settingsControls.newBuffIdLabel:Show(true)
+        end
+        if settingsControls.iconGroupLabel then
+            settingsControls.iconGroupLabel:Show(true)
+        end
+        if settingsControls.positionLabel then
+            settingsControls.positionLabel:Show(true)
+        end
+        if settingsControls.timerGroupLabel then
+            settingsControls.timerGroupLabel:Show(true)
+        end
     end
     
-    -- Функция обновления позиции прокрутки - с обновлением видимых элементов
-    local function updateScrollPosition(offset)
-        -- Проверяем существование контейнера
-        if not settingsControls.buffsListContainer then
-            return
-        end
-        
-        -- Получаем список отслеживаемых бафов
-        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
-        
-        -- Расчет максимальной позиции прокрутки
-        local containerHeight = settingsControls.buffsListContainer:GetHeight() or 115
-        local itemHeight = 23
-        local totalContentHeight = #trackedBuffs * itemHeight
-        local maxScroll = math.max(0, totalContentHeight - containerHeight + 10)
-        
-        -- Обновляем позицию прокрутки
-        if offset and offset ~= 0 then
-            scrollPosition = scrollPosition + offset
-            
-            -- Проверяем границы
-            if scrollPosition < 0 then 
-                scrollPosition = 0 
-            end
-            
-            if scrollPosition > maxScroll then 
-                scrollPosition = maxScroll 
-            end
-            
-            -- Обновляем видимые элементы списка
+    -- Кнопки пагинации для buff list
+    local buffPrevButton = helpers.createButton('buffPrevButton', buffsListContainer, '<', 0, 0)
+    buffPrevButton:SetExtent(30, 25)
+    buffPrevButton:RemoveAllAnchors()
+    buffPrevButton:AddAnchor("BOTTOMLEFT", buffsListContainer, "BOTTOMLEFT", 10, -5)
+    buffPrevButton:SetHandler("OnClick", function()
+        if buffListPage > 1 then
+            buffListPage = buffListPage - 1
             updateVisibleItems()
         end
-    end
-    
-    -- Подключаем обработчики колесика мыши к контейнеру списка
-    buffsListContainer:SetHandler("OnWheelUp", function()
-        updateScrollPosition(-23) -- Прокрутка вверх на один элемент
     end)
+    buffPrevButton:Show(true)
+    settingsControls.buffPrevButton = buffPrevButton
     
-    buffsListContainer:SetHandler("OnWheelDown", function()
-        updateScrollPosition(23) -- Прокрутка вниз на один элемент
+    -- Индикатор страницы
+    local buffPageIndicator = helpers.createLabel('buffPageIndicator', buffsListContainer, "1/1", 0, 0, 14)
+    buffPageIndicator:SetExtent(50, 25)
+    buffPageIndicator:RemoveAllAnchors()
+    buffPageIndicator:AddAnchor("LEFT", buffPrevButton, "RIGHT", 5, 0)
+    buffPageIndicator.style:SetAlign(ALIGN.CENTER)
+    buffPageIndicator:Show(true)
+    settingsControls.buffPageIndicator = buffPageIndicator
+    
+    local buffNextButton = helpers.createButton('buffNextButton', buffsListContainer, '>', 0, 0)
+    buffNextButton:SetExtent(30, 25)
+    buffNextButton:RemoveAllAnchors()
+    buffNextButton:AddAnchor("LEFT", buffPageIndicator, "RIGHT", 5, 0)
+    buffNextButton:SetHandler("OnClick", function()
+        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
+        local totalPages = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
+        if buffListPage < totalPages then
+            buffListPage = buffListPage + 1
+            updateVisibleItems()
+        end
     end)
+    buffNextButton:Show(true)
+    settingsControls.buffNextButton = buffNextButton
     
-    -- Сохраняем функции обновления в контролах
-    settingsControls.updateScrollPosition = updateScrollPosition
+    -- Сохраняем функцию обновления в контролах
     settingsControls.updateVisibleItems = updateVisibleItems
     
     -- IMMEDIATELY fill list of tracked buffs
-    updateTrackedBuffsList()
+    updateTrackedBuffsList(true)
 
     -- THIRD BLOCK - Input field for new tracked buff (перемещаем его выше списка пользовательских баффов)
     local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow, 'Buff ID:', 15, 0, 15)
@@ -772,7 +750,7 @@ local function initSettingsPage()
     
     -- Явно размещаем поле ввода нового баффа после списка обычных баффов
     newBuffIdLabel:RemoveAllAnchors()
-    newBuffIdLabel:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 0, 20)
+    newBuffIdLabel:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 0, 30)
     
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 52, 0)
     if newBuffId then 
@@ -834,6 +812,13 @@ local function initSettingsPage()
     customBuffsListContainer:SetExtent(570, 115)
     customBuffsListContainer:AddAnchor("TOPLEFT", customBuffsListHeader, 0, 35)
     customBuffsListContainer:Show(true)
+    customBuffsListContainer:Clickable(true)
+    
+    -- Enable scissor clipping to prevent elements from rendering outside container bounds
+    if customBuffsListContainer.EnableScissor then
+        customBuffsListContainer:EnableScissor(true)
+    end
+    
     settingsControls.customBuffsListContainer = customBuffsListContainer
 
     -- Рамка для контейнера
@@ -856,30 +841,39 @@ local function initSettingsPage()
      customBuffsContentContainer:Show(true)
      settingsControls.customBuffsContentContainer = customBuffsContentContainer
 
-    -- Функция обновления видимых элементов списка пользовательских баффов
+    -- Функция обновления видимых элементов списка пользовательских баффов с пагинацией
     local function updateCustomVisibleItems()
         local container = settingsControls.customBuffsListContainer
-        local contentHeight = 0
-        local containerHeight = container:GetHeight() or 115
 
         local customBuffs = settings.customBuffs or {}
 
         -- Очищаем предыдущие элементы
         for _, widget in ipairs(customBuffsList) do
-            pcall(function()
-                if widget then
-                    widget:Show(false)
-                    widget:RemoveAllAnchors()
-                    widget = nil
-                end
-            end)
+            if widget then
+                widget:Show(false)
+                widget:RemoveAllAnchors()
+                widget = nil
+            end
         end
         customBuffsList = {}
 
-        -- Размер видимой области и прокрутка
         local itemHeight = 23
-        local visibleCount = math.min(5, math.floor(containerHeight / itemHeight))
-        local startIndex = math.floor(customBuffsScrollPosition / itemHeight) + 1
+        
+        -- Вычисляем общее количество страниц
+        local totalPages = math.max(1, math.ceil(#customBuffs / customsPerPage))
+        
+        -- Корректируем текущую страницу если нужно
+        if customBuffPage > totalPages then customBuffPage = totalPages end
+        if customBuffPage < 1 then customBuffPage = 1 end
+        
+        -- Вычисляем диапазон элементов для текущей страницы
+        local startIndex = (customBuffPage - 1) * customsPerPage + 1
+        local endIndex = math.min(startIndex + customsPerPage - 1, #customBuffs)
+        
+        -- Обновляем индикатор страницы
+        if settingsControls.customPageIndicator then
+            settingsControls.customPageIndicator:SetText(customBuffPage .. "/" .. totalPages)
+        end
 
         -- Если список пуст, показываем сообщение
         if #customBuffs == 0 then
@@ -892,18 +886,10 @@ local function initSettingsPage()
             return
         end
 
-        -- Создаем видимые элементы
-        local yOffset = 8 - (customBuffsScrollPosition % itemHeight)
-        local displayedCount = 0
-        local maxVisibleItems = 5
+        -- Создаем видимые элементы для текущей страницы
+        local yOffset = 8
 
-        -- Изменяем логику чтобы гарантированно отображались все 5 элементов
-        -- Предыдущее условие было: startIndex, math.min(startIndex + visibleCount - 1, #customBuffs)
-        for i = startIndex, math.min(startIndex + maxVisibleItems - 1, #customBuffs) do
-            if displayedCount >= maxVisibleItems then
-                break
-            end
-
+        for i = startIndex, endIndex do
             local buffData = customBuffs[i]
             if not buffData or not buffData.id then break end
 
@@ -931,7 +917,6 @@ local function initSettingsPage()
             local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 330, 0, 14)
             buffTimeOfActionLabel:SetExtent(50, 20)
             buffTimeOfActionLabel:Show(true)
-            
 
             -- Remove button
             local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 410, 0)
@@ -949,45 +934,49 @@ local function initSettingsPage()
 
             table.insert(customBuffsList, buffRow)
             yOffset = yOffset + itemHeight
-            displayedCount = displayedCount + 1
         end
     end
 
-    -- Функция обновления позиции прокрутки для пользовательских баффов
-    local function updateCustomScrollPosition(offset)
-        if not settingsControls.customBuffsListContainer then
-            return
-        end
-
-        local customBuffs = settings.customBuffs or {}
-        local containerHeight = settingsControls.customBuffsListContainer:GetHeight() or 115
-        local itemHeight = 23
-        local totalContentHeight = #customBuffs * itemHeight
-        local maxScroll = math.max(0, totalContentHeight - containerHeight + 10)
-
-        if offset and offset ~= 0 then
-            customBuffsScrollPosition = customBuffsScrollPosition + offset
-            if customBuffsScrollPosition < 0 then
-                customBuffsScrollPosition = 0
-            end
-            if customBuffsScrollPosition > maxScroll then
-                customBuffsScrollPosition = maxScroll
-            end
+    -- Кнопки пагинации для custom buffs list
+    local customPrevButton = helpers.createButton('customPrevButton', customBuffsListContainer, '<', 0, 0)
+    customPrevButton:SetExtent(30, 25)
+    customPrevButton:RemoveAllAnchors()
+    customPrevButton:AddAnchor("BOTTOMLEFT", customBuffsListContainer, "BOTTOMLEFT", 10, -5)
+    customPrevButton:SetHandler("OnClick", function()
+        if customBuffPage > 1 then
+            customBuffPage = customBuffPage - 1
             updateCustomVisibleItems()
         end
-    end
-
-    -- Обработчики колесика мыши
-    customBuffsListContainer:SetHandler("OnWheelUp", function()
-        updateCustomScrollPosition(-23)
     end)
-    customBuffsListContainer:SetHandler("OnWheelDown", function()
-        updateCustomScrollPosition(23)
+    customPrevButton:Show(true)
+    settingsControls.customPrevButton = customPrevButton
+    
+    -- Индикатор страницы
+    local customPageIndicator = helpers.createLabel('customPageIndicator', customBuffsListContainer, "1/1", 0, 0, 14)
+    customPageIndicator:SetExtent(50, 25)
+    customPageIndicator:RemoveAllAnchors()
+    customPageIndicator:AddAnchor("LEFT", customPrevButton, "RIGHT", 5, 0)
+    customPageIndicator.style:SetAlign(ALIGN.CENTER)
+    customPageIndicator:Show(true)
+    settingsControls.customPageIndicator = customPageIndicator
+    
+    local customNextButton = helpers.createButton('customNextButton', customBuffsListContainer, '>', 0, 0)
+    customNextButton:SetExtent(30, 25)
+    customNextButton:RemoveAllAnchors()
+    customNextButton:AddAnchor("LEFT", customPageIndicator, "RIGHT", 5, 0)
+    customNextButton:SetHandler("OnClick", function()
+        local customBuffs = settings.customBuffs or {}
+        local totalPages = math.max(1, math.ceil(#customBuffs / customsPerPage))
+        if customBuffPage < totalPages then
+            customBuffPage = customBuffPage + 1
+            updateCustomVisibleItems()
+        end
     end)
+    customNextButton:Show(true)
+    settingsControls.customNextButton = customNextButton
 
-    settingsControls.updateCustomScrollPosition = updateCustomScrollPosition
     settingsControls.updateCustomVisibleItems = updateCustomVisibleItems
-    updateCustomBuffsList() -- Инициализация списка
+    updateCustomBuffsList(true) -- Инициализация списка
 
     -- CUSTOM BUFF INPUTS
     local customBuffInputsLabel = helpers.createLabel('customBuffInputsLabel', settingsWindow,
@@ -1000,14 +989,40 @@ local function initSettingsPage()
     customBuffInputsLabel:RemoveAllAnchors()
     customBuffInputsLabel:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 0, 20)
 
-    -- Debug Buff ID checkbox
-    local debugBuffId = helpers.createCheckbox('debugBuffId', customBuffInputsLabel, "Debug BuffId", 250, 0)
-    if debugBuffId then
-        debugBuffId:SetChecked(settings.debugBuffId or false)
-        debugBuffId:SetExtent(30, 20)
-        debugBuffId:Show(true)
+    -- Debug Buff ID button (ON/OFF toggle)
+    local debugButtonText = settings.debugBuffId and "Debug: ON" or "Debug: OFF"
+    local debugBuffButton = helpers.createButton('debugBuffButton', customBuffInputsLabel, debugButtonText, 250, -5)
+    if debugBuffButton then
+        debugBuffButton:SetExtent(100, 25)
+        debugBuffButton:Show(true)
+        
+        -- Toggle handler for debug button
+        debugBuffButton:SetHandler("OnClick", function()
+            -- Toggle state
+            settings.debugBuffId = not settings.debugBuffId
+            
+            -- Update button text
+            debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
+            
+            -- Save settings
+            local mainSettings = api.GetSettings("CooldawnBuffTracker")
+            mainSettings.debugBuffId = settings.debugBuffId
+            api.SaveSettings()
+            
+            -- Reinitialize/shutdown debugger based on new setting
+            local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
+            if settings.debugBuffId then
+                if BuffDebugger and BuffDebugger.Initialize then
+                    BuffDebugger.Initialize()
+                end
+            else
+                if BuffDebugger and BuffDebugger.Shutdown then
+                    BuffDebugger.Shutdown()
+                end
+            end
+        end)
     end
-    settingsControls.debugBuffId = debugBuffId
+    settingsControls.debugBuffButton = debugBuffButton
     
     -- Поле ID
     local newCustomBuffIdLabel = helpers.createLabel('newCustomBuffIdLabel', customBuffInputsLabel, 'ID:', 0, 30, 14)
@@ -1165,24 +1180,47 @@ local function initSettingsPage()
     end
     settingsControls.posY = posY
     
-    -- Lock positioning
-    local lockPositioning = helpers.createCheckbox('lockPositioning', posYLabel,
-                                                 "Lock icon movement", 0, 25)
-    if lockPositioning then 
-        lockPositioning:SetChecked(settings[currentUnitType] and settings[currentUnitType].lockPositioning or false)
-        lockPositioning:Show(true)
+    -- Lock positioning button (ON/OFF toggle)
+    local lockIsOn = settings[currentUnitType] and settings[currentUnitType].lockPositioning or false
+    local lockButtonText = lockIsOn and "Lock: ON" or "Lock: OFF"
+    local lockButton = helpers.createButton('lockButton', posYLabel, lockButtonText, 0, 25)
+    if lockButton then
+        lockButton:SetExtent(100, 25)
+        lockButton:Show(true)
+        
+        -- Toggle handler for lock button
+        lockButton:SetHandler("OnClick", function()
+            -- Toggle state
+            local unitSettings = settings[currentUnitType] or {}
+            unitSettings.lockPositioning = not unitSettings.lockPositioning
+            settings[currentUnitType] = unitSettings
+            
+            -- Update button text
+            lockButton:SetText(unitSettings.lockPositioning and "Lock: ON" or "Lock: OFF")
+            
+            -- Save settings
+            local mainSettings = api.GetSettings("CooldawnBuffTracker")
+            if not mainSettings[currentUnitType] then
+                mainSettings[currentUnitType] = {}
+            end
+            mainSettings[currentUnitType].lockPositioning = unitSettings.lockPositioning
+            api.SaveSettings()
+            
+            -- Notify main to update dragging state
+            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+        end)
     end
-    settingsControls.lockPositioning = lockPositioning
+    settingsControls.lockButton = lockButton
     
     -- Timer settings group
-    local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockPositioning,
+    local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockButton,
                                              'Timer settings', 0, 35, 18)
     timerGroupLabel:SetWidth(570)
     timerGroupLabel:Show(true)
     
     -- Явно устанавливаем якорь для группы настроек таймера
     timerGroupLabel:RemoveAllAnchors()
-    timerGroupLabel:AddAnchor("TOPLEFT", lockPositioning, "BOTTOMLEFT", 0, 10)
+    timerGroupLabel:AddAnchor("TOPLEFT", lockButton, "BOTTOMLEFT", 0, 10)
     
     -- Timer font size
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
@@ -1228,42 +1266,40 @@ local function initSettingsPage()
     settingsControls.timerTextColor = timerTextColor
     
     -- Final check - call update one more time for confidence
-    pcall(function()
-        -- Force update list one more time
-        updateTrackedBuffsList()
-        updateCustomBuffsList()
-        
-        -- Force show all critical elements
-        settingsControls.buffsListContainer:Show(true)
-        settingsControls.trackedBuffsListHeader:Show(true)
+    -- Force update list one more time
+    updateTrackedBuffsList()
+    updateCustomBuffsList()
+    
+    -- Force show all critical elements
+    settingsControls.buffsListContainer:Show(true)
+    settingsControls.trackedBuffsListHeader:Show(true)
 
-        settingsControls.customBuffsListContainer:Show(true)
-        settingsControls.customBuffsListHeader:Show(true)
-        
-        -- Явно показываем все ключевые элементы интерфейса
-        if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
-        if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
-        if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
-        
-        if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
-        if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
-        if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
-        
-        if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
-        if settingsControls.posX then settingsControls.posX:Show(true) end
-        if settingsControls.posY then settingsControls.posY:Show(true) end
-        
-        if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
-        if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-        
-        if settingsControls.errorPanel then
-            settingsControls.errorPanel:Show(false)
-        end
+    settingsControls.customBuffsListContainer:Show(true)
+    settingsControls.customBuffsListHeader:Show(true)
+    
+    -- Явно показываем все ключевые элементы интерфейса
+    if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
+    if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
+    if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
+    
+    if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
+    if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
+    if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
+    
+    if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
+    if settingsControls.posX then settingsControls.posX:Show(true) end
+    if settingsControls.posY then settingsControls.posY:Show(true) end
+    
+    if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
+    if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
+    
+    if settingsControls.errorPanel then
+        settingsControls.errorPanel:Show(false)
+    end
 
-        if settingsControls.customBuffErrorPanel then
-            settingsControls.customBuffErrorPanel:Show(false)
-        end
-    end)
+    if settingsControls.customBuffErrorPanel then
+        settingsControls.customBuffErrorPanel:Show(false)
+    end
 
     -- Добавляем вызов функции создания кнопки в конец функции инициализации окна настроек
     addPixelViewerButton()
@@ -1276,8 +1312,7 @@ local function Unload()
     end
     
     -- Close palette if it's open
-    local F_ETC = nil
-    F_ETC = require('CooldawnBuffTracker/util/etc')
+    local F_ETC = require('CooldawnBuffTracker/util/etc')
     if F_ETC then
         F_ETC.HidePallet()
     end
@@ -1310,29 +1345,27 @@ local function openSettingsWindow()
         end
         
         -- Явно показываем все ключевые элементы интерфейса
-        pcall(function()
-            if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
-            if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
-            if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
+        if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
+        if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
+        if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
 
-            if settingsControls.customBuffInputsLabel then settingsControls.customBuffInputsLabel:Show(true) end
-            if settingsControls.newCustomBuffId then settingsControls.newCustomBuffId:Show(true) end
-            if settingsControls.newCustomBuffName then settingsControls.newCustomBuffName:Show(true) end
-            if settingsControls.newCustomBuffCooldown then settingsControls.newCustomBuffCooldown:Show(true) end
-            if settingsControls.newCustomBuffTimeOfAction then settingsControls.newCustomBuffTimeOfAction:Show(true) end
-            if settingsControls.addCustomBuffButton then settingsControls.addCustomBuffButton:Show(true) end
-            
-            if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
-            if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
-            if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
-            
-            if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
-            if settingsControls.posX then settingsControls.posX:Show(true) end
-            if settingsControls.posY then settingsControls.posY:Show(true) end
-            
-            if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
-            if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-        end)
+        if settingsControls.customBuffInputsLabel then settingsControls.customBuffInputsLabel:Show(true) end
+        if settingsControls.newCustomBuffId then settingsControls.newCustomBuffId:Show(true) end
+        if settingsControls.newCustomBuffName then settingsControls.newCustomBuffName:Show(true) end
+        if settingsControls.newCustomBuffCooldown then settingsControls.newCustomBuffCooldown:Show(true) end
+        if settingsControls.newCustomBuffTimeOfAction then settingsControls.newCustomBuffTimeOfAction:Show(true) end
+        if settingsControls.addCustomBuffButton then settingsControls.addCustomBuffButton:Show(true) end
+        
+        if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
+        if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
+        if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
+        
+        if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
+        if settingsControls.posX then settingsControls.posX:Show(true) end
+        if settingsControls.posY then settingsControls.posY:Show(true) end
+        
+        if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
+        if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
         
         settingsWindow:Show(true)
         helpers.setSettingsPageOpened(true)
@@ -1352,12 +1385,10 @@ local function openSettingsWindow()
 end
 
 local function updatePositionFields(x, y)
-    pcall(function()
-        if settingsControls.posX and settingsControls.posY then
-            settingsControls.posX:SetText(tostring(x))
-            settingsControls.posY:SetText(tostring(y))
-        end
-    end)
+    if settingsControls.posX and settingsControls.posY then
+        settingsControls.posX:SetText(tostring(x))
+        settingsControls.posY:SetText(tostring(y))
+    end
 end
 
 local settings_page = {
@@ -1368,4 +1399,4 @@ local settings_page = {
     openPixelWindow = pixelViewer.openPixelWindow
 }
 
-return settings_page 
+return settings_page
