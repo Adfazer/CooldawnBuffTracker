@@ -12686,9 +12686,7 @@ BuffList.ddsData = {
     ["32773"] = "icon_skill_buff182.dds"
 }
 
-pcall(function()
-    helpers = require("CooldawnBuffTracker/helpers")
-  end)
+local helpers = require("CooldawnBuffTracker/helpers")
 
 -- This function returns the buff info given a buff ID
 -- It will try to find the buff in predefined list or return a generic data object
@@ -12730,15 +12728,13 @@ function BuffList.GetBuffName(buffId)
     
     -- Try to get actual buff name from game API if possible
     local buffName = nil
-    pcall(function()
-        local api = require("api")
-        if api and api.Ability and api.Ability.GetBuffTooltip then
-            local tooltip = api.Ability.GetBuffTooltip(buffId)
-            if tooltip and tooltip.name then
-                buffName = tooltip.name
-            end
+    local api = require("api")
+    if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
+        local tooltip = api.Ability.GetBuffTooltip(buffId)
+        if tooltip and tooltip.name then
+            buffName = tooltip.name
         end
-    end)
+    end
     
     return buffName or buffInfo.name or "Buff #" .. buffId
 end
@@ -12760,15 +12756,13 @@ function BuffList.GetBuffIcon(buffId)
     
     -- If no predefined icon, try to get icon from game API
     if not iconPath then
-        pcall(function()
-            local api = require("api")
-            if api and api.Ability and api.Ability.GetBuffTooltip then
-                local tooltip = api.Ability.GetBuffTooltip(buffId)
-                if tooltip and tooltip.path then
-                    iconPath = tooltip.path
-                end
+        local api = require("api")
+        if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
+            local tooltip = api.Ability.GetBuffTooltip(buffId)
+            if tooltip and tooltip.path then
+                iconPath = tooltip.path
             end
-        end)
+        end
     end
     
     -- Return icon path or default
@@ -12806,15 +12800,13 @@ function BuffList.IsValidBuff(buffId)
     
     -- Try to get buff information from game API
     local isValidFromAPI = false
-    pcall(function()
-        local api = require("api")
-        if api and api.Ability and api.Ability.GetBuffTooltip then
-            local tooltip = api.Ability.GetBuffTooltip(buffId)
-            if tooltip and (tooltip.name or tooltip.path) then
-                isValidFromAPI = true
-            end
+    local api = require("api")
+    if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
+        local tooltip = api.Ability.GetBuffTooltip(buffId)
+        if tooltip and (tooltip.name or tooltip.path) then
+            isValidFromAPI = true
         end
-    end)
+    end
     
     return isValidFromAPI
 end

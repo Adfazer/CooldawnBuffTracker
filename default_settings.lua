@@ -37,6 +37,26 @@ local defaultSettings = {
         timerY = 0,
         trackedBuffs = {}  -- Empty array - user specifies buffs themselves
     },
+    target = {
+        posX = 330,
+        posY = 170,  -- Below player
+        iconSize = 40,
+        iconSpacing = 5,
+        lockPositioning = false,
+        enabled = true,
+        timerTextColor = {r = 1, g = 1, b = 1, a = 1},
+        labelTextColor = {r = 1, g = 1, b = 1, a = 1},
+        showLabel = false,
+        labelFontSize = 14,
+        labelX = 0,
+        labelY = -30,
+        showTimer = true,
+        timerFontSize = 16,
+        timerX = 0,
+        timerY = 0,
+        trackedBuffs = {},  -- Empty array - user specifies buffs themselves
+        cacheTimeout = 300  -- 5 минут в секундах - время очистки кэша target
+    },
     customBuffs = {}, -- Таблица для хранения пользовательских баффов
     debugBuffId = false -- Флаг режима отладки баффов (отключен по умолчанию)
 }
