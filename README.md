@@ -6,100 +6,73 @@ An addon for tracking buffs and cooldowns in ArcheAge Classic.
 
 CooldawnBuffTracker helps players track buff durations and ability cooldowns in an intuitive visual interface. This allows for more efficient skill usage and better action planning during combat.
 
-Track buffs and debuffs for multiple unit types:
-- **Player** - Your own buffs and cooldowns
-- **Player/Mount** - Pet and mount buffs
-- **Target** - Current target's buffs and debuffs
+Track buffs and debuffs for multiple unit types.
 
 ## Features
 
-### Core Functionality
-- **Multi-unit tracking** - Track buffs for player, pet/mount, and target simultaneously
-- **Custom buff system** - Add any buff by ID for tracking
-- **Real-time timers** - Display remaining buff duration and cooldown times
-- **Visual status indicators** - Color-coded icons (green=active, red=cooldown, white=ready)
+### Core
+- **Multi-unit tracking** — player, pet/mount and target at the same time, each
+  with its own panel and settings.
+- **Custom buff system** — track any buff by its numeric ID, even if it is not
+  in the default list.
+- **Real-time timers** — remaining buff duration and cooldown, shown on the icon.
+- **Color-coded status** — green = active, red = on cooldown, white = ready.
 
-### Customization
-- **Fully customizable interface** - Adjust size, position, color, and appearance
-- **Icon customization** - Icon size, spacing, and positioning
-- **Font customization** - Timer and label font size and color
-- **Position locking** - Lock icons in place to prevent accidental movement
-- **Independent settings** - Separate configuration for each unit type
+### Icon layout
+- **Configurable grid** — arrange icons in a grid of `Columns × Rows` and cap how
+  many are shown with `Max icons`. Icons fill left-to-right, top-to-bottom. A
+  single row reproduces the classic horizontal bar.
+  - Examples: `10×1` bar, `5×4` block, `15×2` wide bar.
+- **Icon size & spacing** — icon dimensions and the horizontal gap between icons.
+- **Row spacing** — a separate vertical gap between grid rows.
+- **Draggable panel** — drag each panel into place; a small empty "handle" on the
+  right is always grabbable. Position can be locked to prevent accidental moves.
 
-### Advanced Features
-- **Target buff caching** - Smart caching system for seamless target switching
-- **Automatic restoration** - Returning to a previously targeted unit restores cached buff states
-- **Cache cleanup** - Stale cache entries are automatically cleared after 5 minutes
-- **Debug mode** - Display buff IDs in chat and tools for identifying new buffs
-- **Pagination support** - Handle large lists of buffs efficiently
+### Appearance
+- **Buff name label** — optional name under each icon, with its own font size,
+  offset, and **Label color**.
+- **Timer** — font size and **Text color** for the countdown.
 
-## Unit Types
+### Configuration management
+- **Settings presets** — save the full layout (position, size, colors, grid, and
+  tracked buffs) for all unit types as a named preset, and load it any time.
+- **Import / Export to file** — share your whole configuration as a file:
+  - **Export** writes a uniquely-named file `cbt_config_<character>_<id>.txt`
+    into the `CooldawnBuffTracker` addon folder.
+  - **Import** loads such a file by name (the `.txt` extension is optional).
 
-The addon supports tracking buffs and debuffs on three different unit types:
+### Custom buffs
+- Add a buff by ID with name, cooldown and time-of-action.
+- Each entry has **Add** (start tracking it for the currently selected unit type)
+  and **Remove** buttons.
+- Long lists are paginated; all custom buffs are saved automatically.
 
-### Player (player)
-Track your own buffs and ability cooldowns. Perfect for monitoring your skill rotations and resource management.
+### Target tracking
+- Real-time monitoring of buffs/debuffs on the current target.
+- Smart caching: when you switch targets, buff state is preserved and restored if
+  you return to a unit; stale cache is cleared after 5 minutes.
+- Independent position/size/display settings.
 
-### Player/Mount (playerpet)
-Monitor buffs and effects on your pet or mount. Essential for players who rely on pet abilities or mount-specific buffs.
+### Debugging
+- **Debug mode** — print buff IDs to chat to identify new buffs to track.
 
-### Target (target)
-Track active buffs and debuffs on your current target:
-- **Real-time monitoring** - See all active effects on targeted units
-- **Smart caching** - Buff data is preserved when switching targets
-- **Automatic restoration** - Returning to a previously targeted unit restores cached states
-- **Separate configuration** - Target tracking has independent position, size, and display settings
+## Using Import / Export
 
-## Configuration
+Open the settings window and click the Import/Export button.
 
-Addon settings are available in-game. You can customize:
+- **Export your setup:** click **“Save my config to a file”**. The addon writes
+  `cbt_config_<character>_<id>.txt` into the `CooldawnBuffTracker` folder and
+  shows the path. Hand that file to anyone.
+- **Import someone's setup:** put the received file into the
+  `CooldawnBuffTracker` folder, type its name into the field (extension optional),
+  and click **“Load config from file”**.
 
-### Display Settings
-- **Interface position** - X and Y coordinates for each unit type
-- **Icon size and spacing** - Adjust icon dimensions and gaps between them
-- **Position lock/unlock** - Prevent accidental movement of buff icons
-
-### Font Settings
-- **Timer font size and color** - Customize countdown timer appearance
-- **Label font size and color** - Adjust buff name text style
-
-### Buff Management
-- **Tracked buff lists** - Select which buffs to monitor for each unit type
-- **Custom buff IDs** - Add any buff by ID (even if not in default list)
-- **Enable/disable tracking** - Turn tracking on/off for specific unit types
-- **Clear all buffs** - Remove all tracked buffs at once
-
-### Debug Settings
-- **Debug mode** - Display buff IDs in chat for identifying new buffs
-
-## Custom Buffs
-
-The addon includes a flexible custom buff system:
-- **Add any buff by ID** - Track buffs that aren't in default list
-- **Pagination support** - Easily manage large lists of buffs with page navigation
-- **Auto-save** - All custom buff IDs are saved to settings automatically
-- **Remove individually** - Delete specific buffs from your tracking list
-
-## Target Tracking
-
-The addon supports tracking buffs and debuffs on your current target:
-
-- **Real-time monitoring**: Track active buffs/debuffs on any targeted unit
-- **Smart caching**: When you switch targets, buff data is preserved in cache
-- **Automatic restoration**: Returning to a previously targeted unit restores cached buff states
-- **Cache cleanup**: Stale cache entries are automatically cleared after 5 minutes of inactivity
-- **Separate configuration**: Target tracking has its own position, size, and display settings independent from player/mount tracking
-
-## Buff Debugging
-
-The addon includes tools for debugging buffs:
-- **Display buff IDs in game chat** - See buff IDs when they are added or removed
-- **Support for all unit types** - Debug mode works for player, pet, and target
-- **Tools for adding new buffs** - Easily identify and add any buff you encounter
+A configuration contains your custom buffs and the tracked-buff lists for player,
+mount and target.
 
 ## Version
 
-**Current Version:** 1.4.0
+**Current Version:** 1.5.0
 
 ## Credits
 

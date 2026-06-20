@@ -23,7 +23,12 @@ function helpers.getSettings(cnv, playerCnv, targetCnv)
     if targetCnv ~= nil then TARGET_CANVAS = targetCnv end
     
     local settings = api.GetSettings("CooldawnBuffTracker")
-    
+
+    -- Миграция новых полей (presets и т.д.) без перезаписи существующих данных
+    if defaultSettings and defaultSettings.migrate then
+        settings = defaultSettings.migrate(settings)
+    end
+
     -- Check and set default settings
     if not settings.playerpet then
         settings.playerpet = {}
@@ -269,8 +274,150 @@ function helpers.setSettingsPageOpened(state)
     settingsOpened = state 
 end
 
-function helpers.getSettingsPageOpened() 
-    return settingsOpened 
+function helpers.getSettingsPageOpened()
+    return settingsOpened
+end
+
+-- =========================================================================
+-- Пресеты настроек
+-- Пресет хранит полную раскладку для трёх типов юнитов (позиция, размер,
+-- цвета, showLabel/showTimer И список отслеживаемых баффов trackedBuffs).
+-- customBuffs и debugBuffId остаются глобальными и в пресеты не входят.
+-- =========================================================================
+
+-- Типы юнитов, чьи настройки сохраняются в пресете
+local PRESET_UNIT_TYPES = {"playerpet", "player", "target"}
+
+-- Глубокое (рекурсивное) копирование таблицы.
+-- Нужно, чтобы пресеты были независимы от текущих настроек: без этого
+-- присваивание создаёт ссылку, и правка настроек меняла бы сам пресет.
+function helpers.cloneTable(original)
+    if type(original) ~= "table" then
+        return original
+    end
+
+    local copy = {}
+    for key, value in pairs(original) do
+        if type(value) == "table" then
+            copy[key] = helpers.cloneTable(value)
+        else
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
+-- Список имён всех пресетов (отсортирован для стабильного порядка в UI)
+function helpers.getPresetNames()
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    local names = {}
+    if settings and settings.presets then
+        for name, _ in pairs(settings.presets) do
+            table.insert(names, name)
+        end
+        table.sort(names)
+    end
+    return names
+end
+
+-- Получить данные пресета по имени
+function helpers.getPreset(presetName)
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    if not presetName or not settings or not settings.presets then
+        return nil
+    end
+    return settings.presets[presetName]
+end
+
+-- Сохранить текущие настройки как пресет с указанным именем (с глубоким копированием)
+function helpers.savePresetFromCurrent(presetName)
+    if not presetName or presetName == "" then
+        return false, "Empty preset name"
+    end
+
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    if not settings.presets then settings.presets = {} end
+
+    local preset = { name = presetName }
+    for _, unitType in ipairs(PRESET_UNIT_TYPES) do
+        preset[unitType] = helpers.cloneTable(settings[unitType] or {})
+    end
+
+    settings.presets[presetName] = preset
+    settings.activePresetName = presetName
+
+    pcall(function() api.SaveSettings() end)
+    api.Log:Info("[CBT] Preset saved: " .. presetName)
+    return true
+end
+
+-- Удалить пресет. Если удаляем активный — сбрасываем activePresetName.
+function helpers.deletePreset(presetName)
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    if not settings.presets or settings.presets[presetName] == nil then
+        return false, "Preset not found"
+    end
+
+    settings.presets[presetName] = nil
+    if settings.activePresetName == presetName then
+        settings.activePresetName = nil
+    end
+
+    pcall(function() api.SaveSettings() end)
+    api.Log:Info("[CBT] Preset deleted: " .. presetName)
+    return true
+end
+
+-- Загрузить пресет: копируем его настройки в текущие (глубокая копия).
+-- Недостающие ключи добиваются из defaults через nil-проверку (false сохраняется).
+function helpers.loadPreset(presetName)
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    local preset = helpers.getPreset(presetName)
+
+    if not preset then
+        api.Log:Err("[CBT] Preset not found: " .. tostring(presetName))
+        return false, "Preset not found"
+    end
+
+    for _, unitType in ipairs(PRESET_UNIT_TYPES) do
+        if preset[unitType] then
+            local cloned = helpers.cloneTable(preset[unitType])
+            -- Добавляем недостающие поля из defaults, не затирая существующие
+            if defaultSettings and defaultSettings[unitType] then
+                for k, v in pairs(defaultSettings[unitType]) do
+                    if cloned[k] == nil then cloned[k] = v end
+                end
+            end
+            settings[unitType] = cloned
+        end
+    end
+
+    settings.activePresetName = presetName
+
+    pcall(function() api.SaveSettings() end)
+    api.Log:Info("[CBT] Preset loaded: " .. presetName)
+    return true
+end
+
+-- Есть ли сейчас активный пресет
+function helpers.hasActivePreset()
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    return settings.activePresetName ~= nil and settings.activePresetName ~= ""
+end
+
+-- Имя активного пресета (или nil)
+function helpers.getActivePresetName()
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    return settings.activePresetName
+end
+
+-- Сбросить активный пресет (вызывается при ручном изменении настроек)
+function helpers.clearActivePreset()
+    local settings = api.GetSettings("CooldawnBuffTracker")
+    if settings.activePresetName ~= nil then
+        settings.activePresetName = nil
+        pcall(function() api.SaveSettings() end)
+    end
 end
 
 return helpers

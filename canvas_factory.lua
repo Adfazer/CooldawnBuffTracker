@@ -112,7 +112,13 @@ function CanvasFactory.createBuffIcon(parent, index, unitType, unitSettings)
     end
     
     nameLabel:SetText("")
-    nameLabel:Show(false)
+    
+    -- Control visibility based on showLabel setting
+    if unitSettings.showLabel then
+      nameLabel:Show(true)
+    else
+      nameLabel:Show(false)
+    end
   end
   
   -- Create semi-transparent background for timer

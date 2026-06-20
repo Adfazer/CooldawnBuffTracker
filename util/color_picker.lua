@@ -20,7 +20,7 @@ local function SetViewOfEmptyButton(id, parent)
     local button = api.Interface:CreateWidget("button", id, parent)
     button:RegisterForClicks("LeftButton")
     button:RegisterForClicks("RightButton", false)
-    button.style:SetAlign(ALIGN_CENTER)
+    button.style:SetAlign(ALIGN.CENTER)
     button.style:SetSnap(true)
     SetButtonFontColor(button, GetButtonDefaultFontColor())
     return button

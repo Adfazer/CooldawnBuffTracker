@@ -144,4 +144,44 @@ function BuffsToTrack.GetAllTrackedBuffIds(unitType)
     return loadTrackedBuffsFromSettings(unitType)
 end
 
+-- Move a buff in tracked list up or down
+function BuffsToTrack.MoveTrackedBuff(buffId, direction, unitType)
+    unitType = unitType or "playerpet"
+    
+    if not buffId then return false end
+    
+    local trackedBuffs = loadTrackedBuffsFromSettings(unitType)
+    
+    -- Find index of buff in list
+    local index = nil
+    for i, id in ipairs(trackedBuffs) do
+        if id == buffId then
+            index = i
+            break
+        end
+    end
+    
+    if not index then return false end
+    
+    -- Move buff
+    if direction == "up" then
+        if index > 1 then
+            local item = table.remove(trackedBuffs, index)
+            table.insert(trackedBuffs, index - 1, item)
+        end
+    elseif direction == "down" then
+        if index < #trackedBuffs then
+            local item = table.remove(trackedBuffs, index)
+            table.insert(trackedBuffs, index + 1, item)
+        end
+    else
+        return false
+    end
+    
+    -- Save new order
+    BuffsToTrack.SaveTrackedBuffs(trackedBuffs, unitType)
+    
+    return true
+end
+
 return BuffsToTrack
