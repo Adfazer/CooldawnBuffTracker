@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "CooldawnBuffTracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.4.0"
+  version = "1.5.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -284,6 +284,64 @@ local function createChildWidgetSafe(parent, widgetType, name, index)
   return widget
 end
 
+-- =====================================================================
+-- Этап 4: настраиваемая сетка иконок (columns x rows + maxIcons).
+-- Защитный предел на число создаваемых виджетов-иконок в одном канвасе.
+-- Канвас создаётся один раз, поэтому держим фиксированный пул иконок этого
+-- размера, а реальное число показанных ограничиваем maxIcons на лету.
+-- =====================================================================
+local MAX_GRID_ICONS = 40
+
+local function getGridColumns(unitSettings)
+  local cols = math.floor(tonumber(unitSettings and unitSettings.gridColumns) or 10)
+  if cols < 1 then cols = 1 end
+  if cols > MAX_GRID_ICONS then cols = MAX_GRID_ICONS end
+  return cols
+end
+
+local function getGridRows(unitSettings)
+  local rows = math.floor(tonumber(unitSettings and unitSettings.gridRows) or 1)
+  if rows < 1 then rows = 1 end
+  if rows > MAX_GRID_ICONS then rows = MAX_GRID_ICONS end
+  return rows
+end
+
+-- Сколько иконок реально показываем: не больше ёмкости сетки (cols*rows),
+-- не больше глобального предела и не меньше 1.
+local function getMaxIcons(unitSettings)
+  local capacity = getGridColumns(unitSettings) * getGridRows(unitSettings)
+  if capacity > MAX_GRID_ICONS then capacity = MAX_GRID_ICONS end
+  local maxIcons = tonumber(unitSettings and unitSettings.maxIcons)
+  if not maxIcons then
+    maxIcons = capacity
+  else
+    maxIcons = math.floor(maxIcons)
+  end
+  if maxIcons < 1 then maxIcons = 1 end
+  if maxIcons > capacity then maxIcons = capacity end
+  return maxIcons
+end
+
+-- Позиция иконки по индексу (1-based): слева направо, сверху вниз.
+local function calculateIconPosition(index, unitSettings)
+  local cols = getGridColumns(unitSettings)
+  local size = tonumber(unitSettings and unitSettings.iconSize) or 40
+  local spacing = tonumber(unitSettings and unitSettings.iconSpacing) or 5
+  -- вертикальный отступ между строками — отдельная настройка (с откатом на iconSpacing)
+  local rowSpacing = tonumber(unitSettings and unitSettings.gridRowSpacing) or spacing
+  local col = (index - 1) % cols
+  local row = math.floor((index - 1) / cols)
+  return col * (size + spacing), row * (size + rowSpacing)
+end
+
+-- Якорим иконку в ячейку сетки относительно левого-верхнего угла канваса.
+local function anchorIconInGrid(icon, parent, index, unitSettings)
+  if not icon then return end
+  local x, y = calculateIconPosition(index, unitSettings)
+  icon:RemoveAllAnchors()
+  icon:AddAnchor("TOPLEFT", parent, x, y)
+end
+
 -- Function to create buff icon
 local function addBuffIcon(parent, index, unitType)
   unitType = unitType or "playerpet" -- Use mount by default
@@ -294,10 +352,9 @@ local function addBuffIcon(parent, index, unitType)
   if not icon then return nil end
   
   icon:SetExtent(unitSettings.iconSize, unitSettings.iconSize)
-  
-  -- Explicitly calculate icon position taking into account current interval
-  local xPosition = (index-1) * (unitSettings.iconSize + unitSettings.iconSpacing)
-  icon:AddAnchor("LEFT", parent, xPosition, 0)
+
+  -- Этап 4: позиция иконки в сетке (слева направо, сверху вниз)
+  anchorIconInGrid(icon, parent, index, unitSettings)
   
   -- Create a color overlay for the icon (will show status)
   local statusOverlay = icon:CreateColorDrawable(0, 0, 0, 0, "overlay")
@@ -448,7 +505,7 @@ local function createBuffCanvas()
   canvas:Show(false)
   
   canvas.buffIcons = {}
-  for i = 1, 10 do
+  for i = 1, MAX_GRID_ICONS do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, "playerpet")
     
     -- Ensure that the icon has the correct position based on settings
@@ -457,8 +514,7 @@ local function createBuffCanvas()
       canvas.buffIcons[i]:SetExtent(settings.playerpet.iconSize, settings.playerpet.iconSize)
       
       -- Explicitly calculate icon position taking into account current interval
-      local xPosition = (i-1) * (settings.playerpet.iconSize + settings.playerpet.iconSpacing)
-      canvas.buffIcons[i]:AddAnchor("LEFT", canvas, xPosition, 0)
+      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.playerpet)
     end
   end
   
@@ -563,7 +619,7 @@ local function createPlayerBuffCanvas()
   canvas:Show(false)
   
   canvas.buffIcons = {}
-  for i = 1, 10 do
+  for i = 1, MAX_GRID_ICONS do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, "player")
     
     -- Ensure that the icon has the correct position based on settings
@@ -572,8 +628,7 @@ local function createPlayerBuffCanvas()
       canvas.buffIcons[i]:SetExtent(settings.player.iconSize, settings.player.iconSize)
       
       -- Explicitly calculate icon position taking into account current interval
-      local xPosition = (i-1) * (settings.player.iconSize + settings.player.iconSpacing)
-      canvas.buffIcons[i]:AddAnchor("LEFT", canvas, xPosition, 0)
+      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.player)
     end
   end
   
@@ -681,15 +736,14 @@ local function createTargetBuffCanvas()
   canvas.unitType = "target"
   
   canvas.buffIcons = {}
-  for i = 1, 10 do
+  for i = 1, MAX_GRID_ICONS do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, "target")
     
     if canvas.buffIcons[i] then
       canvas.buffIcons[i]:RemoveAllAnchors()
       canvas.buffIcons[i]:SetExtent(settings.target.iconSize, settings.target.iconSize)
       
-      local xPosition = (i-1) * (settings.target.iconSize + settings.target.iconSpacing)
-      canvas.buffIcons[i]:AddAnchor("LEFT", canvas, xPosition, 0)
+      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.target)
     end
   end
   
@@ -766,7 +820,9 @@ local function cleanupTargetCache()
   
   for _, targetId in ipairs(keysToRemove) do
     targetCache[targetId] = nil
-    safeLog("[CBT] Target cache cleaned: " .. tostring(targetId))
+    if settings.debugBuffId then
+      safeLog("[CBT] Target cache cleaned: " .. tostring(targetId))
+    end
   end
   
   -- Очищаем историю баффов для удаленных целей
@@ -974,10 +1030,12 @@ local function updateBuffIcons(unitType)
   end
   
   -- Обновляем все иконки и скрываем неиспользуемые
+  -- Этап 4: число одновременно показанных иконок ограничено настройкой maxIcons
+  local maxShown = math.min(#activeBuffs, getMaxIcons(settings[unitType]))
   for i, icon in ipairs(canvas.buffIcons or {}) do
     if icon and icon.Show then
       -- Показываем и настраиваем только иконки, которые используются
-      if i <= #activeBuffs then
+      if i <= maxShown then
         local buffInfo = activeBuffs[i]
         local buffId = buffInfo.id
         local buff = buffInfo.buff
@@ -985,10 +1043,8 @@ local function updateBuffIcons(unitType)
         -- Обновляем размер иконки согласно текущим настройкам
         icon:SetExtent(settings[unitType].iconSize, settings[unitType].iconSize)
         
-        -- Пересчитываем позицию на основе текущего интервала
-        icon:RemoveAllAnchors()
-        local xPosition = (i-1) * (settings[unitType].iconSize + settings[unitType].iconSpacing)
-        icon:AddAnchor("LEFT", canvas, xPosition, 0)
+        -- Этап 4: позиция иконки в сетке (слева направо, сверху вниз)
+        anchorIconInGrid(icon, canvas, i, settings[unitType])
         
         -- Устанавливаем изображение для иконки
         F_SLOT.SetIconBackGround(icon, buff.icon)
@@ -1147,13 +1203,26 @@ local function updateBuffIcons(unitType)
     end
   end
   
-  -- Обновляем размер canvas
-  local totalWidth = (#activeBuffs) * settings[unitType].iconSize + (#activeBuffs - 1) * settings[unitType].iconSpacing
-  totalWidth = math.max(totalWidth, settings[unitType].iconSize * 2)
-  
+  -- Обновляем размер canvas под фактическую сетку (Этап 4)
+  local us = settings[unitType]
+  local cols = getGridColumns(us)
+  local shown = math.min(#activeBuffs, getMaxIcons(us))
+  local usedCols = math.max(1, math.min(shown, cols))
+  local usedRows = math.max(1, math.ceil(shown / cols))
+  local totalWidth = usedCols * us.iconSize + (usedCols - 1) * us.iconSpacing
+  totalWidth = math.max(totalWidth, us.iconSize * 2)
+  local rowSpacing = tonumber(us.gridRowSpacing) or us.iconSpacing
+  local totalHeight = usedRows * us.iconSize + (usedRows - 1) * rowSpacing
+  totalHeight = math.max(totalHeight, us.iconSize * 1.2)
+
+  -- "Язычок" справа: всегда оставляем пустую область фона, за которую можно
+  -- перетаскивать канвас (иначе иконки-кнопки заняли бы всю ширину и тащить
+  -- было бы не за что).
+  local dragHandle = math.max(12, math.floor(us.iconSize * 0.4))
+
   -- Устанавливаем новый размер canvas
-  canvas:SetWidth(totalWidth)
-  canvas:SetHeight(settings[unitType].iconSize * 1.2)
+  canvas:SetWidth(totalWidth + dragHandle)
+  canvas:SetHeight(totalHeight)
   
   -- Устанавливаем позицию только если canvas не перетаскивается
   if canvas.isDragging ~= true then

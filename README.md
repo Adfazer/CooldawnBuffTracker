@@ -22,6 +22,7 @@ Track buffs and debuffs for multiple unit types:
 ### Customization
 - **Fully customizable interface** - Adjust size, position, color, and appearance
 - **Icon customization** - Icon size, spacing, and positioning
+- **Configurable icon grid** - Arrange icons in a custom grid (columns × rows) and cap how many are shown; the classic single-row bar is simply 1 row
 - **Font customization** - Timer and label font size and color
 - **Position locking** - Lock icons in place to prevent accidental movement
 - **Independent settings** - Separate configuration for each unit type
@@ -57,6 +58,7 @@ Addon settings are available in-game. You can customize:
 ### Display Settings
 - **Interface position** - X and Y coordinates for each unit type
 - **Icon size and spacing** - Adjust icon dimensions and gaps between them
+- **Icon grid (columns × rows)** - Lay icons out in a grid filling left-to-right, top-to-bottom; set the max icon count (e.g. 10×1 bar, 5×4 block, 15×2 wide bar)
 - **Position lock/unlock** - Prevent accidental movement of buff icons
 
 ### Font Settings
@@ -66,6 +68,8 @@ Addon settings are available in-game. You can customize:
 ### Buff Management
 - **Tracked buff lists** - Select which buffs to monitor for each unit type
 - **Custom buff IDs** - Add any buff by ID (even if not in default list)
+- **Buff search** - Find a buff by ID or name and add it to tracking in one click, without memorizing numeric IDs
+- **Settings presets** - Save the full layout (position, size, colors, and tracked buffs) for all unit types as named presets, then load them any time
 - **Enable/disable tracking** - Turn tracking on/off for specific unit types
 - **Clear all buffs** - Remove all tracked buffs at once
 
@@ -99,7 +103,7 @@ The addon includes tools for debugging buffs:
 
 ## Version
 
-**Current Version:** 1.4.0
+**Current Version:** 1.8.2
 
 ## Credits
 
