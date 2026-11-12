@@ -292,6 +292,17 @@ local function bindApplyOnEnter(edit)
     end)
 end
 
+-- Нормализует путь иконки: пустая строка -> nil, имя файла -> game/ui/icon/<file>
+local function normalizeIconPath(text)
+    text = text or ""
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return nil end
+    if not string.find(text, "/", 1, true) then
+        text = "game/ui/icon/" .. text
+    end
+    return text
+end
+
 local function settingsWindowClose()
     -- Обновляем настройки перед сохранением
     settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
@@ -515,6 +526,15 @@ local function addCustomBuff()
         newBuff.spellName = spellName
     end
 
+    -- Необязательная иконка (имя файла или полный путь из клиента)
+    local iconPath = nil
+    if settingsControls.newCustomBuffIcon then
+        iconPath = normalizeIconPath(settingsControls.newCustomBuffIcon:GetText())
+    end
+    if iconPath then
+        newBuff.iconFile = iconPath
+    end
+
     -- Добавляем бафф в настройки
     if not settings.customBuffs then
         settings.customBuffs = {}
@@ -528,6 +548,12 @@ local function addCustomBuff()
     settingsControls.newCustomBuffTimeOfAction:SetText("")
     if settingsControls.newCustomBuffSpell then
         settingsControls.newCustomBuffSpell:SetText("")
+    end
+    if settingsControls.newCustomBuffIcon then
+        settingsControls.newCustomBuffIcon:SetText("")
+    end
+    if settingsControls.customBuffIconPreview then
+        F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, "game/ui/icon/icon_buff_debuff.dds")
     end
 
     -- Скрываем сообщение об ошибке
@@ -1420,6 +1446,34 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffSpell:SetWidth(250)
     newCustomBuffSpell:Show(true)
     settingsControls.newCustomBuffSpell = newCustomBuffSpell
+
+    -- Поле Icon: имя файла иконки (список с превью — cbt_icons.html на шаре)
+    local newCustomBuffIconLabel = helpers.createLabel('newCustomBuffIconLabel', customBuffInputsLabel, 'Icon:', 0, 90, 14)
+    newCustomBuffIconLabel:SetWidth(100)
+    newCustomBuffIconLabel:Show(true)
+
+    local newCustomBuffIcon = helpers.createEdit('newCustomBuffIcon', newCustomBuffIconLabel, "", 45, 0)
+    newCustomBuffIcon:SetWidth(220)
+    newCustomBuffIcon:Show(true)
+    settingsControls.newCustomBuffIcon = newCustomBuffIcon
+
+    local iconPreview = CreateItemIconButton('cbtIconPreview', newCustomBuffIconLabel)
+    if iconPreview then
+        iconPreview:SetExtent(28, 28)
+        iconPreview:AddAnchor("TOPLEFT", newCustomBuffIconLabel, 280, -6)
+        iconPreview:Show(true)
+        settingsControls.customBuffIconPreview = iconPreview
+        F_SLOT.SetIconBackGround(iconPreview, "game/ui/icon/icon_buff_debuff.dds")
+    end
+
+    -- Обновление превью по Enter (без сохранения — бафф ещё не добавлен)
+    newCustomBuffIcon:SetHandler("OnEnterPressed", function(self)
+        if self and self.ClearFocus then self:ClearFocus() end
+        if iconPreview then
+            local p = normalizeIconPath(settingsControls.newCustomBuffIcon and settingsControls.newCustomBuffIcon:GetText())
+            F_SLOT.SetIconBackGround(iconPreview, p or "game/ui/icon/icon_buff_debuff.dds")
+        end
+    end)
 
     -- Кнопка добавления пользовательского баффа
     local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 355, 60)

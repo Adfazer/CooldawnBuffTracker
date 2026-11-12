@@ -71,7 +71,9 @@ settings storage and all `require` paths.
   game the first time the spell is seen in the combat log (by its spell id); if
   the id is unknown you can leave the ID field empty and the spell name becomes
   the key. The tracked-buff ID field also accepts the buff name or the spell
-  name instead of the numeric id.
+  name instead of the numeric id. If the game reports no icon, type a file name
+  from the icon gallery (`cbt_icons.html` next to the addon) into the **Icon**
+  field — Enter previews it.
 - Each entry has **Add** (start tracking it for the currently selected unit type)
   and **Remove** buttons.
 - Long lists are paginated; all custom buffs are saved automatically.
@@ -116,6 +118,14 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.8.0
+
+- Custom buffs get an optional **Icon** field: a file name from the game's icon
+  set (`icon_skill_buff141.dds`) or a full path. Enter previews it in the form.
+  The icon is used immediately and saved with the buff.
+- A searchable icon gallery with previews is provided next to the addon
+  (`cbt_icons.html`) so the right file can be found without guessing.
 
 ### 1.7.7
 
@@ -227,7 +237,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.7
+**Current Version:** 1.8.0
 
 ## Credits
 
