@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.8.1
+
+- **Find icon** button in the custom-buff form: scans the client's skill tooltips
+  by name and, when the skill is found, fills the icon path and updates custom
+  buffs with the same spell name. Needed for skills whose spellId is 0 in the
+  combat log (the client cannot resolve their icon by id).
+- Log under Debug: ON shows the scan progress and the found id/name/path.
+
 ### 1.8.0
 
 - Custom buffs get an optional **Icon** field: a file name from the game's icon
@@ -237,7 +245,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.0
+**Current Version:** 1.8.1
 
 ## Credits
 

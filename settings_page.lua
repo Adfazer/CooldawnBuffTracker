@@ -36,6 +36,19 @@ end
 
 local settings, settingsWindow
 local settingsControls = {}
+local M = {}
+
+-- Вызывается из main.lua, когда сканер нашёл навык по имени (spellId в логе = 0)
+local function onSkillIconFound(name, id, path)
+    if settingsControls.newCustomBuffIcon then
+        settingsControls.newCustomBuffIcon:SetText(path or "")
+    end
+    if settingsControls.customBuffIconPreview then
+        F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
+    end
+    api.Log:Info("[CBT] иконка навыка: " .. tostring(path or "?"))
+end
+M.onSkillIconFound = onSkillIconFound
 local trackedBuffsList = {} -- For storing buff list widgets
 local currentUnitType = "playerpet" -- By default, show settings for mount
 local buffListPage = 1 -- Текущая страница пагинации для списка баффов
@@ -1475,6 +1488,25 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         end
     end)
 
+    -- Кнопка поиска иконки по имени навыка (когда в логе spellId=0)
+    local findIconButton = helpers.createButton('findIconButton', customBuffInputsLabel, 'Find icon', 355, 30)
+    findIconButton:SetWidth(150)
+    findIconButton:Show(true)
+    findIconButton:SetHandler("OnClick", function()
+        local name = ""
+        if settingsControls.newCustomBuffSpell then
+            name = settingsControls.newCustomBuffSpell:GetText() or ""
+        end
+        name = name:gsub("^%s+", ""):gsub("%s+$", "")
+        if name == "" then
+            api.Log:Info("[CBT] укажи Spell, чтобы найти иконку")
+            return
+        end
+        if not M.startScan or not M.startScan(name) then
+            api.Log:Err("[CBT] сканер навыков недоступен")
+        end
+    end)
+
     -- Кнопка добавления пользовательского баффа
     local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 355, 60)
     addCustomBuffButton:SetWidth(150)
@@ -2034,15 +2066,15 @@ local function refreshFromExternal()
     setPresetsButtonText()
 end
 
-local settings_page = {
-    Load = initSettingsPage,
-    Unload = Unload,
-    openSettingsWindow = openSettingsWindow,
-    updatePositionFields = updatePositionFields,
-    openPixelWindow = pixelViewer.openPixelWindow,
-    openImportExportWindow = importExport.openImportExportWindow,
-    refreshAllLists = refreshAllLists,
-    refreshFromExternal = refreshFromExternal
-}
+M.Load = initSettingsPage
+M.Unload = Unload
+M.openSettingsWindow = openSettingsWindow
+M.updatePositionFields = updatePositionFields
+M.openPixelWindow = pixelViewer.openPixelWindow
+M.openImportExportWindow = importExport.openImportExportWindow
+M.refreshAllLists = refreshAllLists
+M.refreshFromExternal = refreshFromExternal
+M.startScan = nil
+M.onSkillIconFound = onSkillIconFound
 
-return settings_page
+return M

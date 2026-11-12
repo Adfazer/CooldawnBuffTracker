@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.0"
+  version = "1.8.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1810,8 +1810,90 @@ local function checkBuffs(unitType)
   end
 end
 
+-- Пакетный поиск id навыка по имени: клиентский тултип отдаёт name/path.
+-- Нужен, когда боевой лог присылает spellId=0 (иначе иконку не достать).
+local skillIconScan = nil
+
+local function startSkillIconScan(name)
+  name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if name == "" then return false end
+  if not (api.Skill and api.Skill.GetSkillTooltip) then return false end
+  skillIconScan = {
+    target = name:lower(),
+    rangeIndex = 1,
+    ranges = { { 1, 40000 }, { 8000000, 8000100 } },
+    nextId = 1,
+  }
+  safeLog("[CBT] skill scan: ищем '" .. name .. "' по id (1..40000, 8000000..8000100)")
+  return true
+end
+
+-- Кросс-модульная точка: settings_page не видит глобалы main (приватное окружение)
+if settingsPage then
+  settingsPage.startScan = startSkillIconScan
+end
+
+local function processSkillIconScan()
+  if not skillIconScan then return end
+  local st = skillIconScan
+  local r = st.ranges[st.rangeIndex]
+  if not r then
+    safeLog("[CBT] skill scan: '" .. st.target .. "' не найден")
+    skillIconScan = nil
+    return
+  end
+  if st.nextId < r[1] then st.nextId = r[1] end
+  local last = math.min(st.nextId + 150 - 1, r[2])
+  local found = nil
+  local getter = api.Skill.GetSkillTooltip
+  for id = st.nextId, last do
+    local ok, info = pcall(getter, api.Skill, id)
+    if ok and type(info) == "table" and info.name then
+      local nm = tostring(info.name):lower():gsub("^%s+", ""):gsub("%s+$", "")
+      if nm ~= "" and (nm == st.target or string.find(nm, st.target, 1, true)) then
+        found = { id = id, path = info.path, name = info.name }
+        break
+      end
+    end
+  end
+  if found then
+    safeLog("[CBT] skill scan: найден id=" .. tostring(found.id)
+      .. " name=" .. tostring(found.name) .. " path=" .. tostring(found.path))
+    for _, cb in ipairs(settings.customBuffs or {}) do
+      local sn = cb.spellName or ""
+      if sn ~= "" and (sn:lower():gsub("^%s+", ""):gsub("%s+$", "")) == st.target then
+        cb.iconFile = found.path
+        local tables = { buffData, playerBuffData, targetBuffData }
+        for _, tbl in pairs(tables) do
+          local entry = tbl[cb.id]
+          if entry then entry.icon = found.path end
+        end
+        for _, cache in pairs(targetCache) do
+          if cache.buffStates and cache.buffStates[cb.id] then
+            cache.buffStates[cb.id].icon = found.path
+          end
+        end
+      end
+    end
+    pcall(function() api.SaveSettings() end)
+    if settingsPage and settingsPage.onSkillIconFound then
+      pcall(settingsPage.onSkillIconFound, st.target, found.id, found.path)
+    end
+    skillIconScan = nil
+    return
+  end
+  if last >= r[2] then
+    st.rangeIndex = st.rangeIndex + 1
+    local nr = st.ranges[st.rangeIndex]
+    st.nextId = nr and nr[1] or 0
+  else
+    st.nextId = last + 1
+  end
+end
+
 local function OnUpdate(dt)
   if not live then return end
+  processSkillIconScan()
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     checkBuffs("playerpet")  -- Проверяем баффы маунта
