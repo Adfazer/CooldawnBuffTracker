@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.15.0
+
+- **Edit** button in every tracked-buff row opens the Cooldown / Duration editor.
+  For a custom buff it updates the custom entry; for a regular buff it stores a
+  per-buff override. Values apply immediately and both lists refresh.
+- The «Search» button is gone: the Buff ID field now has **live search** — matches
+  appear under the field as you type (custom buffs first, then the icon dump);
+  click a row to fill the id.
+- Icons are shown in both lists (tracked buffs and custom buffs).
+- Removed the obsolete buff_search_window module.
+
 ### 1.14.1
 
 - Record window: unit selector (Player / Mount / Target); the Active buffs tab
@@ -460,7 +471,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.14.1
+**Current Version:** 1.15.0
 
 ## Credits
 

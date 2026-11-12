@@ -18,7 +18,6 @@ local importExport = require('CooldawnBuffTracker/util/import_export')
 local presetWindowModule = require('CooldawnBuffTracker/preset_window')
 
 -- Импортируем модуль окна поиска баффов
-local buffSearchModule = require('CooldawnBuffTracker/buff_search_window')
 
 -- If failed to load the module for working with buffs, create a placeholder
 if not BuffsToTrack then
@@ -395,6 +394,7 @@ local function addTrackedBuff()
 
         -- Clear input field
         settingsControls.newBuffId:SetText("")
+        if settingsControls.hideAc then settingsControls.hideAc() end
         
         -- Hide error message
         if settingsControls.errorPanel then
@@ -766,6 +766,105 @@ local function addPixelViewerButton()
 end
 
 
+
+-- Редактор CD/D записи: кастомный бафф обновляется напрямую, обычный — через
+-- settings.buffOverrides. Открывается кнопкой Edit в строке отслеживания.
+local cddWindow = nil
+
+local function openCddDialog(buffId)
+    local s = helpers.getSettings()
+    if type(s.buffOverrides) ~= "table" then s.buffOverrides = {} end
+    local key = tostring(buffId)
+
+    local cb = nil
+    for _, item in ipairs(s.customBuffs or {}) do
+        if tostring(item.id) == key then cb = item; break end
+    end
+
+    local curCd, curToa
+    if cb then
+        curCd = tonumber(cb.cooldown) or 0
+        curToa = tonumber(cb.timeOfAction) or 0
+    else
+        local ov = s.buffOverrides[key]
+        if ov then
+            curCd = tonumber(ov.cooldown) or 0
+            curToa = tonumber(ov.timeOfAction) or 0
+        else
+            curCd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30
+            curToa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3
+        end
+    end
+
+    if cddWindow then
+        pcall(function() api.Interface:Free(cddWindow) end)
+        cddWindow = nil
+    end
+    local wnd = CbtWindow.Create("cbtCddWindow", "Cooldown / Duration", 360, 210, function()
+        if cddWindow then cddWindow:Show(false) end
+    end)
+    if not wnd then return end
+    cddWindow = wnd
+
+    local title = helpers.createLabel('cbtCddName', wnd,
+        tostring(BuffList.GetBuffName(buffId)) .. '  [' .. key .. ']', 15, 40, 14)
+    title:SetWidth(330)
+    title:Show(true)
+
+    local cdLabel = helpers.createLabel('cbtCddCdLabel', wnd, 'Cooldown (s):', 15, 70, 14)
+    cdLabel:SetWidth(140)
+    cdLabel:Show(true)
+    local cdEdit = helpers.createEdit('cbtCddCd', cdLabel, tostring(curCd), 120, 0)
+    cdEdit:SetWidth(70)
+    cdEdit:Show(true)
+
+    local toaLabel = helpers.createLabel('cbtCddToaLabel', wnd, 'Duration (s):', 15, 100, 14)
+    toaLabel:SetWidth(140)
+    toaLabel:Show(true)
+    local toaEdit = helpers.createEdit('cbtCddToa', toaLabel, tostring(curToa), 120, 0)
+    toaEdit:SetWidth(70)
+    toaEdit:Show(true)
+
+    local hint = helpers.createLabel('cbtCddHint', wnd,
+        'CD 0 = no cooldown. Applies to this buff only.', 15, 128, 12)
+    hint:SetWidth(330)
+    hint.style:SetColor(0.72, 0.74, 0.80, 1)
+    hint:Show(true)
+
+    local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 160)
+    saveBtn:SetExtent(120, 26)
+    saveBtn:Show(true)
+    saveBtn:SetHandler("OnClick", function()
+        local cd = tonumber(cdEdit:GetText()) or 0
+        local toa = tonumber(toaEdit:GetText()) or 0
+        if cd < 0 then cd = 0 end
+        if toa < 0 then toa = 0 end
+        local updated = false
+        for _, item in ipairs(s.customBuffs or {}) do
+            if tostring(item.id) == key then
+                item.cooldown = cd
+                item.timeOfAction = toa
+                updated = true
+                break
+            end
+        end
+        if not updated then
+            s.buffOverrides[key] = { cooldown = cd, timeOfAction = toa }
+        end
+        api.SaveSettings()
+        if M.applyBuffOverride then M.applyBuffOverride(buffId, cd, toa) end
+        pcall(updateCustomBuffsList, true)
+        pcall(updateTrackedBuffsList)
+        api.Log:Info(string.format("[CBT] CD/D %s: CD=%s D=%s", key, tostring(cd), tostring(toa)))
+        wnd:Show(false)
+    end)
+
+    local cancelBtn = helpers.createButton('cbtCddCancel', wnd, 'Cancel', 145, 160)
+    cancelBtn:SetExtent(100, 26)
+    cancelBtn:Show(true)
+    cancelBtn:SetHandler("OnClick", function() wnd:Show(false) end)
+end
+
 local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
@@ -968,20 +1067,39 @@ local function buildTrackedBuffsSection()
             buffRow:AddAnchor("TOPLEFT", container, 15, yOffset)
             buffRow:Show(true)
             
+            -- Icon
+            if CreateItemIconButton and F_SLOT and F_SLOT.SetIconBackGround then
+                local iconBtn = CreateItemIconButton('trackedBuffIcon_' .. i, buffRow)
+                if iconBtn then
+                    iconBtn:SetExtent(18, 18)
+                    iconBtn:AddAnchor("LEFT", buffRow, 0, 0)
+                    pcall(function() F_SLOT.SetIconBackGround(iconBtn, BuffList.GetBuffIcon(buffId)) end)
+                    iconBtn:Show(true)
+                end
+            end
+
             -- Buff ID
-            local buffIdLabel = helpers.createLabel('buffIdLabel_' .. i, buffRow, tostring(buffId), 0, 0, 14)
-            buffIdLabel:SetExtent(70, 20)
+            local buffIdLabel = helpers.createLabel('buffIdLabel_' .. i, buffRow, tostring(buffId), 22, 0, 14)
+            buffIdLabel:SetExtent(50, 20)
             buffIdLabel:Show(true)
             
             -- Buff name
-            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
-            buffNameLabel:SetExtent(290, 20)
+            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 75, 0, 14)
+            buffNameLabel:SetExtent(245, 20)
             buffNameLabel:Show(true)
+
+            -- Edit: CD/D этой записи
+            local editButton = helpers.createButton('editBuffButton_' .. i, buffRow, 'Edit', 330, 0)
+            editButton:SetExtent(44, 20)
+            editButton:Show(true)
+            editButton:SetHandler("OnClick", function()
+                openCddDialog(buffId)
+            end)
 
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 380, 0)
-            upButton:SetExtent(40, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 378, 0)
+            upButton:SetExtent(36, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1007,8 +1125,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 425, 0)
-            downButton:SetExtent(45, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 418, 0)
+            downButton:SetExtent(44, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1034,8 +1152,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 475, 0)
-            removeButton:SetExtent(70, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 466, 0)
+            removeButton:SetExtent(74, 20)
             removeButton:Show(true)
             
             -- Remove button handler
@@ -1134,28 +1252,105 @@ local function buildNewBuffInput(buffsListContainer)
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 52, 0)
     if newBuffId then 
         newBuffId:SetMaxTextLength(32) 
-        newBuffId:SetWidth(80)
+        newBuffId:SetWidth(240)
         newBuffId:Show(true)
     end
     settingsControls.newBuffId = newBuffId
     
     -- Add buff button
-    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 140, -7)
+    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 300, -7)
     addBuffButton:SetWidth(100)
     addBuffButton:Show(true)
     settingsControls.addBuffButton = addBuffButton
     addBuffButton:SetHandler("OnClick", addTrackedBuff)
 
-    -- Search: списком (включая кастомные баффы/навыки) найти и добавить в отслеживание
-    local searchBuffButton = helpers.createButton('searchBuffButton', newBuffIdLabel, 'Search', 245, -7)
-    searchBuffButton:SetWidth(100)
-    searchBuffButton:Show(true)
-    settingsControls.searchBuffButton = searchBuffButton
-    searchBuffButton:SetHandler("OnClick", function()
-        if buffSearchModule and buffSearchModule.openBuffSearchWindow then
-            buffSearchModule.openBuffSearchWindow(addBuffFromSearch)
+    -- Live search: подсказки по мере ввода (кастомные баффы + база дампа)
+    local acPanel = api.Interface:CreateWidget('window', 'buffAcPanel', newBuffIdLabel)
+    acPanel:SetExtent(300, 22)
+    acPanel:RemoveAllAnchors()
+    acPanel:AddAnchor("TOPLEFT", newBuffId, "BOTTOMLEFT", 0, 3)
+    acPanel:Show(false)
+    local acBg = acPanel:CreateColorDrawable(0.05, 0.06, 0.07, 0.98, "background")
+    acBg:AddAnchor("TOPLEFT", acPanel, 0, 0)
+    acBg:AddAnchor("BOTTOMRIGHT", acPanel, 0, 0)
+    local acRows = {}
+
+    local function hideAc()
+        acPanel:Show(false)
+    end
+    settingsControls.hideAc = hideAc
+
+    local function ensureAcRow(i)
+        if acRows[i] then return acRows[i] end
+        local row = helpers.createButton('buffAcRow_' .. i, acPanel, '', 0, (i - 1) * 22)
+        row:SetExtent(300, 22)
+        row:Show(false)
+        row:SetHandler("OnClick", function(self)
+            if self.acValue ~= nil and settingsControls.newBuffId then
+                settingsControls.newBuffId:SetText(tostring(self.acValue))
+            end
+            hideAc()
+        end)
+        acRows[i] = row
+        return row
+    end
+
+    local function updateAc()
+        if not settingsControls.newBuffId then return end
+        local q = settingsControls.newBuffId:GetText() or ""
+        q = q:gsub("^%s+", ""):gsub("%s+$", "")
+        if q == "" then hideAc(); return end
+        local lq = string.lower(q)
+        local matches = {}
+        local seen = {}
+        local s = helpers.getSettings()
+        for _, cb in ipairs(s.customBuffs or {}) do
+            local nm = tostring(cb.name or cb.spellName or "")
+            local idv = tostring(cb.id or "")
+            local hit = (nm ~= "" and string.lower(nm):find(lq, 1, true) ~= nil)
+                or string.lower(idv):find(lq, 1, true) ~= nil
+            if hit and idv ~= "" and not seen[idv] then
+                seen[idv] = true
+                matches[#matches + 1] = { value = cb.id, text = (nm ~= "" and nm or idv) .. "  [" .. idv .. "]" }
+            end
+            if #matches >= 6 then break end
         end
+        if #matches < 6 and M.searchIcons then
+            local ok, list = pcall(M.searchIcons, q, 12)
+            if ok and type(list) == "table" then
+                for _, e in ipairs(list) do
+                    local idv = tostring(e.id or e.name or "")
+                    if idv ~= "" and not seen[idv] then
+                        seen[idv] = true
+                        matches[#matches + 1] = { value = idv, text = tostring(e.name or idv) .. "  [" .. idv .. "]" }
+                    end
+                    if #matches >= 6 then break end
+                end
+            end
+        end
+        if #matches == 0 then hideAc(); return end
+        for i = 1, 6 do
+            local item = matches[i]
+            local row = acRows[i]
+            if item then
+                row = ensureAcRow(i)
+                row.acValue = item.value
+                row:SetText(item.text)
+                row:Show(true)
+            elseif row then
+                row:Show(false)
+            end
+        end
+        acPanel:SetExtent(300, math.max(1, #matches) * 22)
+        acPanel:Show(true)
+    end
+
+    newBuffId:SetHandler("OnTextChanged", updateAc)
+    newBuffId:SetHandler("OnEnterPressed", function(self)
+        if self and self.ClearFocus then self:ClearFocus() end
+        hideAc()
     end)
+
     
     -- Create highlighted panel for error messages
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
@@ -1292,9 +1487,20 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffRow:AddAnchor("TOPLEFT", container, 15, yOffset)
             buffRow:Show(true)
 
+            -- Icon
+            if CreateItemIconButton and F_SLOT and F_SLOT.SetIconBackGround then
+                local iconBtn = CreateItemIconButton('customBuffIcon_' .. i, buffRow)
+                if iconBtn then
+                    iconBtn:SetExtent(18, 18)
+                    iconBtn:AddAnchor("LEFT", buffRow, 0, 0)
+                    pcall(function() F_SLOT.SetIconBackGround(iconBtn, BuffList.GetBuffIcon(buffData.id)) end)
+                    iconBtn:Show(true)
+                end
+            end
+
             -- ID
-            local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, tostring(buffData.id), 0, 0, 14)
-            buffIdLabel:SetExtent(50, 20)
+            local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, tostring(buffData.id), 22, 0, 14)
+            buffIdLabel:SetExtent(40, 20)
             buffIdLabel:Show(true)
 
             -- Name
@@ -1302,8 +1508,8 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             if buffData.spellName and buffData.spellName ~= "" then
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 80, 0, 14)
-            buffNameLabel:SetExtent(185, 20)
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 65, 0, 14)
+            buffNameLabel:SetExtent(200, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown
@@ -2101,6 +2307,10 @@ local function Unload()
     -- Close icon search window if it's open
     pcall(function() iconSearch.Unload() end)
     pcall(function() recordWindow.Unload() end)
+    if cddWindow then
+        pcall(function() api.Interface:Free(cddWindow) end)
+        cddWindow = nil
+    end
 
 
     -- Close palette if it's open
