@@ -155,6 +155,14 @@ mount and target.
 
 ## Changelog
 
+### 1.21.4
+
+- Fixed the data-file format: `classes.tbl`, `skillsets.tbl` and `cdmods.tbl` are now
+  wrapped as `{ dump = "..." }` exactly like `buff_dump.tbl`, so `api.File:Read` can
+  deserialize them. Previously they were plain TSV, File:Read returned nil and the
+  Effective CDs picker showed trees but no skills. Now it lists 151 skills with icons
+  across the 10 trees.
+
 ### 1.21.3
 
 - Witchcraft buff **18475** (Exploitation) added as a stacking cooldown reduction:
@@ -832,7 +840,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.3
+**Current Version:** 1.21.4
 
 ## Credits
 
