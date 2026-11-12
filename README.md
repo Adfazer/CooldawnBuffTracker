@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.8.2
+
+- **Find icon** now dumps **all** client skill tooltips (id → name → icon path)
+  into `skill_dump.tbl` in the addon folder instead of stopping at the first
+  match, and reuses that dump on the next lookup/load — no repeated scans.
+- The dump is loaded at startup when present; a name found in it is applied
+  immediately. Leave Spell empty and press Find icon to refresh the dump.
+
 ### 1.8.1
 
 - **Find icon** button in the custom-buff form: scans the client's skill tooltips
@@ -245,7 +253,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.1
+**Current Version:** 1.8.2
 
 ## Credits
 

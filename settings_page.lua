@@ -1498,10 +1498,6 @@ local function buildCustomBuffInputs(customBuffsListContainer)
             name = settingsControls.newCustomBuffSpell:GetText() or ""
         end
         name = name:gsub("^%s+", ""):gsub("%s+$", "")
-        if name == "" then
-            api.Log:Info("[CBT] укажи Spell, чтобы найти иконку")
-            return
-        end
         if not M.startScan or not M.startScan(name) then
             api.Log:Err("[CBT] сканер навыков недоступен")
         end
