@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.12.4
+
+- If the combat log already started the entry (synthetic anchor), the aura poll no
+  longer moves the start to the moment the aura appears: the cooldown keeps
+  counting from the cast, so a delayed aura cannot push readiness later (the
+  "addon shows more cooldown than the skill" case).
+- Target-side spell triggers now use the custom buff's CD/D instead of the
+  built-in buff-table defaults.
+
 ### 1.12.3
 
 - Combat-log spell triggers are debounced: DoT ticks and repeats of the same
@@ -380,7 +389,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.12.3
+**Current Version:** 1.12.4
 
 ## Credits
 

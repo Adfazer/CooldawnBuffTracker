@@ -80,7 +80,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.12.3"
+  version = "1.12.4"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -402,8 +402,15 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
   if not sourceId or not buffId then return end
   now = now or getCurrentTime()
   startedAt = startedAt or now
-  local toa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3
-  local cd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30
+  local cb = findCustomBuff(buffId)
+  local toa, cd
+  if cb then
+    toa = tonumber(cb.timeOfAction) or 0
+    cd = tonumber(cb.cooldown) or 0
+  else
+    toa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3
+    cd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30
+  end
   -- устаревшее событие (кулдаун уже прошёл) не показываем
   if now - startedAt >= cd then return end
 
@@ -1700,8 +1707,12 @@ local function checkBuffs(unitType)
         -- Свежее применение: остаток почти равен настроенной длительности (±1.5 c)
         local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
         local anchorNow = unitPollSeen[unitType] or freshCast
+        -- Запись уже запущена боевым логом (каст был раньше появления ауры) —
+        -- не сдвигаем старт на момент ауры, иначе КД уезжает вперёд.
+        local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
+          and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
-        if isNewBuff or refreshed then
+        if (isNewBuff or refreshed) and not triggeredAnchor then
           if anchorNow then
             -- Якорь — момент обнаружения: кулдаун после диспела отсчитывается от
             -- применения, а не от настроенной длительности
@@ -1762,8 +1773,10 @@ local function checkBuffs(unitType)
           local now = getCurrentTime()
           local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
           local anchorNow = unitPollSeen[unitType] or freshCast
+          local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
+            and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
-          if isNewDebuff or refreshed then
+          if (isNewDebuff or refreshed) and not triggeredAnchor then
             if anchorNow then
               -- Якорь — момент обнаружения (кулдаун от применения, не от длительности)
               setBuffStatus(debuff.buff_id, "active", now, unitType, nil)
