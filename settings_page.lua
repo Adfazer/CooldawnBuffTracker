@@ -237,6 +237,18 @@ local function updateCustomBuffsList(resetPage)
     end
 end
 
+-- Цвет из drawable: движок отдаёт r,g,b,a отдельными значениями (иногда таблицей).
+local function readDrawableColor(drawable)
+    if not drawable or not drawable.GetColor then return nil end
+    local ok, r, g, b, a = pcall(function() return drawable:GetColor() end)
+    if not ok or r == nil then return nil end
+    if type(r) == "table" then
+        return { r = r.r or 1, g = r.g or 1, b = r.b or 1, a = r.a or 1 }
+    end
+    if type(r) ~= "number" then return nil end
+    return { r = r, g = g or r, b = b or r, a = a or 1 }
+end
+
 local function saveSettings()
     -- Get current settings
     settings = helpers.getSettings()
@@ -328,13 +340,13 @@ local function saveSettings()
     end
 
     if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
-        local rgb = settingsControls.timerTextColor.colorBG:GetColor()
-        cfg.timerTextColor = rgb
+        local rgb = readDrawableColor(settingsControls.timerTextColor.colorBG)
+        if rgb then cfg.timerTextColor = rgb end
     end
 
     if settingsControls.labelTextColor and settingsControls.labelTextColor.colorBG then
-        local lblRgb = settingsControls.labelTextColor.colorBG:GetColor()
-        cfg.labelTextColor = lblRgb
+        local lblRgb = readDrawableColor(settingsControls.labelTextColor.colorBG)
+        if lblRgb then cfg.labelTextColor = lblRgb end
     end
 
     -- Если настройки этого канваса реально изменились — деактивируем пресет
@@ -1093,7 +1105,7 @@ local function showCanvasPopup(title, items, onPick)
     closeCanvasPopup()
     canvasPopupSeq = canvasPopupSeq + 1
     local seq = canvasPopupSeq
-    local w = CbtWindow.Create("cbtCanvasPopup" .. tostring(seq), title, 250, 74 + #items * 26, closeCanvasPopup)
+    local w = CbtWindow.Create("cbtCanvasPopup" .. tostring(seq), title, 250, 78 + #items * 26, closeCanvasPopup)
     if not w then return end
     canvasPopup = w
 
@@ -1103,7 +1115,7 @@ local function showCanvasPopup(title, items, onPick)
     hint:Show(true)
 
     for i, item in ipairs(items) do
-        local b = helpers.createButton("cbtCanvasPopupBtn" .. tostring(seq) .. "_" .. tostring(i), w, item.label, 15, 62 + (i - 1) * 26)
+        local b = helpers.createButton("cbtCanvasPopupBtn" .. tostring(seq) .. "_" .. tostring(i), w, item.label, 15, 66 + (i - 1) * 26)
         b:SetExtent(220, 22)
         b:Show(true)
         if item.current then
@@ -1148,8 +1160,15 @@ local function addCanvas()
 
     local newCfg = defaultSettings.cloneValue(src)
     newCfg.name = "Canvas " .. tostring(#unit.canvases + 1)
+    -- Новый канвас ставим ПОД исходным (по его реальной высоте), чтобы панели
+    -- не наложились друг на друга, и снимаем lock, чтобы его можно было тащить.
     local size = tonumber(src.iconSize) or 40
-    newCfg.posY = (tonumber(src.posY) or 30) + size + 30
+    local rows = math.floor(tonumber(src.gridRows) or 1)
+    if rows < 1 then rows = 1 end
+    local rowSpacing = tonumber(src.gridRowSpacing) or 5
+    local height = rows * size + (rows - 1) * rowSpacing
+    newCfg.posY = (tonumber(src.posY) or 30) + height + 20
+    newCfg.lockPositioning = false
     table.insert(unit.canvases, newCfg)
     unit.selectedCanvas = #unit.canvases
 
