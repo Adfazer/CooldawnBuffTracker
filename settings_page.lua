@@ -946,7 +946,7 @@ local function openCddDialog(buffId)
         wnd:Show(false)
     end)
 
-    local cancelBtn = helpers.createButton('cbtCddCancel', wnd, 'Cancel', 145, 160)
+    local cancelBtn = helpers.createButton('cbtCddCancel', wnd, 'Cancel', 143, 222)
     cancelBtn:SetExtent(100, 26)
     cancelBtn:Show(true)
     cancelBtn:SetHandler("OnClick", function() wnd:Show(false) end)
@@ -1917,7 +1917,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Icon search (live filter over the buff dump, scan button inside)
-    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Icon search', 140, 90)
+    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Icon search', 140, 118)
     searchIconButton:SetWidth(120)
     searchIconButton:Show(true)
     searchIconButton:SetHandler("OnClick", function()
@@ -1939,7 +1939,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Mana-навык маунта: стоимость маны + имя маунта
-    local newCustomBuffManaLabel = helpers.createLabel('newCustomBuffManaLabel', customBuffInputsLabel, 'Mana:', 268, 90, 14)
+    local newCustomBuffManaLabel = helpers.createLabel('newCustomBuffManaLabel', customBuffInputsLabel, 'Mana:', 0, 90, 14)
     newCustomBuffManaLabel:SetWidth(46)
     newCustomBuffManaLabel:Show(true)
 
@@ -1948,18 +1948,18 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffMana:Show(true)
     settingsControls.newCustomBuffMana = newCustomBuffMana
 
-    local newCustomBuffMountLabel = helpers.createLabel('newCustomBuffMountLabel', customBuffInputsLabel, 'Mount:', 0, 118, 14)
+    local newCustomBuffMountLabel = helpers.createLabel('newCustomBuffMountLabel', customBuffInputsLabel, 'Mount:', 120, 90, 14)
     newCustomBuffMountLabel:SetWidth(52)
     newCustomBuffMountLabel:Show(true)
 
     local newCustomBuffMount = helpers.createEdit('newCustomBuffMount', newCustomBuffMountLabel, "", 56, 0)
-    newCustomBuffMount:SetWidth(130)
+    newCustomBuffMount:SetWidth(180)
     newCustomBuffMount:Show(true)
     settingsControls.newCustomBuffMount = newCustomBuffMount
 
     local manaSkillHint = helpers.createLabel('cbtManaSkillHint', customBuffInputsLabel,
-        'Mana skill: detected by mana spend', 200, 118, 11)
-    manaSkillHint:SetWidth(210)
+        'Mana skill: by spend', 370, 90, 11)
+    manaSkillHint:SetWidth(200)
     manaSkillHint.style:SetColor(0.55, 0.95, 0.55, 1)
     manaSkillHint:Show(false)
     settingsControls.manaSkillHint = manaSkillHint
@@ -1977,7 +1977,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     pcall(function() newCustomBuffMana:SetHandler("OnChar", updateManaHint) end)
 
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add entry', 0, 90)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add entry', 0, 118)
     addCustomBuffButton:SetWidth(130)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
@@ -2367,7 +2367,7 @@ local function initSettingsPage()
         return
     end
     settingsWindow:SetExtent(1200, 600)
-    settingsWindow:SetUILayer("dialog")
+    settingsWindow:SetUILayer("game")
     pcall(function() settingsWindow:SetCloseOnEscape(true) end)
     pcall(function() settingsWindow:EnableHidingIsRemove(false) end)
 

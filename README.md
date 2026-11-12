@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.18.3
+
+- All addon windows moved from the `dialog` layer to the `game` layer — the same as the
+  inventory/auction, so they no longer sit above every game window; a header click/drag
+  raises the window among its siblings.
+- Cooldown/Duration dialog: Cancel moved next to Save (it used to overlap the Mount field).
+- Settings form: Mana and Mount fields are now above the Add entry / Icon search buttons;
+  the Mount input no longer sits under them.
+
 ### 1.18.2
 
 - Mana entries: only name, mana cost, mount name and cooldown are required; ID, Spell,
@@ -639,7 +648,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.2
+**Current Version:** 1.18.3
 
 ## Credits
 
