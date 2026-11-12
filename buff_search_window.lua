@@ -13,6 +13,7 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 local BuffList = require('CooldawnBuffTracker/buff_helper')
+local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 
 local searchWindow = nil
 local controls = {}
@@ -239,28 +240,21 @@ end
 -- ----- Создание окна -----
 
 function createSearchWindowUI()
-    searchWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSearch", "Buff Search", 540, 500)
-    searchWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
-    searchWindow:SetHandler("OnCloseByEsc", function() closeBuffSearchWindow() end)
-    function searchWindow:OnClose() closeBuffSearchWindow() end
-
-    -- Фон окна
-    local background = searchWindow:CreateColorDrawable(0.1, 0.1, 0.1, 0.95, "background")
-    background:AddAnchor("TOPLEFT", searchWindow, 0, 0)
-    background:AddAnchor("BOTTOMRIGHT", searchWindow, 0, 0)
+    searchWindow = CbtWindow.Create("CooldawnBuffTrackerSearch", "Buff Search", 540, 500, closeBuffSearchWindow)
+    if not searchWindow then return end
 
     -- Поле поиска
-    local searchLabel = helpers.createLabel('cbtBuffSearchLabel', searchWindow, 'Search buff:', 15, 28, 15)
+    local searchLabel = helpers.createLabel('cbtBuffSearchLabel', searchWindow, 'Search buff:', 15, 40, 15)
     searchLabel:SetWidth(110)
     searchLabel:Show(true)
 
-    local searchInput = helpers.createEdit('cbtBuffSearchInput', searchWindow, "", 125, 26)
+    local searchInput = helpers.createEdit('cbtBuffSearchInput', searchWindow, "", 125, 38)
     searchInput:SetWidth(250)
     searchInput:SetMaxTextLength(40)
     searchInput:Show(true)
     controls.searchInput = searchInput
 
-    local searchButton = helpers.createButton('cbtBuffSearchBtn', searchWindow, 'Search', 390, 22)
+    local searchButton = helpers.createButton('cbtBuffSearchBtn', searchWindow, 'Search', 390, 34)
     searchButton:SetExtent(125, 26)
     searchButton:Show(true)
     searchButton:SetHandler("OnClick", function()
@@ -270,13 +264,13 @@ function createSearchWindowUI()
 
     -- Подсказка
     local hint = helpers.createLabel('cbtBuffSearchHint', searchWindow,
-        'Digits = search by ID, letters = search by name', 15, 58, 13)
+        'Digits = search by ID, letters = search by name', 15, 70, 13)
     hint:SetWidth(510)
     hint:Show(true)
     hint.style:SetColor(0.7, 0.7, 0.7, 1)
 
     -- Заголовок списка
-    local listHeader = helpers.createLabel('cbtBuffSearchListHeader', searchWindow, 'Results:', 15, 86, 16)
+    local listHeader = helpers.createLabel('cbtBuffSearchListHeader', searchWindow, 'Results:', 15, 98, 16)
     listHeader:SetWidth(510)
     listHeader:Show(true)
 
@@ -284,7 +278,7 @@ function createSearchWindowUI()
     local listContainer = api.Interface:CreateWidget('window', 'cbtBuffSearchListContainer', searchWindow)
     listContainer:SetExtent(510, 270)
     listContainer:RemoveAllAnchors()
-    listContainer:AddAnchor("TOPLEFT", searchWindow, 15, 112)
+    listContainer:AddAnchor("TOPLEFT", searchWindow, 15, 124)
     listContainer:Show(true)
     listContainer:Clickable(true)
     if listContainer.EnableScissor then
@@ -294,10 +288,11 @@ function createSearchWindowUI()
     local listBorder = listContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     listBorder:SetCoords(0, 0, 27, 16)
     listBorder:SetInset(9, 8, 9, 7)
+    listBorder:SetColor(0.28, 0.30, 0.34, 1)
     listBorder:AddAnchor("TOPLEFT", listContainer, -1, -1)
     listBorder:AddAnchor("BOTTOMRIGHT", listContainer, 1, 1)
 
-    local listBg = listContainer:CreateColorDrawable(0.92, 0.92, 0.92, 1, "background")
+    local listBg = listContainer:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     listBg:AddAnchor("TOPLEFT", listContainer, 0, 0)
     listBg:AddAnchor("BOTTOMRIGHT", listContainer, 0, 0)
 
@@ -340,7 +335,7 @@ function createSearchWindowUI()
     controls.nextButton = nextButton
 
     -- Статус
-    local statusLabel = helpers.createLabel('cbtBuffSearchStatus', searchWindow, '', 15, 418, 14)
+    local statusLabel = helpers.createLabel('cbtBuffSearchStatus', searchWindow, '', 15, 430, 14)
     statusLabel:SetWidth(510)
     statusLabel:Show(true)
     controls.statusLabel = statusLabel

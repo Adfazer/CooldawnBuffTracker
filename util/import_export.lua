@@ -1,6 +1,7 @@
 -- Модуль для Import/Export конфигурации баффов
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
+local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
 
 -- Переменная для хранения ссылки на окно
 local importExportWindow = nil
@@ -536,26 +537,17 @@ local function openImportExportWindow(onImportSuccess)
     end
 
     -- Первое открытие — создаём окно ОДИН раз
-    importExportWindow = api.Interface:CreateWindow("CooldawnBuffTrackerImportExport",
-                                         "Import / Export Configuration", 600, 380)
+    importExportWindow = CbtWindow.Create("CooldawnBuffTrackerImportExport",
+                                          "Import / Export Configuration", 600, 380,
+                                          function()
+                                              if importExportWindow then importExportWindow:Show(false) end
+                                          end)
+    if not importExportWindow then return end
 
-    importExportWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
-    importExportWindow:SetHandler("OnCloseByEsc", function()
-        importExportWindow:Show(false)
-    end)
-    function importExportWindow:OnClose()
-        importExportWindow:Show(false)
-    end
-    
-    -- Добавляем фон окна
-    local background = importExportWindow:CreateColorDrawable(0.1, 0.1, 0.1, 0.95, "background")
-    background:AddAnchor("TOPLEFT", importExportWindow, 0, 0)
-    background:AddAnchor("BOTTOMRIGHT", importExportWindow, 0, 0)
-    
     -- Секция EXPORT
     local exportLabel = api.Interface:CreateWidget('label', 'exportLabel', importExportWindow)
     exportLabel:SetExtent(560, 25)
-    exportLabel:AddAnchor("TOP", importExportWindow, 0, 20)
+    exportLabel:AddAnchor("TOP", importExportWindow, 0, 44)
     exportLabel:SetText("EXPORT - save your current setup to a file:")
     exportLabel.style:SetFontSize(17)
     exportLabel.style:SetColor(0.87, 0.69, 0, 1)
@@ -567,6 +559,7 @@ local function openImportExportWindow(onImportSuccess)
     saveFileButton:SetExtent(260, 34)
     saveFileButton:SetText("Save my config to a file")
     api.Interface:ApplyButtonSkin(saveFileButton, BUTTON_BASIC.DEFAULT)
+    CbtWindow.FlattenButton(saveFileButton)
 
     local fileStatus = api.Interface:CreateWidget('label', 'cbtFileStatus', importExportWindow)
     fileStatus:SetExtent(560, 22)
@@ -613,6 +606,7 @@ local function openImportExportWindow(onImportSuccess)
     importFileEdit.style:SetAlign(ALIGN.LEFT)
     importFileEdit.style:SetFontSize(12)
     importFileEdit:SetText("")
+    CbtWindow.StyleEdit(importFileEdit)
     ieWidgets.importFileEdit = importFileEdit
 
     local loadFileButton = api.Interface:CreateWidget('button', 'cbtLoadFileButton', importExportWindow)
@@ -620,6 +614,7 @@ local function openImportExportWindow(onImportSuccess)
     loadFileButton:SetExtent(185, 30)
     loadFileButton:SetText("Load config from file")
     api.Interface:ApplyButtonSkin(loadFileButton, BUTTON_BASIC.DEFAULT)
+    CbtWindow.FlattenButton(loadFileButton)
 
     -- Панель ошибок для импорта
     local errorPanel = api.Interface:CreateWidget('window', 'importErrorPanel', importExportWindow)
@@ -668,6 +663,7 @@ local function openImportExportWindow(onImportSuccess)
     closeButton:SetExtent(150, 35)
     closeButton:SetText("Close")
     api.Interface:ApplyButtonSkin(closeButton, BUTTON_BASIC.DEFAULT)
+    CbtWindow.FlattenButton(closeButton)
     
     closeButton:SetHandler("OnClick", function()
         importExportWindow:Show(false)

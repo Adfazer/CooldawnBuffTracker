@@ -4,6 +4,7 @@
 -- юнитов. Сами операции с пресетами реализованы в helpers.lua, здесь только UI.
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
+local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 
 local presetWindow = nil
 local presetControls = {}
@@ -206,41 +207,34 @@ end
 -- ----- Создание окна -----
 
 function createPresetWindowUI()
-    presetWindow = api.Interface:CreateWindow("CooldawnBuffTrackerPresets", "Presets", 520, 470)
-    presetWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
-    presetWindow:SetHandler("OnCloseByEsc", function() closePresetWindow() end)
-    function presetWindow:OnClose() closePresetWindow() end
-
-    -- Фон окна
-    local background = presetWindow:CreateColorDrawable(0.1, 0.1, 0.1, 0.95, "background")
-    background:AddAnchor("TOPLEFT", presetWindow, 0, 0)
-    background:AddAnchor("BOTTOMRIGHT", presetWindow, 0, 0)
+    presetWindow = CbtWindow.Create("CooldawnBuffTrackerPresets", "Presets", 520, 470, closePresetWindow)
+    if not presetWindow then return end
 
     -- Надпись об активном пресете
-    local activeLabel = helpers.createLabel('cbtPresetActive', presetWindow, 'Active preset: None', 15, 25, 16)
+    local activeLabel = helpers.createLabel('cbtPresetActive', presetWindow, 'Active preset: None', 15, 38, 16)
     activeLabel:SetWidth(490)
     activeLabel:Show(true)
     presetControls.activeLabel = activeLabel
 
     -- Секция: сохранить текущие настройки как новый пресет
-    local nameLabel = helpers.createLabel('cbtPresetNameLabel', presetWindow, 'New preset name:', 15, 55, 15)
+    local nameLabel = helpers.createLabel('cbtPresetNameLabel', presetWindow, 'New preset name:', 15, 65, 15)
     nameLabel:SetWidth(140)
     nameLabel:Show(true)
 
-    local nameInput = helpers.createEdit('cbtPresetNameInput', presetWindow, "", 160, 53)
+    local nameInput = helpers.createEdit('cbtPresetNameInput', presetWindow, "", 160, 63)
     nameInput:SetWidth(200)
     nameInput:SetMaxTextLength(40)
     nameInput:Show(true)
     presetControls.nameInput = nameInput
 
-    local saveButton = helpers.createButton('cbtPresetSaveBtn', presetWindow, 'Save current', 375, 49)
+    local saveButton = helpers.createButton('cbtPresetSaveBtn', presetWindow, 'Save current', 375, 59)
     saveButton:SetExtent(125, 26)
     saveButton:Show(true)
     saveButton:SetHandler("OnClick", onSaveClicked)
     presetControls.saveButton = saveButton
 
     -- Заголовок списка
-    local listHeader = helpers.createLabel('cbtPresetListHeader', presetWindow, 'Saved presets:', 15, 92, 16)
+    local listHeader = helpers.createLabel('cbtPresetListHeader', presetWindow, 'Saved presets:', 15, 104, 16)
     listHeader:SetWidth(490)
     listHeader:Show(true)
 
@@ -248,7 +242,7 @@ function createPresetWindowUI()
     local listContainer = api.Interface:CreateWidget('window', 'cbtPresetListContainer', presetWindow)
     listContainer:SetExtent(490, 235)
     listContainer:RemoveAllAnchors()
-    listContainer:AddAnchor("TOPLEFT", presetWindow, 15, 120)
+    listContainer:AddAnchor("TOPLEFT", presetWindow, 15, 132)
     listContainer:Show(true)
     listContainer:Clickable(true)
     if listContainer.EnableScissor then
@@ -259,11 +253,12 @@ function createPresetWindowUI()
     local listBorder = listContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     listBorder:SetCoords(0, 0, 27, 16)
     listBorder:SetInset(9, 8, 9, 7)
+    listBorder:SetColor(0.28, 0.30, 0.34, 1)
     listBorder:AddAnchor("TOPLEFT", listContainer, -1, -1)
     listBorder:AddAnchor("BOTTOMRIGHT", listContainer, 1, 1)
 
     -- Фон контейнера
-    local listBg = listContainer:CreateColorDrawable(0.92, 0.92, 0.92, 1, "background")
+    local listBg = listContainer:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     listBg:AddAnchor("TOPLEFT", listContainer, 0, 0)
     listBg:AddAnchor("BOTTOMRIGHT", listContainer, 0, 0)
 
@@ -310,7 +305,7 @@ function createPresetWindowUI()
     local errorPanel = api.Interface:CreateWidget('window', 'cbtPresetErrorPanel', presetWindow)
     errorPanel:SetExtent(490, 25)
     errorPanel:RemoveAllAnchors()
-    errorPanel:AddAnchor("TOPLEFT", presetWindow, 15, 370)
+    errorPanel:AddAnchor("TOPLEFT", presetWindow, 15, 382)
 
     local errorBorder = errorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     errorBorder:SetCoords(0, 0, 27, 16)

@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.12.0
+
+- All remaining addon windows now use the same custom dark shell
+  (`util/cbt_window.lua`): Buff Search, Presets, Import/Export and Support.
+  Each has the dark nine-part plate, own header with title, close button, drag
+  grip and ESC close.
+- Their light 0.92-grey list panels are dark now; import/export buttons are
+  flattened to the dark style; edits are tinted dark with light text.
+
 ### 1.11.0
 
 - The settings and icon-search windows are now fully custom (BetterBars style):
@@ -337,7 +346,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.11.0
+**Current Version:** 1.12.0
 
 ## Credits
 

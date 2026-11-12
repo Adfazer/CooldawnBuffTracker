@@ -1,6 +1,7 @@
 -- Модуль для отображения окна поддержки разработчика
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
+local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
 
 -- Переменная для хранения ссылки на окно
 local supportWindow = nil
@@ -30,19 +31,15 @@ local function openPixelWindow()
     end
     
     -- Создаем окно для отображения
-    supportWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSupport",
-                                         "Support the Addon Developer", 450, 500)
-    
-    supportWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
-    supportWindow:SetHandler("OnCloseByEsc", function() 
-        supportWindow:Show(false) 
-        supportWindow = nil
-    end)
-    
-    -- Добавляем фон окна
-    local background = supportWindow:CreateColorDrawable(0.1, 0.1, 0.1, 0.9, "background")
-    background:AddAnchor("TOPLEFT", supportWindow, 0, 0)
-    background:AddAnchor("BOTTOMRIGHT", supportWindow, 0, 0)
+    supportWindow = CbtWindow.Create("CooldawnBuffTrackerSupport",
+                                     "Support the Addon Developer", 450, 500,
+                                     function()
+                                         if supportWindow then
+                                             supportWindow:Show(false)
+                                             supportWindow = nil
+                                         end
+                                     end)
+    if not supportWindow then return end
     
     -- Добавляем заголовок с описанием
     local titleLabel = api.Interface:CreateWidget('label', 'titleLabel', supportWindow)
@@ -61,6 +58,7 @@ local function openPixelWindow()
     addressEdit.style:SetColor(0, 0, 0, 1)
     addressEdit.style:SetAlign(ALIGN.CENTER)
     addressEdit.style:SetFontSize(14)
+    CbtWindow.StyleEdit(addressEdit)
 
     -- Добавляем заголовок для USDT TON
     local tonTitleLabel = api.Interface:CreateWidget('label', 'tonTitleLabel', supportWindow)
@@ -79,6 +77,7 @@ local function openPixelWindow()
     tonAddressEdit.style:SetColor(0, 0, 0, 1)
     tonAddressEdit.style:SetAlign(ALIGN.CENTER)
     tonAddressEdit.style:SetFontSize(14)
+    CbtWindow.StyleEdit(tonAddressEdit)
 
     -- Добавляем заголовок для USDT SOL
     local solTitleLabel = api.Interface:CreateWidget('label', 'solTitleLabel', supportWindow)
@@ -97,6 +96,7 @@ local function openPixelWindow()
     solAddressEdit.style:SetColor(0, 0, 0, 1)
     solAddressEdit.style:SetAlign(ALIGN.CENTER)
     solAddressEdit.style:SetFontSize(14)
+    CbtWindow.StyleEdit(solAddressEdit)
 
     -- Добавляем заголовок для USDT ERC20
     local erc20TitleLabel = api.Interface:CreateWidget('label', 'erc20TitleLabel', supportWindow)
@@ -115,6 +115,7 @@ local function openPixelWindow()
     erc20AddressEdit.style:SetColor(0, 0, 0, 1)
     erc20AddressEdit.style:SetAlign(ALIGN.CENTER)
     erc20AddressEdit.style:SetFontSize(14)
+    CbtWindow.StyleEdit(erc20AddressEdit)
 
     -- Добавляем заголовок для EthereumX (ETX)
     local etxTitleLabel = api.Interface:CreateWidget('label', 'etxTitleLabel', supportWindow)
@@ -133,6 +134,7 @@ local function openPixelWindow()
     etxAddressEdit.style:SetColor(0, 0, 0, 1)
     etxAddressEdit.style:SetAlign(ALIGN.CENTER)
     etxAddressEdit.style:SetFontSize(14)
+    CbtWindow.StyleEdit(etxAddressEdit)
 
     -- Добавляем подсказку
     local hintLabel = api.Interface:CreateWidget('label', 'hintLabel', supportWindow)

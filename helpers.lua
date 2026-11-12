@@ -1,5 +1,6 @@
 local api = require("api")
 local defaultSettings = require('CooldawnBuffTracker/default_settings')
+local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 local helpers = {}
 local CANVAS
 local PLAYER_CANVAS
@@ -202,10 +203,10 @@ function helpers.createEdit(id, parent, text, offsetX, offsetY)
     field:SetExtent(100, 20)
     field:AddAnchor("TOPLEFT", offsetX, offsetY)
     field:SetText(tostring(text))
-    field.style:SetColor(0, 0, 0, 1)
     field.style:SetAlign(ALIGN.LEFT)
     field:SetInitVal(tonumber(text) or 0)
-    
+    CbtWindow.StyleEdit(field)
+
     return field
 end
 
