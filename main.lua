@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.5"
+  version = "1.8.6"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1941,28 +1941,6 @@ local function applyBuffIcon(nameKey, id, path)
     .. " path=" .. tostring(path) .. " (обновлено записей: " .. applied .. ")")
 end
 
-local function probeBuffTooltip(id)
-  local ok, info = pcall(api.Ability.GetBuffTooltip, api.Ability, id, 1)
-  if not ok then
-    safeLog("[CBT] buff probe " .. tostring(id) .. ": error " .. tostring(info))
-    return
-  end
-  if type(info) ~= "table" then
-    safeLog("[CBT] buff probe " .. tostring(id) .. ": " .. type(info) .. " value=" .. tostring(info))
-    return
-  end
-  local parts = {}
-  for k, v in pairs(info) do
-    if #parts < 14 then
-      local sv = tostring(v)
-      if #sv > 40 then sv = "<" .. tostring(#sv) .. " chars>" end
-      parts[#parts + 1] = tostring(k) .. "=" .. sv
-    end
-  end
-  safeLog("[CBT] buff probe " .. tostring(id) .. ": name=" .. tostring(info.name)
-    .. " path=" .. tostring(info.path) .. " | " .. table.concat(parts, ", "))
-end
-
 local function startBuffIconScan(name)
   name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local key = normalizeSkillName(name)
@@ -1972,10 +1950,6 @@ local function startBuffIconScan(name)
     return true
   end
   if not (api.Ability and api.Ability.GetBuffTooltip) then return false end
-  -- Пробы известных buff id (из клиентской таблицы иконок)
-  for _, probeId in ipairs({ 1, 100, 131, 330, 3523, 6413, 6747, 10000, 20000 }) do
-    probeBuffTooltip(probeId)
-  end
   buffIconScan = {
     target = key,
     rangeIndex = 1,

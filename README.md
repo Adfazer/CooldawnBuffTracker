@@ -119,6 +119,11 @@ mount and target.
 
 ## Changelog
 
+### 1.8.6
+
+- Removed the diagnostic buff-id probes from the scan — no per-skill ids or
+  names are hardcoded anywhere, lookup is purely by name from the dump.
+
 ### 1.8.5
 
 - The buff dump (21 014 entries, id/name/icon) is now shipped inside the addon as
@@ -282,7 +287,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.5
+**Current Version:** 1.8.6
 
 ## Credits
 
