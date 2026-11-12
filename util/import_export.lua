@@ -538,7 +538,7 @@ local function openImportExportWindow(onImportSuccess)
 
     -- Первое открытие — создаём окно ОДИН раз
     importExportWindow = CbtWindow.Create("CooldawnBuffTrackerImportExport",
-                                          "Import / Export Configuration", 600, 380,
+                                          "Import / Export Configuration", 600, 330,
                                           function()
                                               if importExportWindow then importExportWindow:Show(false) end
                                           end)
@@ -594,7 +594,7 @@ local function openImportExportWindow(onImportSuccess)
     local fileNameHint = api.Interface:CreateWidget('label', 'cbtFileNameHint', importExportWindow)
     fileNameHint:SetExtent(560, 20)
     fileNameHint:AddAnchor("TOP", importLabel, "BOTTOM", 0, 6)
-    fileNameHint:SetText("File name (put the received file into the CooldawnBuffTracker folder):")
+    fileNameHint:SetText("File name (file must be in the CooldawnBuffTracker folder):")
     fileNameHint.style:SetFontSize(13)
     fileNameHint.style:SetColor(0.8, 0.8, 0.8, 1)
     fileNameHint.style:SetAlign(ALIGN.LEFT)
@@ -657,19 +657,6 @@ local function openImportExportWindow(onImportSuccess)
         end
     end)
 
-    -- Кнопка Close
-    local closeButton = api.Interface:CreateWidget('button', 'closeButton', importExportWindow)
-    closeButton:AddAnchor("BOTTOM", importExportWindow, 0, -20)
-    closeButton:SetExtent(150, 35)
-    closeButton:SetText("Close")
-    api.Interface:ApplyButtonSkin(closeButton, BUTTON_BASIC.DEFAULT)
-    CbtWindow.FlattenButton(closeButton)
-    
-    closeButton:SetHandler("OnClick", function()
-        importExportWindow:Show(false)
-        importExportWindow = nil
-    end)
-    
     importExportWindow:Show(true)
 end
 

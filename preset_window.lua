@@ -325,14 +325,6 @@ function createPresetWindowUI()
     presetControls.errorPanel = errorPanel
     errorPanel:Show(false)
 
-    -- Кнопка закрытия
-    local closeButton = helpers.createButton('cbtPresetCloseBtn', presetWindow, 'Close', 0, 0)
-    closeButton:SetExtent(150, 30)
-    closeButton:RemoveAllAnchors()
-    closeButton:AddAnchor("BOTTOM", presetWindow, 0, -15)
-    closeButton:SetHandler("OnClick", function() closePresetWindow() end)
-    closeButton:Show(true)
-    presetControls.closeButton = closeButton
 end
 
 -- ----- Публичные функции -----

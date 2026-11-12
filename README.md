@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.16.5
+
+- Add form: button renamed «Add entry»; the left input label is «ID/name:» and the
+  field moved right so the label no longer overlaps the text.
+- Import/Export window: compact 600x330, the long file hint shortened, the
+  redundant «Close» button removed (the header X and ESC close it).
+- Presets window: the redundant «Close» button removed as well.
+
 ### 1.16.4
 
 - Denser lists: tracked entries 11 per page, custom entries 8 per page, row step
@@ -531,7 +539,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.4
+**Current Version:** 1.16.5
 
 ## Credits
 

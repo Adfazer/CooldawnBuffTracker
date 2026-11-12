@@ -1245,7 +1245,7 @@ end
 
 local function buildNewBuffInput(buffsListContainer)
     -- THIRD BLOCK - Input field for new tracked buff (перемещаем его выше списка пользовательских баффов)
-    local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow, 'ID / name:', 15, 0, 15)
+    local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow, 'ID/name:', 15, 0, 15)
     newBuffIdLabel:SetWidth(100)
     newBuffIdLabel:Show(true)
     settingsControls.newBuffIdLabel = newBuffIdLabel
@@ -1254,10 +1254,10 @@ local function buildNewBuffInput(buffsListContainer)
     newBuffIdLabel:RemoveAllAnchors()
     newBuffIdLabel:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 0, 30)
     
-    local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 52, 0)
+    local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 64, 0)
     if newBuffId then 
         newBuffId:SetMaxTextLength(32) 
-        newBuffId:SetWidth(240)
+        newBuffId:SetWidth(218)
         newBuffId:Show(true)
     end
     settingsControls.newBuffId = newBuffId
@@ -1811,7 +1811,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 90)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add entry', 0, 90)
     addCustomBuffButton:SetWidth(130)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
