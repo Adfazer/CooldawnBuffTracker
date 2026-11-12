@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.21.6"
+  version = "1.21.7"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -118,6 +118,7 @@ local settings = {}
 local live = false
 -- Окно-приёмник боевого лога (для триггера по имени навыка)
 local combatEventWnd = nil
+local getActiveBuffsDebug -- forward: used in OnLoad, defined below
 -- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
 local mirrorTargetByBuff = {}
 
@@ -2823,6 +2824,7 @@ if settingsPage then
   settingsPage.getActiveBuffs = getActiveBuffs
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
+  settingsPage.getActiveBuffs = getActiveBuffsDebug
   settingsPage.findIconByName = findIconByName
   settingsPage.openEffectiveCdWindow = function() EffectivePicker.open() end
   settingsPage.resetEffectiveLearning = function()
@@ -3132,6 +3134,47 @@ local function watchTargetAuras()
     end
   end
   debugAuraState = now
+end
+
+-- Record window: current buffs/debuffs of a unit for the debug list.
+getActiveBuffsDebug = function(unit)
+  unit = unit or "target"
+  local out = {}
+  local function scan(kind, countFn, getFn)
+    local n = countFn(unit) or 0
+    for i = 1, n do
+      local b = getFn(unit, i)
+      if b and b.buff_id then
+        local id = helpers.formatBuffId(b.buff_id)
+        local name = BuffList.GetBuffName(id)
+        local icon = BuffList.GetBuffIcon(id)
+        if (not name or name == "") or (not icon) then
+          local ok, tip = pcall(api.Ability.GetBuffTooltip, api.Ability, id, 1)
+          if ok and type(tip) == "table" then
+            if not name or name == "" then name = tip.name end
+            if not icon and tip.path then icon = normalizeTexturePath(tip.path) end
+          end
+        end
+        out[#out + 1] = {
+          id = id,
+          name = name or ("Buff #" .. tostring(id)),
+          icon = icon,
+          kind = kind,
+          unit = unit,
+          stack = b.stack,
+          timeLeft = b.timeLeft,
+        }
+      end
+    end
+  end
+  pcall(scan, "buff", function(u) return api.Unit:UnitBuffCount(u) end,
+    function(u, i) return api.Unit:UnitBuff(u, i) end)
+  pcall(scan, "debuff", function(u) return api.Unit:UnitDeBuffCount(u) end,
+    function(u, i) return api.Unit:UnitDeBuff(u, i) end)
+  table.sort(out, function(a, b)
+    return tostring(a.name) < tostring(b.name)
+  end)
+  return out
 end
 
 local function OnUpdate(dt)

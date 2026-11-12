@@ -155,6 +155,15 @@ mount and target.
 
 ## Changelog
 
+### 1.21.7
+
+- Record (Debug) buff tab is now a persistent **buff log**: every buff/debuff seen on the
+  selected unit is appended (newest first) and kept after it fades; live refresh every
+  200 ms; active entries are gold, faded ones grey. **Clear log** works on both tabs
+  (clears the buff log or the skill log depending on the active tab).
+- The missing `getActiveBuffs` provider is implemented: the tab lists the current buffs
+  and debuffs of Player / Mount / Target with id, name and icon (it was always empty).
+
 ### 1.21.6
 
 - Vitalism list reduced to the two skills the user tracks: **Abyssal Petrification** and
@@ -857,7 +866,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.6
+**Current Version:** 1.21.7
 
 ## Credits
 

@@ -17,6 +17,8 @@ local modeButtons = {}
 local PER_PAGE = 8
 local page = 1
 local results = {}
+local buffLogs = {}   -- [unit] = newest-first list of buffs seen since Clear
+local buffSeen = {}   -- [unit] = { [id] = true } currently active
 
 local providerActive
 local providerLog
@@ -40,11 +42,31 @@ end
 local function refresh()
     if not win or not win:IsVisible() then return end
     results = {}
+    local activeCount = 0
     if mode == "buff" then
+        local list = {}
         if providerActive then
-            local ok, list = pcall(providerActive, unit)
-            if ok and type(list) == "table" then results = list end
+            local ok, l = pcall(providerActive, unit)
+            if ok and type(l) == "table" then list = l end
         end
+        local seen = buffSeen[unit]
+        if not seen then seen = {}; buffSeen[unit] = seen end
+        local active = {}
+        for _, it in ipairs(list) do
+            local key = tostring(it.id)
+            active[key] = true
+            activeCount = activeCount + 1
+            if not seen[key] then
+                seen[key] = true
+                local log = buffLogs[unit]
+                if not log then log = {}; buffLogs[unit] = log end
+                table.insert(log, 1, { id = it.id, name = it.name, icon = it.icon, unit = unit })
+                if #log > 300 then log[#log] = nil end
+            end
+        end
+        -- снятый бафф снова попадёт в лог при повторном появлении
+        for key in pairs(seen) do if not active[key] then seen[key] = nil end end
+        results = buffLogs[unit] or {}
     else
         if providerLog then
             local ok, list = pcall(providerLog, 60)
@@ -59,7 +81,7 @@ local function refresh()
 
     if countLabel then
         if mode == "buff" then
-            countLabel:SetText("Active buffs/debuffs: " .. total)
+            countLabel:SetText("Buffs seen: " .. total .. " (active " .. activeCount .. ")")
         else
             countLabel:SetText("Skills seen in combat log: " .. total)
         end
@@ -84,6 +106,10 @@ local function refresh()
                 if row.icon then
                     F_SLOT.SetIconBackGround(row.icon, item.icon or "game/ui/icon/icon_buff_debuff.dds")
                 end
+                if mode == "buff" and row.nameLabel then
+                    local live = buffSeen[unit] and buffSeen[unit][tostring(item.id)]
+                    setColor(row.nameLabel, live and COLORS.text or COLORS.muted)
+                end
                 row:Show(true)
             else
                 row:Show(false)
@@ -100,7 +126,7 @@ local function setMode(m)
         setColor(modeButtons.log.textLabel, (mode == "log") and COLORS.text or COLORS.muted)
     end
     if clearBtn then
-        clearBtn:Show(mode == "log")
+        clearBtn:Show(true)
     end
     refresh()
 end
@@ -169,7 +195,7 @@ local function build()
     end)
     if not win then return end
 
-    modeButtons.buff = helpers.createButton("cbtRecModeBuff", win, "Active buffs", 20, 42)
+    modeButtons.buff = helpers.createButton("cbtRecModeBuff", win, "Buff log", 20, 42)
     modeButtons.buff:SetExtent(150, 26)
     modeButtons.buff:Show(true)
     modeButtons.buff:SetHandler("OnClick", function() setMode("buff") end)
@@ -214,10 +240,16 @@ local function build()
 
     clearBtn = helpers.createButton("cbtRecClear", win, "Clear log", 330, 72)
     clearBtn:SetExtent(110, 24)
-    clearBtn:Show(false)
+    clearBtn:Show(true)
     clearBtn:SetHandler("OnClick", function()
-        if clearLog then clearLog() end
-        if statusLabel then statusLabel:SetText("Log cleared") end
+        if mode == "buff" then
+            buffLogs[unit] = {}
+            buffSeen[unit] = {}
+            if statusLabel then statusLabel:SetText("Buff log cleared") end
+        else
+            if clearLog then clearLog() end
+            if statusLabel then statusLabel:SetText("Skill log cleared") end
+        end
         page = 1
         refresh()
     end)
@@ -262,7 +294,7 @@ local function build()
     win:SetHandler("OnUpdate", function(self, dt)
         if not win or not win:IsVisible() then return end
         refreshAcc = refreshAcc + (dt or 0)
-        if refreshAcc >= 400 then
+        if refreshAcc >= 200 then
             refreshAcc = 0
             refresh()
         end
