@@ -104,6 +104,17 @@ mount and target.
 
 ## Changelog
 
+### 1.6.2
+
+- The green "active" phase is now capped by the configured time-of-action: a
+  buff configured as 0.1 s (or 0) no longer stays green for the whole long aura
+  reported by the game API; it switches to the cooldown right away.
+- Zero time-of-action is allowed (instant buff) instead of being replaced with
+  the 3 s default.
+- Remaining-time re-sync only applies while the API remainder fits the
+  configured duration, so a long aura cannot push the active phase forward
+  every tick.
+
 ### 1.6.1
 
 - Fixed: buff panels no longer render above the inventory, auction and other
@@ -133,7 +144,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.6.1
+**Current Version:** 1.6.2
 
 ## Credits
 
