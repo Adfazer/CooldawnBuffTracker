@@ -117,6 +117,15 @@ mount and target.
 
 ## Changelog
 
+### 1.7.4
+
+- Spell-trigger diagnostics under the existing **Debug: ON** toggle: chat now says
+  whether a matched spell was a self cast (and on which panels it fired), whether
+  the cooldown was stored for a player, or whether the attacker is still unknown
+  and waiting for the first target.
+- If the configured time-of-action is longer than the cooldown, the green phase
+  is clamped to the cooldown so the ready state is still reached.
+
 ### 1.7.3
 
 - The buff-ID field now accepts the custom buff name or the spell name as well
@@ -198,7 +207,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.3
+**Current Version:** 1.7.4
 
 ## Credits
 

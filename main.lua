@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.3"
+  version = "1.7.4"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -278,6 +278,12 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       buff.permanent = false
     end
     buff.readyAt = buff.fixedTime + cooldown
+    -- Если длительность больше кулдауна, активная фаза не должна пережить готовность
+    -- (иначе зелёный висит, а красного кулдауна не видно вовсе).
+    if buff.activeUntil and buff.readyAt and buff.activeUntil ~= math.huge
+      and buff.activeUntil > buff.readyAt then
+      buff.activeUntil = buff.readyAt
+    end
     buff.missingCount = 0
   elseif status == "cooldown" and not buff.fixedTime then
     -- Если бафф переходит в состояние кулдауна, но fixedTime не установлено,
@@ -397,13 +403,16 @@ end
 local function triggerSelfBuff(buffId, now)
   now = now or getCurrentTime()
   local tables = { player = playerBuffData, playerpet = buffData }
+  local count = 0
   for unitType, tbl in pairs(tables) do
     if tbl[buffId] and BuffsToTrack.ShouldTrackBuff(buffId, unitType) then
       setBuffStatus(buffId, "active", now, unitType, nil)
       tbl[buffId].synthetic = true
       cachedBuffStatus[buffId] = "active"
+      count = count + 1
     end
   end
+  return count
 end
 
 -- Выучить иконку навыка по spellId из боевого лога (api.Skill:GetSkillTooltip).
@@ -452,11 +461,21 @@ local function triggerSpell(spellName, sourceName, spellId)
     if trigger and trigger ~= "" and trigger == needle and cb.id then
       learnSkillIcon(cb, spellId)
       if srcKey and myNameExact and srcKey == myNameExact then
-        triggerSelfBuff(cb.id, now)
+        local hits = triggerSelfBuff(cb.id, now)
+        if settings.debugBuffId then
+          if hits > 0 then
+            safeLog("[CBT] '" .. spellName .. "': свой каст -> обновлено панелей: " .. tostring(hits))
+          else
+            safeLog("[CBT] '" .. spellName .. "': свой каст, но бафф не отслеживается на Player/Mount (добавь его туда)")
+          end
+        end
       elseif srcKey then
         local sourceId = unitIdByName[srcKey]
         if sourceId then
           triggerTargetCooldown(sourceId, cb.id, now, now)
+          if settings.debugBuffId then
+            safeLog("[CBT] '" .. spellName .. "': КД записан для " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
+          end
         else
           local p = pendingBySource[srcKey]
           if not p then
@@ -464,6 +483,13 @@ local function triggerSpell(spellName, sourceName, spellId)
             pendingBySource[srcKey] = p
           end
           p[cb.id] = now
+          if settings.debugBuffId then
+            safeLog("[CBT] '" .. spellName .. "': источник " .. tostring(srcKey) .. " неизвестен, ждём первого таргета")
+          end
+        end
+      else
+        if settings.debugBuffId then
+          safeLog("[CBT] '" .. spellName .. "': нет источника в событии")
         end
       end
     end
