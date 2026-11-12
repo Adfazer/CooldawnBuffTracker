@@ -117,6 +117,12 @@ mount and target.
 
 ## Changelog
 
+### 1.7.6
+
+- Debug: ON now dumps the raw `COMBAT_MSG` arguments (1..14) and the parsed
+  spellId/spellName for every matched spell, to diagnose why the client returns
+  no icon for a skill (spellId was reported as 0).
+
 ### 1.7.5
 
 - Skill-icon lookup is now logged under **Debug: ON**: the spell id from the
@@ -215,7 +221,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.5
+**Current Version:** 1.7.6
 
 ## Credits
 

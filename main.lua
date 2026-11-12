@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.5"
+  version = "1.7.6"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -465,7 +465,7 @@ local function learnSkillIcon(cb, spellId)
 end
 
 -- Имя навыка из лога -> запуск/обновление таймера у виновника
-local function triggerSpell(spellName, sourceName, spellId)
+local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent)
   if not spellName or spellName == "" then return end
   local s = api.GetSettings("CooldawnBuffTracker") or {}
   local custom = s.customBuffs or {}
@@ -483,6 +483,15 @@ local function triggerSpell(spellName, sourceName, spellId)
   for _, cb in ipairs(custom) do
     local trigger = cb.spellName
     if trigger and trigger ~= "" and trigger == needle and cb.id then
+      if settings.debugBuffId and rawArgs then
+        local parts = {}
+        for i = 1, 14 do
+          parts[#parts + 1] = tostring(i) .. "=" .. tostring(rawArgs[i])
+        end
+        safeLog("[CBT] " .. tostring(combatEvent) .. " args: " .. table.concat(parts, " "))
+        safeLog("[CBT] parsed: spellId=" .. tostring(spellId)
+          .. " spellName=" .. tostring(spellName))
+      end
       learnSkillIcon(cb, spellId)
       if srcKey and myNameExact and srcKey == myNameExact then
         local hits = triggerSelfBuff(cb.id, now)
@@ -1894,7 +1903,7 @@ local function onCombatMessage(event, ...)
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
   if parsed.spellName then
-    triggerSpell(parsed.spellName, args[3], parsed.spellId)
+    triggerSpell(parsed.spellName, args[3], parsed.spellId, args, combatEvent)
   end
 end
 
