@@ -1,0 +1,154 @@
+# skillName<TAB>tree<TAB>baseCD(s, comma-separated variants)<TAB>kind<TAB>iconFile
+# kind: skill | repeat-growth | charges. iconFile is a file name inside game/ui/icon/.
+# Overridable: edit this file, then Reload tables in the Effective CDs window.
+Charge	Battlerage	12	skill	icon_skill_fight14.dds
+Whirlwind Slash	Battlerage	12	skill	icon_skill_fight09.dds
+Sunder Earth	Battlerage	21	skill	icon_skill_fight04.dds
+Lasso	Battlerage	24	skill	icon_skill_fight19.dds
+Terrifying Roar	Battlerage	18	skill	icon_skill_fight26.dds
+Weak	Battlerage	30	skill	
+Tough	Battlerage	30	skill	
+Bondbreaker	Battlerage	24	skill	icon_skill_fight16.dds
+Precision Strike	Battlerage	21,30	skill	icon_skill_fight15.dds
+Frenzy	Battlerage	90	skill	icon_skill_fight10.dds
+Battle Focus	Battlerage	42	skill	icon_skill_fight08.dds
+Tiger Strike	Battlerage	18,28	skill	icon_skill_fight18.dds
+Behind Enemy Lines	Battlerage	21	skill	icon_skill_fight28.dds
+Soulbound Blades	Battlerage	4	skill	icon_skill_hatred05.dds
+Rising Hatred	Battlerage	120	skill	icon_skill_hatred02.dds
+Swordfall	Battlerage	14	skill	icon_skill_hatred04.dds
+Earthen Grip	Witchcraft	18	skill	icon_skill_illusion09.dds
+Enervate	Witchcraft	24	skill	icon_skill_illusion03.dds
+Bubble Trap	Witchcraft	21,39	skill	icon_skill_illusion04.dds
+Insidious Whisper	Witchcraft	45	skill	icon_skill_illusion05.dds
+Purge	Witchcraft	30	skill	icon_skill_illusion14.dds
+Play Dead	Witchcraft	120	skill	icon_skill_illusion07.dds
+Courageous Action	Witchcraft	9	skill	icon_skill_illusion08.dds
+Lassitude	Witchcraft	45	skill	icon_skill_illusion01.dds
+Banshee Wail	Witchcraft	45	skill	icon_skill_illusion18.dds
+Focal Concussion	Witchcraft	27	skill	icon_skill_illusion11.dds
+Dahuta's Breath	Witchcraft	21	skill	icon_skill_illusion22.dds
+Fiend's Knell	Witchcraft	45	skill	icon_skill_illusion24.dds
+Shield Slam	Defense	4,18,45	skill	icon_skill_adamant01.dds
+Refreshment	Defense	8,30	skill	icon_skill_adamant02.dds
+Bull Rush	Defense	30	skill	icon_skill_adamant28.dds
+Boastful Roar	Defense	24	skill	icon_skill_adamant27.dds
+Toughen	Defense	60	skill	icon_skill_adamant06.dds
+Toughened	Defense	45	skill	
+Revitalizing Cheer	Defense	45	skill	icon_skill_adamant14.dds
+Redoubt	Defense	18,42,60	skill	icon_skill_adamant05.dds
+Ollo's Hammer	Defense	42	skill	icon_skill_will26.dds
+Mocking Howl	Defense	24	skill	icon_skill_adamant07.dds
+Imprison	Defense	120	skill	icon_skill_love10.dds
+Invincibility	Defense	120	skill	icon_skill_streak16.dds
+Fortress	Defense	45	skill	icon_skill_adamant29.dds
+Shield Throw	Defense	22	skill	icon_skill_hatred10.dds
+Rising Hatred	Defense	120	skill	icon_skill_hatred02.dds
+Cruel Binding	Defense	24	skill	icon_skill_hatred11.dds
+Thwart	Auramancy	15	skill	icon_skill_will24.dds
+Comet's Boon	Auramancy	12	skill	icon_skill_will01.dds
+Hollow Comet's Boon	Auramancy	12	skill	aac-hollow_comets_boon.dds
+Spell Shield	Auramancy	15,30,50	skill	icon_skill_will14.dds
+Spell Shield: Flame	Auramancy	50	skill	
+Vicious Implosion	Auramancy	15	skill	icon_skill_will04.dds
+Teleportation	Auramancy	30	skill	icon_skill_will11.dds
+Health Lift	Auramancy	8	skill	icon_skill_will21.dds
+Meditate	Auramancy	120	skill	icon_skill_will05.dds
+Radiant Meditate	Auramancy	120	skill	aac-radiant_meditate.dds
+Shrug It Off	Auramancy	30	skill	icon_skill_will12.dds
+Liberation	Auramancy	60	skill	icon_skill_will08.dds
+Leech	Auramancy	45	skill	icon_skill_will07.dds
+Protective Wings	Auramancy	120	skill	icon_skill_will13.dds
+Mirror Warp	Auramancy	42	skill	icon_skill_will27.dds
+Crushing Grasp	Auramancy	24	skill	icon_skill_hatred14.dds
+Rising Hatred	Auramancy	120	skill	icon_skill_hatred02.dds
+Abyssal Wave	Auramancy	14	skill	icon_skill_hatred13.dds
+Mana Force	Occultism	60	skill	icon_skill_death14.dds
+Radiant Mana Force	Occultism	30	skill	aac-radiant_manaforce.dds
+Hell Spear	Occultism	27	skill	icon_skill_death06.dds
+Hell Spears	Occultism	27	skill	icon_skill_death32.dds
+Absorb Lifeforce	Occultism	18	skill	icon_skill_death05.dds
+Hollow Absorb Lifeforce	Occultism	18	skill	aac-hollow_absorb_lifeforce.dds
+Summon Crows	Occultism	30	skill	icon_skill_death09.dds
+Crippling Mire	Occultism	18	skill	icon_skill_death11.dds
+Telekinesis	Occultism	60	skill	icon_skill_death10.dds
+Retribution	Occultism	30,36	skill	icon_skill_death02.dds
+Stillness	Occultism	36	skill	icon_skill_death07.dds
+Urgency	Occultism	60	skill	icon_skill_death03.dds
+Summon Wraith	Occultism	60,90	skill	icon_skill_death13.dds
+Death's Vengeance	Occultism	12	skill	icon_skill_death27.dds
+Cursed Thorns	Occultism	12	skill	icon_skill_hatred18.dds
+Rising Hatred	Occultism	120	skill	icon_skill_hatred02.dds
+Shadow Circle	Occultism	20	skill	icon_skill_hatred16.dds
+Charged Bolt	Archery	6,10	skill	icon_skill_wild02.dds
+Piercing Shot	Archery	12	skill	icon_skill_vocation01.dds
+Double Recurve	Archery	80,90	skill	icon_skill_wild08.dds
+Deadeye	Archery	80	skill	icon_skill_wild21.dds
+Snare	Archery	24	skill	icon_skill_wild14.dds
+Float	Archery	90	skill	icon_skill_wild05.dds
+Boneyard	Archery	45	skill	icon_skill_magic24.dds
+Concussive Arrow	Archery	30	skill	icon_skill_wild15.dds
+Missile Rain	Archery	22	skill	icon_skill_wild10.dds
+Intensity	Archery	60	skill	icon_skill_wild09.dds
+Snipe	Archery	27	skill	icon_skill_wild24.dds
+Flamebolt	Sorcery	1.7	skill	icon_skill_magic01.dds
+Freezing Arrow	Sorcery	6	skill	icon_skill_magic04.dds
+Insulating Lens	Sorcery	20,45,180	skill	icon_skill_magic02.dds
+Arc Lightning	Sorcery	20	skill	icon_skill_magic05.dds
+Freezing Earth	Sorcery	36	skill	icon_skill_magic10.dds
+Searing Rain	Sorcery	39	skill	icon_skill_magic16.dds
+Frigid Tracks	Sorcery	45	skill	icon_skill_magic06.dds
+Magic Circle	Sorcery	21	skill	icon_skill_magic15.dds
+Chain Lightning	Sorcery	36	skill	icon_skill_magic19.dds
+Flame Barrier	Sorcery	33	skill	icon_skill_magic22.dds
+Meteor Strike	Sorcery	45	skill	icon_skill_magic13.dds
+Gods' Whip	Sorcery	30	skill	icon_skill_magic26.dds
+Void Leap	Sorcery	120	skill	icon_skill_hatred24.dds
+Rising Hatred	Sorcery	120	skill	icon_skill_hatred02.dds
+Serpent Strike	Sorcery	22	skill	icon_skill_hatred25.dds
+Overwhelm	Shadowplay	18,26	skill	icon_skill_vocation07.dds
+Drop Back	Shadowplay	12	skill	icon_skill_vocation15.dds
+Wallop	Shadowplay	12	skill	icon_skill_vocation27.dds
+Stalker's Mark	Shadowplay	27	skill	icon_skill_wild17.dds
+Radiant Stalker's Mark	Shadowplay	27	skill	aac-radiant_stalkers.dds
+Stealth	Shadowplay	9,45	skill	icon_skill_vocation05.dds
+Toxic Shot	Shadowplay	9	skill	icon_skill_wild01.dds
+Pin Down	Shadowplay	21	skill	icon_skill_vocation18.dds
+Bleeding	Shadowplay	24	skill	
+Shadowsmite	Shadowplay	24	skill	icon_skill_vocation06.dds
+Freerunner	Shadowplay	18,90	skill	icon_skill_vocation11.dds
+Shadow Step	Shadowplay	18	skill	icon_skill_vocation16.dds
+Throw Dagger	Shadowplay	35	skill	icon_skill_vocation28.dds
+Venom Blades	Shadowplay	14	skill	icon_skill_hatred27.dds
+Rising Hatred	Shadowplay	120	skill	icon_skill_hatred02.dds
+Assassination	Shadowplay	10	skill	icon_skill_hatred38.dds
+Critical Discord	Songcraft	18	skill	icon_skill_romance14.dds
+Hollow Critical Discord	Songcraft	18	skill	aac-hollow_critical_discord.dds
+Startling Strain	Songcraft	24	skill	icon_skill_romance15.dds
+[Perform] Quickstep	Songcraft	2	skill	icon_skill_romance02.dds
+Double-Time	Songcraft	28	skill	icon_skill_romance39.dds
+Dissonance	Songcraft	18	skill	icon_skill_romance17.dds
+Hummingbird Ditty	Songcraft	8,15	skill	icon_skill_romance01.dds
+Healing Hymn	Songcraft	15,23	skill	icon_skill_romance29.dds
+[Perform] Ode to Recovery	Songcraft	2	skill	icon_skill_romance05.dds
+Rhythmic Renewal	Songcraft	90	skill	icon_skill_romance26.dds
+[Perform] Bulwark Ballad	Songcraft	2	skill	icon_skill_romance19.dds
+[Perform] Bloody Chantey	Songcraft	2	skill	icon_skill_romance08.dds
+Alarm Call	Songcraft	45	skill	icon_skill_romance25.dds
+[Perform] Grief's Cadence	Songcraft	2	skill	icon_skill_romance30.dds
+Abyssal Echoes	Songcraft	16	skill	icon_skill_hatred29.dds
+Rising Hatred	Songcraft	120	skill	icon_skill_hatred02.dds
+Polymorphic Resonance	Songcraft	30	skill	icon_skill_hatred30.dds
+Holy Bolt	Vitalism	21	skill	icon_skill_love32.dds
+Mirror Light	Vitalism	21	skill	icon_skill_love02.dds
+Antithesis	Vitalism	5	skill	icon_skill_love01.dds
+Skewer	Vitalism	18,28	skill	icon_skill_love05.dds
+Mend	Vitalism	24	skill	icon_skill_love07.dds
+Aranzeb's Boon	Vitalism	8	skill	icon_skill_love28.dds
+Hollow Renewal	Vitalism	10	skill	aac-hollow_renewal.dds
+Fervent Healing	Vitalism	10,30	repeat-growth	icon_skill_love21.dds
+Infuse	Vitalism	25	skill	icon_skill_love27.dds
+Whirlwind's Blessing	Vitalism	120	skill	icon_skill_love29.dds
+Abyssal Petrification	Vitalism	24	skill	icon_skill_hatred39.dds
+Rising Hatred	Vitalism	120	skill	icon_skill_hatred02.dds
+Defy Death	Vitalism	30	skill	icon_skill_hatred33.dds

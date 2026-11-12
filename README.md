@@ -88,6 +88,38 @@ settings storage and all `require` paths.
   you return to a unit; stale cache is cleared after 5 minutes.
 - Independent position/size/display settings.
 
+### Effective cooldowns (Target only)
+- **Effective CD (Target)** checkbox in the settings window turns the feature on
+  (`effectiveCd`, off by default). It only changes the Target panel; player and
+  mount keep the configured cooldown.
+- **Effective CDs** opens a picker with the ten skillsets (Battlerage, Witchcraft,
+  Defense, Auramancy, Occultism, Archery, Sorcery, Shadowplay, Songcraft,
+  Vitalism). It lists every skill that has a base cooldown, with icon, CD and a
+  checkbox. Checking a skill creates a permanent entry (id, name, cooldown, spell
+  name, icon and tree from `skillsets.tbl`) and tracks it on the selected Target
+  canvas. Unchecking is the only way to remove such an entry; permanent entries
+  have no Remove/Edit buttons in the custom list.
+- **Formula:** `eff = max(0, base - sumFlat) * (1 - sumPct/100)`; flat seconds are
+  subtracted first and percentages add up (10% + 20% = 30%).
+- **Target class** comes from `GetUnitClassName` mapped through `classes.tbl`;
+  mobs return `Pending` and rely on learning only.
+- **Visible buffs** apply while they are on the target: Battle Focus rank 2 (id
+  7651, -35%) and rank 3 (id 13612, -40%) to Battlerage, buff 9000610 (-10% to
+  everything), Rhythm (-0.4 s per stack), Mana Fountain (-2% per stack),
+  Inspired (-0.6/-2.1/-1.2 s) and Exploitation (-10% per stack).
+- **Learning:** no passive is assumed up front. Repeated casts of a tracked skill
+  are compared with its base CD, the observed ratio is snapped to a known
+  candidate (0.90, 0.86, 0.80, 0.76, 0.65, ...) and after two consistent
+  observations it is applied to every tracked skill of that tree for that target
+  only. Learned state expires 30 minutes after the target was last seen, and
+  **Reset learning** clears it.
+- **Reset procs** are handled separately: Deflect and Retaliate (id 2611, ICD
+  12 s) readies all Battlerage timers, Quick Recovery (by name, ICD 12 s) readies
+  Vitalism; a single far-too-early re-use also reads the tree as reset without
+  changing the learned ratio.
+- All game numbers live in `classes.tbl`, `skillsets.tbl` and `cdmods.tbl` next to
+  the addon and can be edited (the picker's **Reload tables** re-reads them).
+
 ### Debugging
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
 
@@ -122,6 +154,37 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.21.0
+
+- **Effective cooldowns for the Target panel.** New `effectiveCd` master checkbox
+  (off by default) with a tooltip: base CD + known skillset candidates +
+  per-target learning from observed re-use; reset procs are handled separately,
+  off = the configured CD. Player/mount panels are untouched.
+- **Effective CDs picker** (settings window): ten skillset tabs, every skill that
+  has a base cooldown, icon + name + CD + checkbox, 15 rows per page. Checking a
+  skill creates a permanent entry (`id`, `name`, `cooldown`, `spellName`,
+  `iconFile`, `tree`, `permanent`) and tracks it on the selected Target canvas;
+  unchecking removes it from `customBuffs`, every `trackedBuffs` list, `canvasOf`
+  and `mirror`. Permanent entries have no Remove/Edit buttons in the custom list.
+- **Data tables** shipped next to the addon: `classes.tbl` (117 classes → three
+  skillsets), `skillsets.tbl` (skill → tree, base CD variants, kind, icon) and
+  `cdmods.tbl` (buff ids/names → percentage, flat, per-stack and reset effects).
+  Icons were parsed from the wiki skill cards; skills without one fall back to
+  `buff_dump.tbl`, then to a neutral placeholder. The picker can reload the tables.
+- **Model:** `eff = max(0, base - sumFlat) * (1 - sumPct/100)` with additive
+  percentages. Target class via `GetUnitClassName` + `classes.tbl`; visible Battle
+  Focus rank 2/3 (7651/13612), 9000610, Rhythm, Mana Fountain, Inspired and
+  Exploitation apply only while their aura is present.
+- **Learning:** per-target tree ratios snapped to candidate values (0.90, 0.86,
+  0.80, 0.76, 0.65, ...), applied to the whole tree after two consistent
+  observations, 30-minute TTL, **Reset learning** button, debug line
+  `[CBT] effCD: skill base=… flat=… pct=… eff=… tree=… target=…`.
+- **Reset procs:** Deflect and Retaliate (2611, ICD 12 s) readies Battlerage,
+  Quick Recovery (by name, ICD 12 s) readies Vitalism; an unexplained early
+  re-use (<50% of the CD) is treated as a reset and does not change the ratio.
+- Fervent Healing is marked `repeat-growth` in `skillsets.tbl`: its growing
+  repeat interval is never learned as a cooldown reduction.
 
 ### 1.20.3
 
@@ -747,7 +810,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.20.3
+**Current Version:** 1.21.0
 
 ## Credits
 

@@ -88,6 +88,10 @@ local defaultSettings = {
     },
     customBuffs = {},           -- Таблица для хранения пользовательских баффов
     debugBuffId = false,        -- Флаг режима отладки баффов (отключен по умолчанию)
+    -- 1.21.0: эффективные КД только для панели Target (мастер-включение).
+    -- Список навыков выбирается в окне Effective CDs и хранится в customBuffs
+    -- как permanent-записи; выключено = показывается настроенный CD.
+    effectiveCd = false,
 }
 
 -- Добивает недостающие поля одного канваса, не затирая сохранённые значения.
@@ -252,6 +256,11 @@ function defaultSettings.migrate(settings)
     -- Таблица пресетов создаётся один раз и далее живёт в settings.txt
     if settings.presets == nil then
         settings.presets = {}
+    end
+
+    -- 1.21.0: эффективные КД (мастер-включение, по умолчанию выключено)
+    if settings.effectiveCd == nil then
+        settings.effectiveCd = false
     end
 
     -- activePresetName остаётся nil, пока пользователь не загрузит пресет

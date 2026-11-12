@@ -110,6 +110,56 @@ function M.Destroy(win)
     pcall(function() api.Interface:Free(win) end)
 end
 
+-- Чекбокс на нативной текстуре (CreateCheckButton в песочнице нет):
+-- шесть состояний одного атласа + SetExtent, иначе виджет не кликается.
+local CHECK_ART = (TEXTURE_PATH and TEXTURE_PATH.CHECK_BUTTON) or "ui/button/check_button.dds"
+local CHECK_STATES = {
+    { 0, 0, 18, 17 }, { 0, 0, 18, 17 }, { 0, 0, 18, 17 },
+    { 0, 17, 18, 17 }, { 18, 0, 18, 17 }, { 18, 17, 18, 17 },
+}
+
+function M.CheckButton(id, parent, onChanged)
+    if not parent then return nil end
+    local w = parent:CreateChildWidget("checkbutton", id, 0, true)
+    if not w then return nil end
+    local bgs = {}
+    for i = 1, 6 do
+        local s = CHECK_STATES[i]
+        local d = w:CreateImageDrawable(CHECK_ART, "background")
+        if d then
+            d:AddAnchor("CENTER", w, 0, 0)
+            d:SetCoords(s[1], s[2], s[3], s[4])
+            d:SetExtent(s[3], s[4])
+        end
+        bgs[i] = d
+    end
+    w:SetExtent(18, 17)
+    if bgs[1] then w:SetNormalBackground(bgs[1]) end
+    if bgs[2] then w:SetHighlightBackground(bgs[2]) end
+    if bgs[3] then w:SetPushedBackground(bgs[3]) end
+    if bgs[4] then w:SetDisabledBackground(bgs[4]) end
+    if bgs[5] then w:SetCheckedBackground(bgs[5]) end
+    if bgs[6] then w:SetDisabledCheckedBackground(bgs[6]) end
+    w:SetHandler("OnCheckChanged", function(self)
+        local checked = false
+        pcall(function() checked = self:GetChecked() and true or false end)
+        if onChanged then onChanged(checked, self) end
+    end)
+    return w
+end
+
+-- Всплывающая подсказка на ховере (SetTooltipOnPos: nil очищает).
+function M.Tooltip(widget, text)
+    if not widget or not text or text == "" then return widget end
+    widget:SetHandler("OnEnter", function(self)
+        pcall(function() api.Interface:SetTooltipOnPos(text, self, 0, -22) end)
+    end)
+    widget:SetHandler("OnLeave", function(self)
+        pcall(function() api.Interface:SetTooltipOnPos(nil, self, 0, 0) end)
+    end)
+    return widget
+end
+
 -- Перекрашивает готовую кнопку в плоский тёмный стиль, сохраняя анкоры и OnClick.
 function M.FlattenButton(btn)
     if not btn or btn._cbtFlat then return btn end
