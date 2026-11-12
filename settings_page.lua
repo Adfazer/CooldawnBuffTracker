@@ -1900,7 +1900,7 @@ local function buildIconSection(customBuffErrorPanel)
     local gridDefRowSpacing = gridUnitSettings.gridRowSpacing or gridUnitSettings.iconSpacing or 5
 
     local gridGroupLabel = helpers.createLabel('gridGroupLabel', iconGroupLabel,
-                                             'Grid (cols x rows):', 0, 90, 15)
+                                             'Grid (cols x rows):', 0, 110, 15)
     gridGroupLabel:SetWidth(320)
     gridGroupLabel:Show(true)
     settingsControls.gridGroupLabel = gridGroupLabel
@@ -2007,7 +2007,7 @@ local function buildPositionSection(showLabelButton, iconSpacingLabel)
     -- Icon position settings
     local positionLabel = helpers.createLabel('positionLabel', iconSpacingLabel,
                                             'Icon position', 0, 35, 18)
-    positionLabel:SetWidth(570)
+    positionLabel:SetWidth(320)
     positionLabel:Show(true)
     settingsControls.positionLabel = positionLabel
     
@@ -2089,7 +2089,7 @@ local function buildTimerSection(lockButton)
     -- Timer settings group
     local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockButton,
                                              'Timer settings', 0, 35, 18)
-    timerGroupLabel:SetWidth(570)
+    timerGroupLabel:SetWidth(320)
     timerGroupLabel:Show(true)
     
     -- Явно устанавливаем якорь для группы настроек таймера
@@ -2273,7 +2273,7 @@ local function initSettingsPage()
     local customBuffsListContainer = buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     local customBuffErrorPanel = buildCustomBuffInputs(customBuffsListContainer)
     local showLabelButton, iconSpacingLabel = buildIconSection(customBuffErrorPanel)
-    local lockButton = buildPositionSection(showLabelButton, iconSpacingLabel)
+    local lockButton = buildPositionSection(settingsControls.gridBottomLabel or showLabelButton, iconSpacingLabel)
     buildTimerSection(lockButton)
 
     -- Final check - call update one more time for confidence

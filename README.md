@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.16.1
+
+- Fixed the right column overlap: Grid moved 20 px down (below Show label) and
+  Icon position now anchors under the grid's last field, so Grid / Position /
+  Timer no longer stack on top of each other.
+
 ### 1.16.0
 
 - Settings window redesigned for landscape: 1200x600, three columns —
@@ -498,7 +504,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.0
+**Current Version:** 1.16.1
 
 ## Credits
 
