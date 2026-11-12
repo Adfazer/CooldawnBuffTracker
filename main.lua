@@ -232,21 +232,38 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   
   buff.status = status
   
+  local timeOfAction = tonumber(buff.timeOfAction) or 0
+  local cooldown = tonumber(buff.cooldown) or 0
+  
   if status == "active" then
-    -- Если передано оставшееся время баффа, рассчитываем fixedTime на его основе
-    if remainingTime and remainingTime > 0 and buff.timeOfAction then
-      -- fixedTime = момент когда бафф начал действовать
-      -- remainingTime приходит в миллисекундах от API, конвертируем в секунды
+    -- remainingTime (мс) — серверный остаток баффа. По нему восстанавливаем момент старта,
+    -- поэтому отсчёт не зависит от точности введённой длительности и одинаково работает
+    -- для player, playerpet и target.
+    if remainingTime ~= nil and remainingTime > 0 then
       local remainingSeconds = remainingTime / 1000
-      -- currentTime - (timeOfAction - remainingSeconds) = когда бафф был активирован
-      buff.fixedTime = currentTime - (tonumber(buff.timeOfAction) - remainingSeconds)
+      -- fixedTime = момент, когда бафф начал действовать
+      buff.fixedTime = currentTime - (timeOfAction - remainingSeconds)
+      buff.permanent = false
+    elseif remainingTime == nil and buff.permanent == nil then
+      -- API не отдаёт timeLeft: постоянный бафф без обратного отсчёта
+      buff.fixedTime = currentTime
+      buff.permanent = true
     else
       buff.fixedTime = currentTime
     end
+    if buff.permanent then
+      buff.activeUntil = math.huge
+    else
+      buff.activeUntil = buff.fixedTime + timeOfAction
+    end
+    buff.readyAt = buff.fixedTime + cooldown
+    buff.missingCount = 0
   elseif status == "cooldown" and not buff.fixedTime then
     -- Если бафф переходит в состояние кулдауна, но fixedTime не установлено,
     -- устанавливаем текущее время как время начала кулдауна
     buff.fixedTime = currentTime
+    buff.activeUntil = currentTime
+    buff.readyAt = currentTime + cooldown
   end
   
   buff.statusChangeTime = currentTime
@@ -260,12 +277,14 @@ local function checkBuffStatus(buff, currentTime)
   local cooldown = tonumber(buff.cooldown) or 0
   currentTime = tonumber(currentTime) or 0
   
-  local activeEndTime = fixedTime + timeOfAction
-  local readyTime = fixedTime + cooldown
+  -- activeUntil может быть обрезан при досрочном снятии баффа (диспел/смерть);
+  -- readyAt — момент готовности способности (старт баффа + кулдаун).
+  local activeUntil = tonumber(buff.activeUntil) or (fixedTime + timeOfAction)
+  local readyAt = tonumber(buff.readyAt) or (fixedTime + cooldown)
   
-  if currentTime < activeEndTime - 0.05 then
+  if currentTime < activeUntil - 0.05 then
     return "active"
-  elseif currentTime < readyTime - 0.05 then
+  elseif currentTime < readyAt - 0.05 then
     return "cooldown"
   else
     return "ready"
@@ -1143,13 +1162,13 @@ local function updateBuffIcons(unitType)
         if icon.timerLabel and settings[unitType].showTimer then
           local timerText = ""
           
-          if currentStatus == "active" and buff.fixedTime then
-            local remainingActive = buff.timeOfAction - (currentTime - buff.fixedTime)
+          if currentStatus == "active" and buff.activeUntil and buff.activeUntil ~= math.huge then
+            local remainingActive = buff.activeUntil - currentTime
             if remainingActive > 0 then
               timerText = formatTimerSeconds(remainingActive)
             end
-          elseif currentStatus == "cooldown" and buff.fixedTime then
-            local remainingCooldown = buff.cooldown - (currentTime - buff.fixedTime)
+          elseif currentStatus == "cooldown" and buff.readyAt then
+            local remainingCooldown = buff.readyAt - currentTime
             if remainingCooldown > 0 then
               timerText = formatTimerSeconds(remainingCooldown)
             end
@@ -1310,6 +1329,9 @@ local function checkBuffs(unitType)
         for buffId, buffInfo in pairs(targetBuffData) do
           targetCache[currentTargetId].buffStates[buffId] = {
             fixedTime = buffInfo.fixedTime,
+            activeUntil = buffInfo.activeUntil,
+            readyAt = buffInfo.readyAt,
+            permanent = buffInfo.permanent,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
             cooldown = buffInfo.cooldown,
@@ -1342,6 +1364,10 @@ local function checkBuffs(unitType)
             cooldown = cachedBuff.cooldown,
             timeOfAction = cachedBuff.timeOfAction,
             fixedTime = cachedBuff.fixedTime,
+            activeUntil = cachedBuff.activeUntil,
+            readyAt = cachedBuff.readyAt,
+            permanent = cachedBuff.permanent,
+            missingCount = 0,
             status = cachedBuff.status
           }
           -- Recalculate status based on current time
@@ -1371,6 +1397,9 @@ local function checkBuffs(unitType)
         cooldown = buffInfo.cooldown,
         timeOfAction = buffInfo.timeOfAction,
         fixedTime = buffInfo.fixedTime,
+        activeUntil = buffInfo.activeUntil,
+        readyAt = buffInfo.readyAt,
+        permanent = buffInfo.permanent,
         status = buffInfo.status
       }
     end
@@ -1410,40 +1439,40 @@ local function checkBuffs(unitType)
   local activeBuffsOnUnit = {}
   local hasChanges = false
   local currentBuffsOnUnit = {}
-  
+  local timeLeftById = {}   -- остаток (мс) по каждому увиденному баффу/дебаффу
+
   -- Проверяем активные баффы на юните
-  -- Получаем все активные баффы на юните
-  local buffCount = api.Unit:UnitBuffCount(unitType) or 0
+  local buffCountRaw = api.Unit:UnitBuffCount(unitType)
+  local buffCount = buffCountRaw or 0
   for i = 1, buffCount do
     local buff = api.Unit:UnitBuff(unitType, i)
-    
+
     -- Проверяем, существует ли бафф и есть ли у него идентификатор
     if buff and buff.buff_id then
       buff.buff_id = helpers.formatBuffId(buff.buff_id)
       -- Записываем текущие ID баффов для последующего сравнения
       currentBuffsOnUnit[buff.buff_id] = true
-      
+      timeLeftById[buff.buff_id] = buff.timeLeft
+
       -- Проверяем, нужно ли отслеживать этот бафф
       if BuffsToTrack.ShouldTrackBuff(buff.buff_id, unitType) then
         activeBuffsOnUnit[buff.buff_id] = true
-        
-        -- Для target: обновляем fixedTime только если timeLeft значительный (> 500мс)
-        -- Это предотвращает "мерцание" в последний момент бафа
-        -- Для player/playerpet: только при первой активации, без timeLeft
-        local isNewBuff = not buffDataTable[buff.buff_id] or (buffDataTable[buff.buff_id].status ~= "active")
-        local shouldUpdateTarget = unitType == "target" and buff.timeLeft and buff.timeLeft > 500
-        
-        if isNewBuff or shouldUpdateTarget then
-          -- Бафф стал активным, обновляем его статус
-          -- Для target передаём timeLeft (API возвращает время в мс)
-          -- Для player/playerpet - nil, чтобы fixedTime = currentTime
-          local timeLeftParam = (unitType == "target") and buff.timeLeft or nil
-          setBuffStatus(buff.buff_id, "active", getCurrentTime(), unitType, timeLeftParam)
+
+        -- timeLeft отдаётся для любого юнита: по нему ре-синхронизируем момент старта.
+        -- Порог 500 мс — защита от мерцания в последний момент баффа.
+        local entry = buffDataTable[buff.buff_id]
+        local isNewBuff = (not entry) or entry.status ~= "active"
+        local remaining = buff.timeLeft
+        local canResync = remaining ~= nil and remaining > 500
+
+        if isNewBuff then
+          -- Бафф стал активным (в т.ч. уже висел до таргета/логина) — берём остаток из API
+          setBuffStatus(buff.buff_id, "active", getCurrentTime(), unitType, remaining)
           hasChanges = true
-          
+
           -- Обновляем кэшированный статус
           cachedBuffStatus[buff.buff_id] = "active"
-          
+
           -- Запоминаем бафф для текущей цели (для отслеживания истории)
           if unitType == "target" and currentTargetId then
             if not targetActiveBuffs[currentTargetId] then
@@ -1451,97 +1480,130 @@ local function checkBuffs(unitType)
             end
             targetActiveBuffs[currentTargetId][buff.buff_id] = true
           end
+        elseif canResync then
+          -- Плановый ре-синк: таймер не уплывает от реального остатка
+          setBuffStatus(buff.buff_id, "active", getCurrentTime(), unitType, remaining)
+          hasChanges = true
+          cachedBuffStatus[buff.buff_id] = "active"
         end
       end
     end
   end
-  
+
   -- Проверяем активные дебаффы на игроке и цели
+  local debuffCountRaw = nil
   if unitType == "player" or unitType == "target" then
     -- Получаем все активные дебаффы на юните
-    local debuffCount = api.Unit:UnitDeBuffCount(unitType) or 0
+    debuffCountRaw = api.Unit:UnitDeBuffCount(unitType)
+    local debuffCount = debuffCountRaw or 0
     for i = 1, debuffCount do
       local debuff = api.Unit:UnitDeBuff(unitType, i)
-      
+
       -- Проверяем, существует ли дебафф и есть ли у него идентификатор
       if debuff and debuff.buff_id then
         debuff.buff_id = helpers.formatBuffId(debuff.buff_id)
         -- Записываем текущие ID дебаффов для последующего сравнения
         currentBuffsOnUnit[debuff.buff_id] = true
-        
+        timeLeftById[debuff.buff_id] = debuff.timeLeft
+
         -- Проверяем, нужно ли отслеживать этот дебафф
         if BuffsToTrack.ShouldTrackBuff(debuff.buff_id, unitType) then
           activeBuffsOnUnit[debuff.buff_id] = true
-          
-          -- Для target: обновляем только если timeLeft значительный (> 500мс)
-          -- Для player: только при первой активации
-          local isNewDebuff = not buffDataTable[debuff.buff_id] or (buffDataTable[debuff.buff_id].status ~= "active")
-          local shouldUpdateTarget = unitType == "target" and debuff.timeLeft and debuff.timeLeft > 500
-          
-          if isNewDebuff or shouldUpdateTarget then
-            -- Дебафф стал активным, обновляем его статус
-            -- Для target передаём timeLeft, для player - nil
-            local timeLeftParam = (unitType == "target") and debuff.timeLeft or nil
-          setBuffStatus(debuff.buff_id, "active", getCurrentTime(), unitType, timeLeftParam)
-          hasChanges = true
-          
-          -- Обновляем кэшированный статус
-          cachedBuffStatus[debuff.buff_id] = "active"
-          
-          -- Запоминаем бафф для текущей цели (для отслеживания истории)
-          if unitType == "target" and currentTargetId then
-            if not targetActiveBuffs[currentTargetId] then
-              targetActiveBuffs[currentTargetId] = {}
+
+          local entry = buffDataTable[debuff.buff_id]
+          local isNewDebuff = (not entry) or entry.status ~= "active"
+          local remaining = debuff.timeLeft
+          local canResync = remaining ~= nil and remaining > 500
+
+          if isNewDebuff then
+            -- Дебафф стал активным — берём серверный остаток
+            setBuffStatus(debuff.buff_id, "active", getCurrentTime(), unitType, remaining)
+            hasChanges = true
+
+            -- Обновляем кэшированный статус
+            cachedBuffStatus[debuff.buff_id] = "active"
+
+            -- Запоминаем бафф для текущей цели (для отслеживания истории)
+            if unitType == "target" and currentTargetId then
+              if not targetActiveBuffs[currentTargetId] then
+                targetActiveBuffs[currentTargetId] = {}
+              end
+              targetActiveBuffs[currentTargetId][debuff.buff_id] = true
             end
-            targetActiveBuffs[currentTargetId][debuff.buff_id] = true
+          elseif canResync then
+            setBuffStatus(debuff.buff_id, "active", getCurrentTime(), unitType, remaining)
+            hasChanges = true
+            cachedBuffStatus[debuff.buff_id] = "active"
           end
-        end
         end
       end
     end
   end
-  
+
   -- Обновляем кэшированные баффы юнита
   if unitType == "player" then
     cachedPlayerBuffs = currentBuffsOnUnit
   else
     cachedMountBuffs = currentBuffsOnUnit
   end
-  
+
+  -- Можно ли доверять «пустому» списку баффов в этом опросе:
+  -- API ответил числом, юнит жив/существует, и либо на юните есть баффы, либо юнит
+  -- доступен, либо это маунт (пет мог быть отпущен). В загрузке/без мира не обрываем таймеры.
+  local unitIdNow = api.Unit:GetUnitId(unitType)
+  local healthNow = api.Unit:UnitHealth(unitType)
+  local listReadable = (buffCountRaw ~= nil) and (healthNow ~= nil)
+  if unitType == "player" or unitType == "target" then
+    listReadable = listReadable and (debuffCountRaw ~= nil)
+  end
+  local disappearanceValid = listReadable and (buffCount > 0 or unitIdNow ~= nil or unitType == "playerpet")
+
   -- Проверяем баффы, которые были активны, но больше не существуют
   local currentTime = tonumber(getCurrentTime()) or 0
-  
+
   for buffId, buffInfo in pairs(buffDataTable) do
-    local oldStatus = buffInfo.status
-    
     if currentBuffsOnUnit[buffId] then
-      -- Бафф активен на юните, ничего делать не нужно
+      -- Бафф снова на юните: сбрасываем счётчик пропусков
+      buffInfo.missingCount = 0
       if buffInfo.status ~= "active" then
-        setBuffStatus(buffId, "active", currentTime, unitType)
+        setBuffStatus(buffId, "active", currentTime, unitType, timeLeftById[buffId])
         hasChanges = true
-        
+
         -- Обновляем кэшированный статус
         cachedBuffStatus[buffId] = "active"
       end
-    else
-      -- Если баффа больше нет на юните
-      if buffInfo.fixedTime then
+    elseif buffInfo.status == "active" then
+      -- Бафф исчез: подтверждаем двумя опросами подряд (защита от мерцания)
+      buffInfo.missingCount = (buffInfo.missingCount or 0) + 1
+      if disappearanceValid and buffInfo.missingCount >= 2 then
+        -- Досрочное снятие (диспел/смерть) или конец действия:
+        -- активная фаза заканчивается СЕЙЧАС, а кулдаун считается от момента старта
+        -- баффа (fixedTime), а не от момента обнаружения пропажи.
+        buffInfo.activeUntil = currentTime
+        buffInfo.permanent = false
         local expectedStatus = checkBuffStatus(buffInfo, currentTime)
-        
-        if expectedStatus ~= buffInfo.status then
-          setBuffStatus(buffId, expectedStatus, currentTime, unitType)
-          hasChanges = true
-          
-          -- Обновляем кэшированный статус
-          cachedBuffStatus[buffId] = expectedStatus
-        end
-      elseif buffInfo.status ~= "ready" then
-        setBuffStatus(buffId, "ready", nil, unitType)
+        buffInfo.status = expectedStatus
+        buffInfo.statusChangeTime = currentTime
         hasChanges = true
-        
+
         -- Обновляем кэшированный статус
-        cachedBuffStatus[buffId] = "ready"
+        cachedBuffStatus[buffId] = expectedStatus
       end
+    elseif buffInfo.fixedTime then
+      local expectedStatus = checkBuffStatus(buffInfo, currentTime)
+      if expectedStatus ~= buffInfo.status then
+        setBuffStatus(buffId, expectedStatus, currentTime, unitType)
+        hasChanges = true
+
+        -- Обновляем кэшированный статус
+        cachedBuffStatus[buffId] = expectedStatus
+      end
+    elseif buffInfo.status ~= "ready" then
+      setBuffStatus(buffId, "ready", nil, unitType)
+      hasChanges = true
+
+      -- Обновляем кэшированный статус
+      cachedBuffStatus[buffId] = "ready"
     end
   end
   
@@ -1577,6 +1639,9 @@ local function checkBuffs(unitType)
         for buffId, buffInfo in pairs(targetBuffData) do
           targetCache[currentTargetId].buffStates[buffId] = {
             fixedTime = buffInfo.fixedTime,
+            activeUntil = buffInfo.activeUntil,
+            readyAt = buffInfo.readyAt,
+            permanent = buffInfo.permanent,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
             cooldown = buffInfo.cooldown,
