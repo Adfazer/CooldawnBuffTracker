@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.9.0"
+  version = "1.9.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2254,6 +2254,50 @@ local function OnLoad()
     ESCMenu.queue = ESCMenu.queue or {}
     table.insert(ESCMenu.queue, { name = "Cooldown Buff Tracker", callback = openFromEscMenu, category = "System" })
   end
+
+  -- Дефолтное ESC-меню: панель «Addon Options» (конвенция michaelClient).
+  -- Первый загрузившийся аддон строит панель на системном фрейме, остальные
+  -- добавляют свою кнопку. Без неё наш аддон в ванильном меню не виден.
+  pcall(function()
+    local configMenu = ADDON:GetContent(UIC.SYSTEM_CONFIG_FRAME)
+    if not configMenu then return end
+    if configMenu.michaelClient == nil then
+      local mc = configMenu:CreateChildWidget("label", "cbt_michaelClient", 0, true)
+      mc:AddAnchor("TOPLEFT", configMenu, -110, 5)
+      mc:SetExtent(110, 28)
+      mc:SetText("Addon Options")
+      configMenu.michaelClient = mc
+      configMenu.michaelClient.addons = {}
+      mc.bg = mc:CreateNinePartDrawable("ui/common/tab_list.dds", "background")
+      mc.bg:SetTextureInfo("bg_quest")
+      mc.bg:SetColor(0, 0, 0, 0.5)
+      mc.bg:AddAnchor("TOPLEFT", mc, 0, 0)
+      mc.bg:AddAnchor("BOTTOMRIGHT", mc, 0, 0)
+      mc.addonCount = 0
+      function configMenu.michaelClient:AddAddon(title, callback)
+        if self.addons[title] then
+          self.addons[title]:SetHandler("OnClick", function() callback() end)
+          self.addons[title]:Show(true)
+          return
+        end
+        self.addonCount = self.addonCount + 1
+        local btn = self:CreateChildWidget("button", "cbt_addon_" .. tostring(self.addonCount), 0, true)
+        btn:SetText(title)
+        btn:AddAnchor("TOPLEFT", self, 5, self.addonCount * 30)
+        btn:SetExtent(100, 28)
+        btn:SetHandler("OnClick", function() callback() end)
+        btn:Show(true)
+        self.addons[title] = btn
+        self.bg:SetExtent(self.bg:GetWidth(), self.addonCount * 30)
+        self.bg:RemoveAllAnchors()
+        self.bg:AddAnchor("TOPLEFT", self, 0, 0)
+        self.bg:AddAnchor("BOTTOMRIGHT", self, 0, self.addonCount * 30 + 10)
+      end
+    end
+    if configMenu.michaelClient.AddAddon then
+      configMenu.michaelClient:AddAddon("Cooldown Buff Tracker", openFromEscMenu)
+    end
+  end)
 
   safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
   

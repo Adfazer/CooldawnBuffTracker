@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.9.1
+
+- Registered in the **default ESC menu**: the addon now builds/uses the
+  community `michaelClient` «Addon Options» panel on the system config frame
+  (`ADDON:GetContent(UIC.SYSTEM_CONFIG_FRAME)`) — that is why BetterBars shows up
+  there and we did not. With the ESCMenu addon installed, ESCMenu hides that
+  panel and reroutes the same title into its own grid.
+
 ### 1.9.0
 
 - **Icon search window** (button «Поиск иконки»): type a name and see live matches
@@ -303,7 +311,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.9.0
+**Current Version:** 1.9.1
 
 ## Credits
 
