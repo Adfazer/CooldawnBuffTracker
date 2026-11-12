@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.2"
+  version = "1.8.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1828,8 +1828,8 @@ local function loadSkillDump()
   local byName = {}
   local n = 0
   for line in data.dump:gmatch("[^\n]+") do
-    local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.+)$")
-    if id and name and path then
+    local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
+    if id and name and path and path ~= "" then
       n = n + 1
       local key = normalizeSkillName(name)
       if key ~= "" and not byName[key] then
@@ -1871,6 +1871,25 @@ local function applySkillIcon(nameKey, id, path)
     .. " path=" .. tostring(path) .. " (обновлено записей: " .. applied .. ")")
 end
 
+local function probeSkillTooltip(id)
+  local ok, info = pcall(api.Skill.GetSkillTooltip, api.Skill, id)
+  if not ok then
+    safeLog("[CBT] probe " .. tostring(id) .. ": error " .. tostring(info))
+    return
+  end
+  if type(info) ~= "table" then
+    safeLog("[CBT] probe " .. tostring(id) .. ": " .. type(info) .. " value=" .. tostring(info))
+    return
+  end
+  local keys = {}
+  for k, v in pairs(info) do
+    if #keys < 10 then keys[#keys + 1] = tostring(k) .. "=" .. tostring(v) end
+  end
+  safeLog("[CBT] probe " .. tostring(id) .. ": name=" .. tostring(info.name)
+    .. " path=" .. tostring(info.path) .. " type=" .. tostring(info.type)
+    .. " skillId=" .. tostring(info.skillId) .. " | " .. table.concat(keys, ", "))
+end
+
 local function startSkillIconScan(name)
   name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local key = normalizeSkillName(name)
@@ -1880,12 +1899,20 @@ local function startSkillIconScan(name)
     return true
   end
   if not (api.Skill and api.Skill.GetSkillTooltip) then return false end
+  -- Пробы известных skill type из клиента (character_create_ability.lua)
+  for _, probeId in ipairs({ 13282, 10455, 23587, 10670, 11314, 10664, 16210, 10694, 23592, 10534, 13286, 23596 }) do
+    probeSkillTooltip(probeId)
+  end
   skillIconScan = {
     target = key,
     rangeIndex = 1,
     ranges = { { 1, 40000 }, { 8000000, 8001000 } },
     nextId = 1,
     entries = {},
+    tables = 0,
+    named = 0,
+    errors = 0,
+    firstError = nil,
   }
   safeLog("[CBT] skill scan: дамп всех навыков"
     .. (key ~= "" and (" + поиск '" .. name .. "'") or "")
@@ -1912,8 +1939,8 @@ local function processSkillIconScan()
     end
     local byName = {}
     for _, line in ipairs(st.entries) do
-      local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.+)$")
-      if id and name and path then
+      local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
+      if id and name and path and path ~= "" then
         local key = normalizeSkillName(name)
         if key ~= "" and not byName[key] then
           byName[key] = { id = tonumber(id), path = path, name = name }
@@ -1922,7 +1949,10 @@ local function processSkillIconScan()
     end
     skillDump = { byName = byName, count = #st.entries }
     safeLog("[CBT] skill dump: " .. #st.entries .. " навыков, "
-      .. (saved and "сохранён в skill_dump.tbl" or "НЕ сохранён (api.File недоступен)"))
+      .. (saved and "сохранён в skill_dump.tbl" or "НЕ сохранён (api.File недоступен)")
+      .. "; таблиц=" .. tostring(st.tables) .. " с именем=" .. tostring(st.named)
+      .. " ошибок=" .. tostring(st.errors)
+      .. (st.firstError and (" | первая ошибка: " .. st.firstError) or ""))
     if st.target ~= "" then
       local e = byName[st.target]
       if e then
@@ -1939,10 +1969,18 @@ local function processSkillIconScan()
   local getter = api.Skill.GetSkillTooltip
   for id = st.nextId, last do
     local ok, info = pcall(getter, api.Skill, id)
-    if ok and type(info) == "table" and info.name and info.path then
-      local nm = tostring(info.name)
-      if nm ~= "" then
-        st.entries[#st.entries + 1] = tostring(id) .. "\t" .. nm .. "\t" .. tostring(info.path)
+    if not ok then
+      st.errors = st.errors + 1
+      if not st.firstError then st.firstError = tostring(info) end
+    elseif type(info) == "table" then
+      st.tables = st.tables + 1
+      if info.name then
+        st.named = st.named + 1
+        local nm = tostring(info.name)
+        if nm ~= "" then
+          st.entries[#st.entries + 1] = tostring(id) .. "\t" .. nm .. "\t"
+            .. ((info.path and tostring(info.path)) or "")
+        end
       end
     end
   end

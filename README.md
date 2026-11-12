@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.8.3
+
+- Scan diagnostics: on start it probes 12 known client skill types (13282,
+  10455, 23587, ...) and logs name/path/type plus the table fields, and the final
+  line now reports how many tooltip tables, names and errors the scan saw — to
+  explain an empty dump.
+- Entries without an icon path are kept in the dump (path filled later).
+
 ### 1.8.2
 
 - **Find icon** now dumps **all** client skill tooltips (id → name → icon path)
@@ -253,7 +261,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.2
+**Current Version:** 1.8.3
 
 ## Credits
 
