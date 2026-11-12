@@ -155,6 +155,14 @@ mount and target.
 
 ## Changelog
 
+### 1.21.1
+
+- Always-on skillset passives: a target whose class contains **Battlerage** gets
+  Attack Speed Training (-10% to all Battlerage skills), and a target whose class
+  contains **Archery** gets Archery Expertise (-10% to Piercing Shot, Charged Bolt,
+  Stalker's Mark, Missile Rain, Toxic Shot, Snipe). These are applied from the class
+  table, not learned; the learner divides them out so they are not counted twice.
+
 ### 1.21.0
 
 - **Effective cooldowns for the Target panel.** New `effectiveCd` master checkbox
@@ -810,7 +818,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.0
+**Current Version:** 1.21.1
 
 ## Credits
 

@@ -1,4 +1,4 @@
--- Effective cooldowns for the TARGET panel (1.21.0).
+-- Effective cooldowns for the TARGET panel (1.21.1).
 --
 -- Model: eff = max(0, base - sumFlat) * (1 - sumPct / 100); percentages add up.
 -- Base CD comes from the entry (custom/override), otherwise from skillsets.tbl.
@@ -27,6 +27,18 @@ local TTL_MS = 30 * 60 * 1000   -- learned state expires 30 min after the target
 local SNAP_TOL = 0.04           -- candidate ratio tolerance
 local MIN_OBS = 2               -- consistent observations before a ratio applies to the whole tree
 local PASSIVE_CAP = 90          -- summed percentages never exceed this
+
+-- Always-on class passives (not learned): every Battlerage build takes
+-- Attack Speed Training (-10% all Battlerage skills); every Archery build takes
+-- Archery Expertise (-10% only for the listed skills).
+local CLASS_PASSIVES = {
+  Battlerage = { pct = 10 },
+  Archery = { pct = 10, skills = {
+    ["piercing shot"] = true, ["charged bolt"] = true, ["stalker's mark"] = true,
+    ["stalkers mark"] = true, ["missile rain"] = true, ["toxic shot"] = true,
+    ["snipe"] = true,
+  } },
+}
 
 local PLACEHOLDER_ICON = "game/ui/icon/icon_buff_debuff.dds"
 local ICON_ROOT = "game/ui/icon/"
@@ -334,6 +346,25 @@ local function skillMatches(mod, desc)
   return normalize(desc.spell) == want or normalize(desc.name) == want
 end
 
+-- 10% class passive, only when the target's class is known and contains the tree.
+local function classPassivePct(st, tree, desc)
+  if not tree or tree == "" then return 0 end
+  local cfg = CLASS_PASSIVES[tree]
+  if not cfg then return 0 end
+  local trees = st and st.classTrees
+  if not trees then return 0 end
+  local has = false
+  for _, t in ipairs(trees) do
+    if normalize(t) == normalize(tree) then has = true; break end
+  end
+  if not has then return 0 end
+  if cfg.skills then
+    local nm = normalize((desc and (desc.spell ~= "" and desc.spell or desc.name)) or "")
+    if not cfg.skills[nm] then return 0 end
+  end
+  return cfg.pct or 0
+end
+
 -- Сумма видимых динамических модификаторов для цели/ветви/навыка.
 local function sumDynamic(targetKey, tree, desc, st)
   local pct, flat = 0, 0
@@ -381,6 +412,7 @@ function M.Effective(desc, targetId, now)
   local tree = M.TreeOf(desc)
   local pct, flat = 0, 0
   local learnedPct = 0
+  local classPct = 0
 
   if tree and tree ~= "" then st.obsTrees[tree] = true end
 
@@ -393,8 +425,15 @@ function M.Effective(desc, targetId, now)
     elseif tr and tr.ready then
       learnedPct = (1 - tr.ratio) * 100
     end
-    pct = pct + learnedPct
   end
+
+  classPct = classPassivePct(st, tree, desc)
+  -- class passive already accounts for a learned 0.90 ratio; do not count it twice
+  if classPct > 0 and learnedPct > 0
+     and math.abs((1 - learnedPct / 100) - (1 - classPct / 100)) <= 0.02 then
+    learnedPct = 0
+  end
+  pct = pct + learnedPct + classPct
 
   local dpct, dflat = sumDynamic(tostring(targetId), tree, desc, st)
   pct = pct + dpct
@@ -525,7 +564,10 @@ function M.Observe(desc, targetId, intervalSec, now)
   local dpct = sumDynamic(key, tree, desc, st)
   local factor = 1 - dpct / 100
   if factor < 0.1 then factor = 0.1 end
-  local passive = raw / factor
+  local classPct = classPassivePct(st, tree, desc)
+  local cfactor = 1 - classPct / 100
+  if cfactor < 0.1 then cfactor = 0.1 end
+  local passive = raw / factor / cfactor
   if passive > 1.05 then return "up", nil, passive end
 
   local cand, dist = nearestCandidate(passive)
