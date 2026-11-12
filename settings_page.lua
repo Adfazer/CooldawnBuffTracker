@@ -1,6 +1,7 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 local iconSearch = require('CooldawnBuffTracker/icon_search_window')
+local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 
 -- Load module for working with buffs
 local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
@@ -723,6 +724,92 @@ local function addPixelViewerButton()
     end
 end
 
+
+-- Диалог настройки CD/D для обычного (не кастомного) баффа.
+-- Значения хранятся в settings.buffOverrides[tostring(id)].
+local overrideWindow = nil
+
+local function openBuffOverrideDialog(buffId)
+    local s = helpers.getSettings()
+    if type(s.buffOverrides) ~= "table" then s.buffOverrides = {} end
+    local key = tostring(buffId)
+    local existing = s.buffOverrides[key] or {}
+    local curCd = tonumber(existing.cooldown)
+    local curToa = tonumber(existing.timeOfAction)
+    if curCd == nil then curCd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30 end
+    if curToa == nil then curToa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3 end
+
+    if overrideWindow then
+        pcall(function() api.Interface:Free(overrideWindow) end)
+        overrideWindow = nil
+    end
+
+    local wnd = CbtWindow.Create("cbtBuffOverride", "CD / D баффа", 360, 210, function()
+        if overrideWindow then overrideWindow:Show(false) end
+    end)
+    if not wnd then return end
+    overrideWindow = wnd
+
+    local nameLabel = helpers.createLabel('cbtOverrideName', wnd,
+        tostring(BuffList.GetBuffName(buffId)) .. '  [' .. tostring(buffId) .. ']', 15, 40, 14)
+    nameLabel:SetWidth(330)
+    nameLabel:Show(true)
+
+    local cdLabel = helpers.createLabel('cbtOverrideCdLabel', wnd, 'Cooldown (s):', 15, 70, 14)
+    cdLabel:SetWidth(140)
+    cdLabel:Show(true)
+    local cdEdit = helpers.createEdit('cbtOverrideCd', cdLabel, tostring(curCd), 120, 0)
+    cdEdit:SetWidth(70)
+    cdEdit:Show(true)
+
+    local toaLabel = helpers.createLabel('cbtOverrideToaLabel', wnd, 'Duration (s):', 15, 100, 14)
+    toaLabel:SetWidth(140)
+    toaLabel:Show(true)
+    local toaEdit = helpers.createEdit('cbtOverrideToa', toaLabel, tostring(curToa), 120, 0)
+    toaEdit:SetWidth(70)
+    toaEdit:Show(true)
+
+    local hint = helpers.createLabel('cbtOverrideHint', wnd,
+        'CD 0 = без кулдауна. Значения только для этого баффа.', 15, 128, 12)
+    hint:SetWidth(330)
+    hint.style:SetColor(0.72, 0.74, 0.80, 1)
+    hint:Show(true)
+
+    local saveBtn = helpers.createButton('cbtOverrideSave', wnd, 'Save', 15, 160)
+    saveBtn:SetExtent(120, 26)
+    saveBtn:Show(true)
+    saveBtn:SetHandler("OnClick", function()
+        local cd = tonumber(cdEdit:GetText()) or 0
+        local toa = tonumber(toaEdit:GetText()) or 0
+        if cd < 0 then cd = 0 end
+        if toa < 0 then toa = 0 end
+        s.buffOverrides[key] = { cooldown = cd, timeOfAction = toa }
+        api.SaveSettings()
+        if M.applyBuffOverride then M.applyBuffOverride(buffId, cd, toa) end
+        pcall(updateTrackedBuffsList)
+        api.Log:Info(string.format("[CBT] CD/D для %s: CD=%s D=%s",
+            tostring(buffId), tostring(cd), tostring(toa)))
+        wnd:Show(false)
+    end)
+
+    local resetBtn = helpers.createButton('cbtOverrideReset', wnd, 'Сброс', 145, 160)
+    resetBtn:SetExtent(100, 26)
+    resetBtn:Show(true)
+    resetBtn:SetHandler("OnClick", function()
+        s.buffOverrides[key] = nil
+        api.SaveSettings()
+        if M.applyBuffOverride then M.applyBuffOverride(buffId, 30, 3) end
+        pcall(updateTrackedBuffsList)
+        api.Log:Info("[CBT] CD/D сброшены для " .. tostring(buffId))
+        wnd:Show(false)
+    end)
+
+    local cancelBtn = helpers.createButton('cbtOverrideCancel', wnd, 'Cancel', 255, 160)
+    cancelBtn:SetExtent(90, 26)
+    cancelBtn:Show(true)
+    cancelBtn:SetHandler("OnClick", function() wnd:Show(false) end)
+end
+
 local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
@@ -804,6 +891,12 @@ local function buildTrackedBuffsSection()
     trackedBuffsListHeader:Show(true)
     trackedBuffsListHeader:SetWidth(570)
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
+
+    local trackedHint = helpers.createLabel('trackedBuffsHint', trackedBuffsGroupLabel,
+        'Клик по имени баффа — задать свои CD/D', 150, 14, 12)
+    trackedHint:SetWidth(400)
+    trackedHint.style:SetColor(0.70, 0.72, 0.78, 1)
+    trackedHint:Show(true)
     
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
@@ -914,10 +1007,15 @@ local function buildTrackedBuffsSection()
             buffIdLabel:SetExtent(70, 20)
             buffIdLabel:Show(true)
             
-            -- Buff name
+            -- Buff name (клик — настройка CD/D для обычного баффа)
             local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
             buffNameLabel:SetExtent(290, 20)
             buffNameLabel:Show(true)
+            if buffNameLabel.SetHandler then
+                buffNameLabel:SetHandler("OnClick", function()
+                    openBuffOverrideDialog(buffId)
+                end)
+            end
             
             -- Up button
             local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 380, 0)

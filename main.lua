@@ -80,7 +80,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.12.4"
+  version = "1.13.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -156,6 +156,45 @@ local function findCustomBuff(buffId)
   return nil
 end
 
+-- Пользовательские CD/D для обычного баффа (settings.buffOverrides)
+local function findBuffOverride(buffId)
+  local s = settings or api.GetSettings("CooldawnBuffTracker") or {}
+  local ov = s.buffOverrides
+  if type(ov) ~= "table" then return nil end
+  return ov[tostring(buffId)]
+end
+
+-- Применяет CD/D из override к живым записям и кэшам целей
+local function applyBuffOverride(buffId, cd, toa)
+  cd = tonumber(cd) or 0
+  toa = tonumber(toa) or 0
+  local tables = { buffData, playerBuffData, targetBuffData }
+  for _, tbl in pairs(tables) do
+    local e = tbl[buffId]
+    if e then
+      e.cooldown = cd
+      e.timeOfAction = toa
+      if e.fixedTime then
+        e.readyAt = e.fixedTime + cd
+        if not e.synthetic then
+          e.activeUntil = e.fixedTime + toa
+        end
+      end
+    end
+  end
+  for _, cache in pairs(targetCache) do
+    local e = cache.buffStates and cache.buffStates[buffId]
+    if e then
+      e.cooldown = cd
+      e.timeOfAction = toa
+      if e.fixedTime then
+        e.readyAt = e.fixedTime + cd
+        e.activeUntil = e.fixedTime + toa
+      end
+    end
+  end
+end
+
 -- Переносит CD/D/имя/иконку из customBuffs в уже созданные записи панелей
 local function applyCustomBuffOverrides()
   if not settings or type(settings.customBuffs) ~= "table" then return end
@@ -173,6 +212,11 @@ local function applyCustomBuffOverrides()
         if toa ~= nil and toa >= 0 then entry.timeOfAction = toa end
         if cb.name and cb.name ~= "" then entry.name = cb.name end
         if cb.iconFile and cb.iconFile ~= "" then entry.icon = cb.iconFile end
+        local ov = findBuffOverride(id)
+        if ov then
+          entry.cooldown = tonumber(ov.cooldown) or 0
+          entry.timeOfAction = tonumber(ov.timeOfAction) or 0
+        end
       end
     end
   end
@@ -237,6 +281,12 @@ local function initBuffData()
             buffTimeOfAction = 3
           end
         end
+
+        local ov = findBuffOverride(buffId)
+        if ov then
+          buffCooldown = tonumber(ov.cooldown) or 0
+          buffTimeOfAction = tonumber(ov.timeOfAction) or 0
+        end
         
         buffDataTable[buffId] = {
           name = buffName,
@@ -294,6 +344,12 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       if toaNum == nil or toaNum < 0 then
         buffTimeOfAction = 3
       end
+    end
+
+    local ov = findBuffOverride(buffId)
+    if ov then
+      buffCooldown = tonumber(ov.cooldown) or 0
+      buffTimeOfAction = tonumber(ov.timeOfAction) or 0
     end
     
     buffDataTable[buffId] = {
@@ -2146,6 +2202,7 @@ end
 
 if settingsPage then
   settingsPage.searchIcons = searchIcons
+  settingsPage.applyBuffOverride = applyBuffOverride
 end
 
 local function processBuffIconScan()

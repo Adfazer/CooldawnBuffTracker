@@ -1,5 +1,6 @@
 local defaultSettings = {
     enabled = true,
+    buffOverrides = {},
     playerpet = {
         posX = 330,
         posY = 30,
@@ -85,6 +86,11 @@ function defaultSettings.migrate(settings)
     -- Верхнеуровневый enabled нужен списку аддонов (кнопка Options в ESC-меню)
     if settings.enabled == nil then
         settings.enabled = true
+    end
+
+    -- Пользовательские CD/D для обычных (не кастомных) баффов
+    if type(settings.buffOverrides) ~= "table" then
+        settings.buffOverrides = {}
     end
 
     -- Таблица пресетов создаётся один раз и далее живёт в settings.txt

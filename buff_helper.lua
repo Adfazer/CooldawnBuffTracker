@@ -12697,6 +12697,19 @@ function BuffList.GetBuffInfo(buffId)
     else
         settings = api.GetSettings("CooldawnBuffTracker") or {}
     end
+    -- Пользовательские CD/D для обычных баффов (клик по имени в списке)
+    if settings and type(settings.buffOverrides) == "table" then
+        local ov = settings.buffOverrides[tostring(buffId)]
+        if ov then
+            return {
+                id = buffId,
+                name = "Buff #" .. tostring(buffId),
+                cooldown = tonumber(ov.cooldown) or 0,
+                timeOfAction = tonumber(ov.timeOfAction) or 0
+            }
+        end
+    end
+
     -- Сначала ищем в пользовательских баффах
     if settings and settings.customBuffs then
         for _, buffInfo in ipairs(settings.customBuffs) do

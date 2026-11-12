@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.13.0
+
+- Regular (non-custom) tracked buffs can now take their own CD/D: **click the buff
+  name in the tracked list** to open a small dialog (Cooldown / Duration / Reset).
+  Values are stored in `settings.buffOverrides[id]`, apply to new entries and
+  immediately to live ones (readyAt is recomputed from the same fixed start).
+  Why: the built-in buff table (`ALL_BUFFS`) is empty, so every regular buff
+  silently used CD=30 / D=3 — a real 21 s cooldown then showed ~9 s too much.
+
 ### 1.12.4
 
 - If the combat log already started the entry (synthetic anchor), the aura poll no
@@ -389,7 +398,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.12.4
+**Current Version:** 1.13.0
 
 ## Credits
 
