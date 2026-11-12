@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.17.3
+
+- All addon windows (except the main settings window) now have a taller full-width title
+  bar (34 px) with a separator line; the title label is click-through, so the whole bar
+  reliably starts a drag instead of swallowing clicks.
+- Import/Export buttons rebuilt with the shared dark button helper (same look and hover
+  as the rest of the addon); the native light skin and the flat repaint hack are gone.
+
 ### 1.17.2
 
 - Mirror button now shows its state explicitly: «Mir ON» (green) / «Mir OFF» (grey).
@@ -602,7 +610,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.17.2
+**Current Version:** 1.17.3
 
 ## Credits
 

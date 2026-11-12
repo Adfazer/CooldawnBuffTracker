@@ -554,12 +554,11 @@ local function openImportExportWindow(onImportSuccess)
     exportLabel.style:SetAlign(ALIGN.LEFT)
     
     -- Кнопка: сохранить мой конфиг в файл (его можно сразу отдать)
-    local saveFileButton = api.Interface:CreateWidget('button', 'cbtSaveFileButton', importExportWindow)
+    local saveFileButton = helpers.createButton('cbtSaveFileButton', importExportWindow,
+        "Save my config to a file", 0, 0)
+    saveFileButton:RemoveAllAnchors()
     saveFileButton:AddAnchor("TOP", exportLabel, "BOTTOM", 0, 12)
-    saveFileButton:SetExtent(260, 34)
-    saveFileButton:SetText("Save my config to a file")
-    api.Interface:ApplyButtonSkin(saveFileButton, BUTTON_BASIC.DEFAULT)
-    CbtWindow.FlattenButton(saveFileButton)
+    saveFileButton:SetExtent(280, 30)
 
     local fileStatus = api.Interface:CreateWidget('label', 'cbtFileStatus', importExportWindow)
     fileStatus:SetExtent(560, 22)
@@ -608,12 +607,11 @@ local function openImportExportWindow(onImportSuccess)
     CbtWindow.StyleEdit(importFileEdit)
     ieWidgets.importFileEdit = importFileEdit
 
-    local loadFileButton = api.Interface:CreateWidget('button', 'cbtLoadFileButton', importExportWindow)
+    local loadFileButton = helpers.createButton('cbtLoadFileButton', importExportWindow,
+        "Load config from file", 0, 0)
+    loadFileButton:RemoveAllAnchors()
     loadFileButton:AddAnchor("LEFT", importFileEdit, "RIGHT", 12, 0)
     loadFileButton:SetExtent(185, 30)
-    loadFileButton:SetText("Load config from file")
-    api.Interface:ApplyButtonSkin(loadFileButton, BUTTON_BASIC.DEFAULT)
-    CbtWindow.FlattenButton(loadFileButton)
 
     -- Панель ошибок для импорта
     local errorPanel = api.Interface:CreateWidget('window', 'importErrorPanel', importExportWindow)
