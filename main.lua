@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.13.4"
+  version = "1.14.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -466,6 +466,26 @@ end
 -- pendingBySource: имя -> { [buffId] = время }, пока id игрока неизвестен
 local unitIdByName = {}
 local pendingBySource = {}
+
+-- Журнал навыков из боевого лога (для окна Record)
+local loggedSpellOrder = {}
+local loggedSpellMap = {}
+
+local function recordLoggedSpell(name, now)
+  if not name or name == "" then return end
+  local e = loggedSpellMap[name]
+  if not e then
+    e = { name = name, count = 0 }
+    loggedSpellMap[name] = e
+    loggedSpellOrder[#loggedSpellOrder + 1] = name
+    if #loggedSpellOrder > 200 then
+      local old = table.remove(loggedSpellOrder, 1)
+      loggedSpellMap[old] = nil
+    end
+  end
+  e.count = (e.count or 0) + 1
+  e.last = now or getCurrentTime()
+end
 -- Анти-дребезг триггеров по боевому логу: DoT-тики не должны перезапускать КД
 local lastTriggerTimes = {}
 local myNameExact = nil   -- мой ник ровно как в игре (string.lower не работает с кириллицей)
@@ -574,7 +594,7 @@ local function learnSkillIcon(cb, spellId)
   if cb.iconFile and cb.iconFile ~= "" then return end
   if not spellId then
     if settings.debugBuffId then
-      safeLog("[CBT] icon: в событии нет spellId для '" .. tostring(cb.id) .. "'")
+      safeLog("[CBT] icon: no spellId in event for '" .. tostring(cb.id) .. "'")
     end
     return
   end
@@ -681,8 +701,8 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         if last and (now - last) < (blockWindow - 0.5) then
           blocked = true
           if settings.debugBuffId then
-            safeLog("[CBT] '" .. tostring(spellName) .. "': повторный триггер через "
-              .. string.format("%.1f", now - last) .. " c — игнор (окно " .. tostring(blockWindow) .. ")")
+            safeLog("[CBT] '" .. tostring(spellName) .. "': repeat trigger after "
+              .. string.format("%.1f", now - last) .. " s - ignored (window " .. tostring(blockWindow) .. ")")
           end
         else
           lastTriggerTimes[tkey] = now
@@ -700,18 +720,18 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         end
         if settings.debugBuffId then
           if hits > 0 then
-            safeLog("[CBT] '" .. spellName .. "': свой каст -> панелей Player/Mount: " .. tostring(hits))
+            safeLog("[CBT] '" .. spellName .. "': self cast -> Player/Mount panels: " .. tostring(hits))
           else
-            safeLog("[CBT] '" .. spellName .. "': свой каст, но бафф не отслеживается на Player/Mount")
+            safeLog("[CBT] '" .. spellName .. "': self cast, but the buff is not tracked on Player/Mount")
           end
           if sourceId and currentTargetId and tostring(currentTargetId) == tostring(sourceId) then
-            safeLog("[CBT] '" .. spellName .. "': ты сам в таргете -> записано в Target")
+            safeLog("[CBT] '" .. spellName .. "': you are the current target -> recorded to Target")
           end
         end
       elseif sourceId then
         triggerTargetCooldown(sourceId, cb.id, now, now)
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': КД записан для " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
+          safeLog("[CBT] '" .. spellName .. "': cooldown recorded for " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
         end
       elseif srcKey then
         local p = pendingBySource[srcKey]
@@ -721,11 +741,11 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         end
         p[cb.id] = now
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': источник " .. tostring(srcKey) .. " неизвестен, ждём первого таргета")
+          safeLog("[CBT] '" .. spellName .. "': source " .. tostring(srcKey) .. " unknown, waiting for the first target")
         end
       else
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': нет источника в событии")
+          safeLog("[CBT] '" .. spellName .. "': no source in the event")
         end
       end
       end
@@ -2100,7 +2120,7 @@ local function loadBuffDump()
   end
   if n > 0 then
     buffDump = { byName = byName, list = buildDumpList(entries), count = n }
-    safeLog("[CBT] buff dump: " .. n .. " баффов загружено из " .. tostring(usedPath))
+    safeLog("[CBT] buff dump: " .. n .. " buffs loaded from " .. tostring(usedPath))
   end
 end
 
@@ -2161,7 +2181,7 @@ local function applyBuffIcon(nameKey, id, path)
     pcall(settingsPage.onSkillIconFound, nameKey, id, path)
   end
   safeLog("[CBT] buff dump: '" .. nameKey .. "' -> id=" .. tostring(id)
-    .. " path=" .. tostring(path) .. " (обновлено записей: " .. applied .. ")")
+    .. " path=" .. tostring(path) .. " (entries updated: " .. applied .. ")")
 end
 
 local function startBuffIconScan(name)
@@ -2184,8 +2204,8 @@ local function startBuffIconScan(name)
     errors = 0,
     firstError = nil,
   }
-  safeLog("[CBT] buff scan: дамп всех баффов"
-    .. (key ~= "" and (" + поиск '" .. name .. "'") or "")
+  safeLog("[CBT] buff scan: dumping all buffs"
+    .. (key ~= "" and (" + search '" .. name .. "'") or "")
     .. " (1..50000, 8000000..8001000)")
   return true
 end
@@ -2211,9 +2231,65 @@ local function searchIcons(query, limit)
   return out
 end
 
+-- Активные баффы/дебаффы юнита для окна Record
+local function getActiveBuffs(unitType)
+  local out = {}
+  local seen = {}
+  local bc = api.Unit:UnitBuffCount(unitType) or 0
+  for i = 1, bc do
+    local b = api.Unit:UnitBuff(unitType, i)
+    if b and b.buff_id then
+      local id = helpers.formatBuffId(b.buff_id)
+      if not seen[id] then
+        seen[id] = true
+        out[#out + 1] = {
+          id = id,
+          name = BuffList.GetBuffName(id),
+          icon = b.path or BuffList.GetBuffIcon(id),
+          remaining = b.timeLeft,
+          kind = "buff",
+        }
+      end
+    end
+  end
+  local dc = api.Unit:UnitDeBuffCount(unitType) or 0
+  for i = 1, dc do
+    local b = api.Unit:UnitDeBuff(unitType, i)
+    if b and b.buff_id then
+      local id = helpers.formatBuffId(b.buff_id)
+      if not seen[id] then
+        seen[id] = true
+        out[#out + 1] = {
+          id = id,
+          name = BuffList.GetBuffName(id),
+          icon = b.path or BuffList.GetBuffIcon(id),
+          remaining = b.timeLeft,
+          kind = "debuff",
+        }
+      end
+    end
+  end
+  return out
+end
+
+-- Навыки из боевого лога (свежие сверху) для окна Record
+local function getLoggedSpells(limit)
+  local out = {}
+  for i = #loggedSpellOrder, 1, -1 do
+    local e = loggedSpellMap[loggedSpellOrder[i]]
+    if e then
+      out[#out + 1] = { name = e.name, count = e.count, last = e.last }
+    end
+    if #out >= (limit or 50) then break end
+  end
+  return out
+end
+
 if settingsPage then
   settingsPage.searchIcons = searchIcons
   settingsPage.applyBuffOverride = applyBuffOverride
+  settingsPage.getActiveBuffs = getActiveBuffs
+  settingsPage.getLoggedSpells = getLoggedSpells
 end
 
 local function processBuffIconScan()
@@ -2238,17 +2314,17 @@ local function processBuffIconScan()
       end
     end
     buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries }
-    safeLog("[CBT] buff dump: " .. #st.entries .. " баффов, "
-      .. (saved and "сохранён в buff_dump.tbl" or "НЕ сохранён (api.File недоступен)")
-      .. "; таблиц=" .. tostring(st.tables) .. " с именем=" .. tostring(st.named)
-      .. " ошибок=" .. tostring(st.errors)
-      .. (st.firstError and (" | первая ошибка: " .. st.firstError) or ""))
+    safeLog("[CBT] buff dump: " .. #st.entries .. " buffs, "
+      .. (saved and "saved to buff_dump.tbl" or "NOT saved (api.File unavailable)")
+      .. "; tables=" .. tostring(st.tables) .. " named=" .. tostring(st.named)
+      .. " errors=" .. tostring(st.errors)
+      .. (st.firstError and (" | first error: " .. st.firstError) or ""))
     if st.target ~= "" then
       local e = byName[st.target]
       if e then
         applyBuffIcon(st.target, e.id, e.path)
       else
-        safeLog("[CBT] buff dump: '" .. st.target .. "' не найден")
+        safeLog("[CBT] buff dump: '" .. st.target .. "' not found")
       end
     end
     if settingsPage and settingsPage.onIconDumpUpdated then
@@ -2400,6 +2476,7 @@ local function onCombatMessage(event, ...)
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
   if parsed.spellName then
+    recordLoggedSpell(parsed.spellName, getCurrentTime())
     triggerSpell(parsed.spellName, args[3], parsed.spellId, args, combatEvent)
   end
 end

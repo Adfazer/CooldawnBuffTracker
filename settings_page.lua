@@ -2,6 +2,7 @@ local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 local iconSearch = require('CooldawnBuffTracker/icon_search_window')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
+local recordWindow = require('CooldawnBuffTracker/record_window')
 
 -- Load module for working with buffs
 local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
@@ -48,7 +49,7 @@ local function onSkillIconFound(name, id, path)
     if settingsControls.customBuffIconPreview then
         F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
     end
-    api.Log:Info("[CBT] иконка навыка: " .. tostring(path or "?"))
+    api.Log:Info("[CBT] skill icon: " .. tostring(path or "?"))
 end
 M.onSkillIconFound = onSkillIconFound
 M.onIconDumpUpdated = function()
@@ -477,6 +478,38 @@ local function addBuffFromSearch(buffId)
     end
 end
 
+-- Записывает навык из боевого лога как кастомный бафф (CD/D пользователь
+-- поправит вручную) и добавляет его в отслеживание текущего типа юнита.
+local function addCustomFromSpell(spellName)
+    if not spellName or spellName == "" then
+        return false, "Invalid spell name"
+    end
+    settings = helpers.getSettings()
+    if not settings.customBuffs then settings.customBuffs = {} end
+    local exists = nil
+    for _, cb in ipairs(settings.customBuffs) do
+        if cb.id == spellName then exists = cb; break end
+    end
+    if not exists then
+        table.insert(settings.customBuffs, {
+            id = spellName,
+            name = spellName,
+            spellName = spellName,
+            cooldown = 0,
+            timeOfAction = 0,
+        })
+        pcall(function() api.SaveSettings() end)
+        updateCustomBuffsList(true)
+    end
+    if BuffsToTrack.AddTrackedBuff(spellName, currentUnitType) then
+        deactivateActivePreset()
+        if helpers and helpers.updateSettings then helpers.updateSettings() end
+        api:Emit("ADDON_CBT_BUFFS_CHANGED")
+        return true, "Added skill: " .. tostring(spellName)
+    end
+    return false, "Already tracked: " .. tostring(spellName)
+end
+
 -- Добавляет пользовательский бафф
 local function addCustomBuff()
     local id = settingsControls.newCustomBuffId:GetText() or ""
@@ -806,6 +839,21 @@ local function buildTrackedBuffsSection()
     trackedBuffsListHeader:Show(true)
     trackedBuffsListHeader:SetWidth(570)
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
+
+    -- Record (Debug): активные баффы и навыки из лога
+    local recordButton = helpers.createButton('recordButton', trackedBuffsGroupLabel, 'Record (Debug)', 430, 8)
+    recordButton:SetExtent(140, 24)
+    recordButton:Show(settings and settings.debugBuffId and true or false)
+    recordButton:SetHandler("OnClick", function()
+        recordWindow.setProviders(
+            function() return M.getActiveBuffs and M.getActiveBuffs(currentUnitType) or {} end,
+            function(lim) return M.getLoggedSpells and M.getLoggedSpells(lim) or {} end,
+            function(id) return addBuffFromSearch(id) end,
+            function(name) return addCustomFromSpell(name) end)
+        recordWindow.scanStarter = function() if M.startScan then M.startScan("") end end
+        recordWindow.open()
+    end)
+    settingsControls.recordButton = recordButton
 
     
     -- Create container for buffs list and place it directly under header
@@ -1273,7 +1321,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 -- ВАЖНО: передаём buffData.id КАК ЕСТЬ (без tonumber). ID кастом-баффов
                 -- и отслеживаемых баффов хранятся строкой (из поля ввода), и аддон
                 -- сопоставляет их по совпадению типа. Приведение к числу ломает поиск
-                -- данных баффа -> "неизвестный бафф".
+                -- данных баффа -> "unknown buff".
                 if BuffsToTrack.AddTrackedBuff(buffData.id, currentUnitType) then
                     updateTrackedBuffsList()
                     api:Emit("ADDON_CBT_BUFFS_CHANGED")
@@ -1367,6 +1415,9 @@ local function buildCustomBuffInputs(customBuffsListContainer)
             
             -- Update button text
             debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
+        if settingsControls.recordButton then
+            settingsControls.recordButton:Show(settings.debugBuffId and true or false)
+        end
             
             -- Save settings
             local mainSettings = api.GetSettings("CooldawnBuffTracker")
@@ -1498,38 +1549,26 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         end
     end)
 
-    -- Кнопка поиска иконки по базе баффов (живой фильтр + превью)
-    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Поиск иконки', 320, 90)
+    -- Icon search (live filter over the buff dump, scan button inside)
+    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Icon search', 160, 90)
     searchIconButton:SetWidth(150)
     searchIconButton:Show(true)
     searchIconButton:SetHandler("OnClick", function()
         iconSearch.setProvider(function(q, l) return M.searchIcons and M.searchIcons(q, l) or {} end)
         iconSearch.setScanStarter(function() if M.startScan then M.startScan("") end end)
-        iconSearch.setPicker(function(path, name)
+        iconSearch.setPicker(function(path, name, alsoSpell)
             if settingsControls.newCustomBuffIcon then
                 settingsControls.newCustomBuffIcon:SetText(path or "")
             end
             if settingsControls.customBuffIconPreview then
                 F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
             end
-            api.Log:Info('[CBT] иконка выбрана: ' .. tostring(name or '') .. ' -> ' .. tostring(path or ''))
+            if alsoSpell and name and name ~= "" and settingsControls.newCustomBuffSpell then
+                settingsControls.newCustomBuffSpell:SetText(name)
+            end
+            api.Log:Info("[CBT] icon picked: " .. tostring(name or "") .. " -> " .. tostring(path or ""))
         end)
         iconSearch.open(settingsControls.newCustomBuffSpell and settingsControls.newCustomBuffSpell:GetText() or "")
-    end)
-
-    -- Кнопка поиска иконки по имени навыка (когда в логе spellId=0)
-    local findIconButton = helpers.createButton('findIconButton', customBuffInputsLabel, 'Find icon', 160, 90)
-    findIconButton:SetWidth(150)
-    findIconButton:Show(true)
-    findIconButton:SetHandler("OnClick", function()
-        local name = ""
-        if settingsControls.newCustomBuffSpell then
-            name = settingsControls.newCustomBuffSpell:GetText() or ""
-        end
-        name = name:gsub("^%s+", ""):gsub("%s+$", "")
-        if not M.startScan or not M.startScan(name) then
-            api.Log:Err("[CBT] сканер навыков недоступен")
-        end
     end)
 
     -- Кнопка добавления пользовательского баффа
@@ -2049,6 +2088,7 @@ local function Unload()
     
     -- Close icon search window if it's open
     pcall(function() iconSearch.Unload() end)
+    pcall(function() recordWindow.Unload() end)
 
 
     -- Close palette if it's open

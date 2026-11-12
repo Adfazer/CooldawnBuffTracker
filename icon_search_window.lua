@@ -16,6 +16,7 @@ local page = 1
 local PER_PAGE = 9
 
 local provider = nil
+local setSpell = false
 local scanStarter = nil
 local picker = nil
 
@@ -75,7 +76,7 @@ local function makeRow(index)
     end)
     row:SetHandler("OnClick", function(self)
         if picker and self.iconPath then
-            picker(self.iconPath, self.iconName)
+            picker(self.iconPath, self.iconName, setSpell)
         end
     end)
 
@@ -106,9 +107,9 @@ local function refresh()
 
     if countLabel then
         if total == 0 then
-            countLabel:SetText("Ничего не найдено. Нажми «Скан баффов» или измени запрос.")
+            countLabel:SetText("Nothing found. Press Scan dump or change the query.")
         else
-            countLabel:SetText("Найдено: " .. total .. " (клик по строке подставит иконку)")
+            countLabel:SetText("Found: " .. total .. " (click a row to apply the icon)")
         end
     end
     if pageLabel then
@@ -167,7 +168,7 @@ local function buildWindow()
     titleLabel.style:SetFontSize(18)
     titleLabel.style:SetAlign(ALIGN.LEFT)
     titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
-    titleLabel:SetText("Поиск иконки")
+    titleLabel:SetText("Icon search")
 
     local closeBtn = header:CreateChildWidget("button", "cbtIconSearchCloseBtn", 0, true)
     closeBtn:SetExtent(20, 20)
@@ -199,7 +200,7 @@ local function buildWindow()
     editBox = helpers.createEdit("cbtIconSearchEdit", win, "", 20, 44)
     editBox:SetExtent(380, 24)
     if editBox.CreateGuideText then
-        pcall(function() editBox:CreateGuideText("Начни вводить имя навыка или баффа...", ALIGN.LEFT) end)
+        pcall(function() editBox:CreateGuideText("Start typing a skill or buff name...", ALIGN.LEFT) end)
     end
     editBox:SetHandler("OnTextChanged", function()
         page = 1
@@ -209,7 +210,7 @@ local function buildWindow()
         if self and self.ClearFocus then self:ClearFocus() end
     end)
 
-    local scanButton = helpers.createButton("cbtIconSearchScan", win, "Скан баффов", 410, 44)
+    local scanButton = helpers.createButton("cbtIconSearchScan", win, "Scan dump", 410, 44)
     scanButton:SetExtent(126, 24)
     scanButton:Show(true)
     scanButton:SetHandler("OnClick", function()
@@ -217,13 +218,27 @@ local function buildWindow()
             scanStarter()
         end
         if countLabel then
-            countLabel:SetText("Скан запущен... по завершении база обновится")
+            countLabel:SetText("Scan started... the database will refresh when done")
         end
     end)
 
     countLabel = helpers.createLabel("cbtIconSearchCount", win, "", 20, 74, 14)
-    countLabel:SetExtent(516, 18)
+    countLabel:SetExtent(380, 18)
     setLabelColor(countLabel, COLORS.muted)
+
+    -- Опция: вместе с иконкой подставлять и Spell (имя выбранного баффа)
+    local spellToggle = helpers.createButton("cbtIconSearchSpell", win, "Spell: OFF", 410, 72)
+    spellToggle:SetExtent(126, 24)
+    spellToggle:Show(true)
+    spellToggle:SetHandler("OnClick", function()
+        setSpell = not setSpell
+        spellToggle:SetText(setSpell and "Spell: ON" or "Spell: OFF")
+        if setSpell then
+            setLabelColor(spellToggle.textLabel, COLORS.text)
+        else
+            setLabelColor(spellToggle.textLabel, COLORS.muted)
+        end
+    end)
 
     for i = 1, PER_PAGE do
         rows[i] = makeRow(i)
@@ -251,7 +266,7 @@ local function buildWindow()
         refresh()
     end)
 
-    local closeBtn = helpers.createButton("cbtIconSearchClose", win, "Закрыть", 436, 448)
+    local closeBtn = helpers.createButton("cbtIconSearchClose", win, "Close", 436, 448)
     closeBtn:SetExtent(100, 26)
     closeBtn:Show(true)
     closeBtn:SetHandler("OnClick", function()

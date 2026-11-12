@@ -119,6 +119,20 @@ mount and target.
 
 ## Changelog
 
+### 1.14.0
+
+- Removed the duplicate «Find icon» button from the main settings form: the icon
+  search window owns the dump scan («Scan dump»).
+- Icon search: new «Spell: ON/OFF» toggle — when ON, picking a row also fills the
+  custom buff's Spell field with the picked name (handy, but optional).
+- Every log line and UI label is now English.
+- New **Record (Debug)** window (button «Record (Debug)» appears next to the Buff
+  list when Debug: ON): lists active buffs/debuffs of the current unit and skills
+  seen in the combat log. «Add» records a buff as a custom entry + tracking; a
+  skill becomes a custom entry with Spell filled automatically (CD/D left for
+  manual tuning).
+- Combat-log spell names are captured into a 200-entry ring for that window.
+
 ### 1.13.4
 
 - Reverted the speculative cooldown-anchor experiments (`unitPollSeen`,
@@ -435,7 +449,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.13.4
+**Current Version:** 1.14.0
 
 ## Credits
 
