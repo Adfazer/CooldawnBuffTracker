@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.18.6"
+  version = "1.18.7"
 }
 
 -- Simplified logging function that only logs during initialization

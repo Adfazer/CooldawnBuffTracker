@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.18.7
+
+- Settings layout rebuilt as a tidy grid: tracked and custom lists now share the same top,
+  height and pagination row; forms sit below them at the same level.
+- Tracked list no longer overflows its container (content width matched the rows), so its
+  buttons no longer run under the custom block.
+- Custom rows: 52 px ID column (long ids no longer merge with the name), 114 px name,
+  evenly spaced CD / D / Add / Remove / Edit; row buttons use a 12 px font.
+- Custom form: ID / NM / CD / D on one aligned row, Spell / Icon + preview on the next,
+  Mana / Mount below, then Add entry / Icon search.
+
 ### 1.18.6
 
 - Tracked entries show only the buff name (the ID column is gone), so the name no longer
@@ -670,7 +681,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.6
+**Current Version:** 1.18.7
 
 ## Credits
 
