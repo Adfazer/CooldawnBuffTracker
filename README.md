@@ -155,6 +155,12 @@ mount and target.
 
 ## Changelog
 
+### 1.21.8
+
+- Fixed the Record buff tab being empty: the 1.21.7 patch overwrote the existing
+  `getActiveBuffs` provider with a forward-declared debug function that was still `nil`
+  at load time. The working provider is restored; the buff log now fills again.
+
 ### 1.21.7
 
 - Record (Debug) buff tab is now a persistent **buff log**: every buff/debuff seen on the
@@ -866,7 +872,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.7
+**Current Version:** 1.21.8
 
 ## Credits
 
