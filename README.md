@@ -119,6 +119,16 @@ mount and target.
 
 ## Changelog
 
+### 1.10.0
+
+- Settings UI restyled to match BetterBars/Power Ranger: flat dark buttons with
+  gold labels (no more cream native buttons), dark list containers with dimmed
+  borders instead of the light 0.92-grey panels.
+- Layout fixes: the unit selector moved below the title bar; the custom-buff form
+  is a clean grid (ID / Name / CD / D on one row, Spell + Icon on the next,
+  buttons on their own row) — the CD/D edits no longer sit under the Find icon
+  button; the error panel moved below the form.
+
 ### 1.9.2
 
 - Fixed the "settings window without text": a window-level colour drawable sank
@@ -319,7 +329,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.9.2
+**Current Version:** 1.10.0
 
 ## Credits
 

@@ -726,22 +726,22 @@ end
 local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
-                                           'Select unit type for settings:', 15, 30, 16)
+                                           'Select unit type for settings:', 15, 44, 16)
     unitTypeLabel:SetWidth(250)
     unitTypeLabel:Show(true)
     
     -- Mount settings button
-    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 280, 30)
+    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 280, 44)
     mountButton:SetWidth(80)
     mountButton:Show(true)
     
     -- Player settings button
-    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 365, 30)
+    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 365, 44)
     playerButton:SetWidth(80)
     playerButton:Show(true)
     
     -- Target settings button
-    local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 450, 30)
+    local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 450, 44)
     targetButton:SetWidth(80)
     targetButton:Show(true)
 
@@ -794,7 +794,7 @@ end
 local function buildTrackedBuffsSection()
     -- FIRST BLOCK - контейнер для размещения элементов (без заголовка)
     local trackedBuffsGroupLabel = helpers.createLabel('trackedBuffsGroupLabel', settingsWindow,
-                                                    '', 15, 50, 20)  -- Удаляем текст "Buff tracker management"
+                                                    '', 15, 84, 20)  -- Удаляем текст "Buff tracker management"
     trackedBuffsGroupLabel:SetWidth(570) -- Increase header width
     trackedBuffsGroupLabel:Show(true)
     
@@ -821,11 +821,12 @@ local function buildTrackedBuffsSection()
     local containerBorder = buffsListContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     containerBorder:SetCoords(0, 0, 27, 16)
     containerBorder:SetInset(9, 8, 9, 7)
+    containerBorder:SetColor(0.28, 0.30, 0.34, 1)
     containerBorder:AddAnchor("TOPLEFT", buffsListContainer, -1, -1)
     containerBorder:AddAnchor("BOTTOMRIGHT", buffsListContainer, 1, 1)
     
     -- Visible background for container
-    local containerBg = buffsListContainer:CreateColorDrawable(0.92, 0.92, 0.92, 1, "background")
+    local containerBg = buffsListContainer:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     containerBg:AddAnchor("TOPLEFT", buffsListContainer, 0, 0)
     containerBg:AddAnchor("BOTTOMRIGHT", buffsListContainer, 0, 0)
     
@@ -915,12 +916,12 @@ local function buildTrackedBuffsSection()
             
             -- Buff name
             local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
-            buffNameLabel:SetExtent(330, 20)
+            buffNameLabel:SetExtent(290, 20)
             buffNameLabel:Show(true)
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 410, 0)
-            upButton:SetExtent(25, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 380, 0)
+            upButton:SetExtent(40, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -946,8 +947,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 440, 0)
-            downButton:SetExtent(35, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 425, 0)
+            downButton:SetExtent(45, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -973,8 +974,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 477, 0)
-            removeButton:SetExtent(50, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 475, 0)
+            removeButton:SetExtent(70, 20)
             removeButton:Show(true)
             
             -- Remove button handler
@@ -1160,11 +1161,12 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     local customContainerBorder = customBuffsListContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     customContainerBorder:SetCoords(0, 0, 27, 16)
     customContainerBorder:SetInset(9, 8, 9, 7)
+    customContainerBorder:SetColor(0.28, 0.30, 0.34, 1)
     customContainerBorder:AddAnchor("TOPLEFT", customBuffsListContainer, -1, -1)
     customContainerBorder:AddAnchor("BOTTOMRIGHT", customBuffsListContainer, 1, 1)
 
     -- Фон для контейнера
-    local customContainerBg = customBuffsListContainer:CreateColorDrawable(0.92, 0.92, 0.92, 1, "background")
+    local customContainerBg = customBuffsListContainer:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     customContainerBg:AddAnchor("TOPLEFT", customBuffsListContainer, 0, 0)
     customContainerBg:AddAnchor("BOTTOMRIGHT", customBuffsListContainer, 0, 0)
 
@@ -1244,7 +1246,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
             local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 80, 0, 14)
-            buffNameLabel:SetExtent(200, 20)
+            buffNameLabel:SetExtent(185, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown
@@ -1434,22 +1436,22 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     settingsControls.newCustomBuffName = newCustomBuffName
     
     -- Поле Cooldown
-    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 260, 30, 14)
+    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 255, 30, 14)
     newCustomBuffCooldownLabel:SetWidth(100)
     newCustomBuffCooldownLabel:Show(true)
     
-    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 30, 0)
-    newCustomBuffCooldown:SetWidth(100)
+    local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 20, 0)
+    newCustomBuffCooldown:SetWidth(55)
     newCustomBuffCooldown:Show(true)
     settingsControls.newCustomBuffCooldown = newCustomBuffCooldown
     
     -- Поле Duration
-    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 395, 30, 14)
+    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 340, 30, 14)
     newCustomBuffTimeOfActionLabel:SetWidth(100)
     newCustomBuffTimeOfActionLabel:Show(true)
     
-    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 25, 0)
-    newCustomBuffTimeOfAction:SetWidth(100)
+    local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 20, 0)
+    newCustomBuffTimeOfAction:SetWidth(55)
     newCustomBuffTimeOfAction:Show(true)
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
     
@@ -1460,24 +1462,24 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffSpellLabel:Show(true)
 
     local newCustomBuffSpell = helpers.createEdit('newCustomBuffSpell', newCustomBuffSpellLabel, "", 45, 0)
-    newCustomBuffSpell:SetWidth(250)
+    newCustomBuffSpell:SetWidth(240)
     newCustomBuffSpell:Show(true)
     settingsControls.newCustomBuffSpell = newCustomBuffSpell
 
     -- Поле Icon: имя файла иконки (список с превью — cbt_icons.html на шаре)
-    local newCustomBuffIconLabel = helpers.createLabel('newCustomBuffIconLabel', customBuffInputsLabel, 'Icon:', 0, 90, 14)
+    local newCustomBuffIconLabel = helpers.createLabel('newCustomBuffIconLabel', customBuffInputsLabel, 'Icon:', 300, 60, 14)
     newCustomBuffIconLabel:SetWidth(100)
     newCustomBuffIconLabel:Show(true)
 
-    local newCustomBuffIcon = helpers.createEdit('newCustomBuffIcon', newCustomBuffIconLabel, "", 45, 0)
-    newCustomBuffIcon:SetWidth(220)
+    local newCustomBuffIcon = helpers.createEdit('newCustomBuffIcon', newCustomBuffIconLabel, "", 40, 0)
+    newCustomBuffIcon:SetWidth(130)
     newCustomBuffIcon:Show(true)
     settingsControls.newCustomBuffIcon = newCustomBuffIcon
 
     local iconPreview = CreateItemIconButton('cbtIconPreview', newCustomBuffIconLabel)
     if iconPreview then
         iconPreview:SetExtent(28, 28)
-        iconPreview:AddAnchor("TOPLEFT", newCustomBuffIconLabel, 280, -6)
+        iconPreview:AddAnchor("TOPLEFT", newCustomBuffIconLabel, 180, -6)
         iconPreview:Show(true)
         settingsControls.customBuffIconPreview = iconPreview
         F_SLOT.SetIconBackGround(iconPreview, "game/ui/icon/icon_buff_debuff.dds")
@@ -1493,7 +1495,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Кнопка поиска иконки по базе баффов (живой фильтр + превью)
-    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Поиск иконки', 355, 90)
+    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Поиск иконки', 320, 90)
     searchIconButton:SetWidth(150)
     searchIconButton:Show(true)
     searchIconButton:SetHandler("OnClick", function()
@@ -1512,7 +1514,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Кнопка поиска иконки по имени навыка (когда в логе spellId=0)
-    local findIconButton = helpers.createButton('findIconButton', customBuffInputsLabel, 'Find icon', 355, 30)
+    local findIconButton = helpers.createButton('findIconButton', customBuffInputsLabel, 'Find icon', 160, 90)
     findIconButton:SetWidth(150)
     findIconButton:Show(true)
     findIconButton:SetHandler("OnClick", function()
@@ -1527,7 +1529,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end)
 
     -- Кнопка добавления пользовательского баффа
-    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 355, 60)
+    local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 0, 90)
     addCustomBuffButton:SetWidth(150)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
@@ -1537,7 +1539,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     local customBuffErrorPanel = api.Interface:CreateWidget('window', 'customBuffErrorPanel', settingsWindow)
     customBuffErrorPanel:SetExtent(350, 25)
     customBuffErrorPanel:RemoveAllAnchors()
-    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 45)
+    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 120)
     customBuffErrorPanel:Show(false)
     settingsControls.customBuffErrorPanel = customBuffErrorPanel
     

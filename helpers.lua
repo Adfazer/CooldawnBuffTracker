@@ -212,10 +212,39 @@ end
 function helpers.createButton(id, parent, text, x, y)
     local button = api.Interface:CreateWidget('button', id, parent)
     button:AddAnchor("TOPLEFT", x, y)
-    button:SetExtent(95, 26)  -- Increased width for buttons
-    button:SetText(text)
-    api.Interface:ApplyButtonSkin(button, BUTTON_BASIC.DEFAULT)
-    
+    button:SetExtent(95, 26)
+    button:SetText("") -- нативную надпись гасим, рисуем свою (тёмная тема)
+
+    -- Плоская тёмная кнопка в стиле BetterBars: рамка + заливка + светлый текст
+    local border = button:CreateColorDrawable(0.00, 0.00, 0.00, 0.90, "background")
+    border:AddAnchor("TOPLEFT", button, 0, 0)
+    border:AddAnchor("BOTTOMRIGHT", button, 0, 0)
+    local fill = button:CreateColorDrawable(0.12, 0.13, 0.15, 0.95, "background")
+    fill:AddAnchor("TOPLEFT", button, 1, 1)
+    fill:AddAnchor("BOTTOMRIGHT", button, -1, -1)
+
+    local label = button:CreateChildWidget("label", id .. "_text", 0, true)
+    label:SetExtent(80, 20)
+    label:AddAnchor("LEFT", button, 4, 0)
+    label:AddAnchor("RIGHT", button, -4, 0)
+    label.style:SetAlign(ALIGN.CENTER)
+    label.style:SetFontSize(13)
+    label.style:SetColor(0.87, 0.69, 0, 1)
+    label:SetText(text or "")
+    if label.Clickable then label:Clickable(false) end
+    button.textLabel = label
+
+    function button:SetText(t)
+        if self.textLabel then self.textLabel:SetText(t or "") end
+    end
+
+    button:SetHandler("OnEnter", function()
+        fill:SetColor(0.18, 0.19, 0.23, 0.95)
+    end)
+    button:SetHandler("OnLeave", function()
+        fill:SetColor(0.12, 0.13, 0.15, 0.95)
+    end)
+
     return button
 end
 
