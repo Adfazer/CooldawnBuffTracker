@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.14.1
+
+- Record window: unit selector (Player / Mount / Target); the Active buffs tab
+  defaults to Player and «Add» uses the selected unit.
+- A skill recorded from the log gets its icon automatically from the buff dump
+  (name lookup), CD/D still left for manual tuning.
+- All custom windows can be dragged again: handles now also call
+  `RegisterForDrag("LeftButton")` and handle `OnDragEnd` (the AddonUILib pattern).
+- The «Search» button next to the tracked-buff input is back; its list now also
+  includes custom buffs/skills by name, so the exact name no longer has to be typed.
+
 ### 1.14.0
 
 - Removed the duplicate «Find icon» button from the main settings form: the icon
@@ -449,7 +460,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.14.0
+**Current Version:** 1.14.1
 
 ## Credits
 

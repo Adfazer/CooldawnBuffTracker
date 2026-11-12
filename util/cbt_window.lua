@@ -54,6 +54,9 @@ function M.Create(id, title, w, h, onClose)
     closeBtn:SetHandler("OnClick", close)
 
     header:EnableDrag(true)
+    if header.RegisterForDrag then
+        pcall(function() header:RegisterForDrag("LeftButton") end)
+    end
     header:SetHandler("OnDragStart", function()
         win:StartMoving()
         pcall(function() api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0) end)
@@ -62,6 +65,13 @@ function M.Create(id, title, w, h, onClose)
         win:StopMovingOrSizing()
         pcall(function() api.Cursor:ClearCursor() end)
     end)
+    header:SetHandler("OnDragEnd", function()
+        win:StopMovingOrSizing()
+        pcall(function() api.Cursor:ClearCursor() end)
+    end)
+    if win.RegisterForDrag then
+        pcall(function() win:RegisterForDrag("LeftButton") end)
+    end
     win.header = header
 
     -- Тёмная подложка контента (первый ребёнок => под остальными элементами)

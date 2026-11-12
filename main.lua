@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.14.0"
+  version = "1.14.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2233,6 +2233,7 @@ end
 
 -- Активные баффы/дебаффы юнита для окна Record
 local function getActiveBuffs(unitType)
+  unitType = unitType or "player"
   local out = {}
   local seen = {}
   local bc = api.Unit:UnitBuffCount(unitType) or 0
@@ -2285,11 +2286,21 @@ local function getLoggedSpells(limit)
   return out
 end
 
+-- Иконка из дампа по имени (для баффов/навыков, добавленных из лога)
+local function findIconByName(name)
+  if not (buffDump and buffDump.byName) then return nil end
+  local key = normalizeSkillName(name)
+  local e = buffDump.byName[key]
+  if e then return e.path end
+  return nil
+end
+
 if settingsPage then
   settingsPage.searchIcons = searchIcons
   settingsPage.applyBuffOverride = applyBuffOverride
   settingsPage.getActiveBuffs = getActiveBuffs
   settingsPage.getLoggedSpells = getLoggedSpells
+  settingsPage.findIconByName = findIconByName
 end
 
 local function processBuffIconScan()

@@ -427,10 +427,11 @@ end
 
 -- Добавляет бафф из окна поиска: гарантирует наличие в customBuffs и
 -- добавляет его в отслеживание для текущего типа юнита. Возвращает ok, message.
-local function addBuffFromSearch(buffId)
+local function addBuffFromSearch(buffId, unitType)
     if not buffId or buffId == "" then
         return false, "Invalid buff ID"
     end
+    unitType = unitType or currentUnitType
 
     settings = helpers.getSettings()
 
@@ -438,7 +439,7 @@ local function addBuffFromSearch(buffId)
     local inCustom = false
     if settings.customBuffs then
         for _, buffInfo in ipairs(settings.customBuffs) do
-            if buffInfo.id == buffId then
+            if tostring(buffInfo.id) == tostring(buffId) then
                 inCustom = true
                 break
             end
@@ -456,7 +457,7 @@ local function addBuffFromSearch(buffId)
     end
 
     -- Добавляем в отслеживание для текущего типа юнита
-    if BuffsToTrack.AddTrackedBuff(buffId, currentUnitType) then
+    if BuffsToTrack.AddTrackedBuff(buffId, unitType) then
         -- Список баффов изменился — активный пресет больше не актуален
         deactivateActivePreset()
 
@@ -466,24 +467,25 @@ local function addBuffFromSearch(buffId)
         api:Emit("ADDON_CBT_BUFFS_CHANGED")
 
         -- Перейти на последнюю страницу, чтобы показать добавленный бафф
-        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
+        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(unitType)
         buffListPage = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
         if settingsControls.updateVisibleItems then
             settingsControls.updateVisibleItems()
         end
 
-        return true, "Added to " .. currentUnitType
+        return true, "Added to " .. tostring(unitType)
     else
-        return false, "Already tracked (" .. currentUnitType .. ")"
+        return false, "Already tracked (" .. tostring(unitType) .. ")"
     end
 end
 
 -- Записывает навык из боевого лога как кастомный бафф (CD/D пользователь
 -- поправит вручную) и добавляет его в отслеживание текущего типа юнита.
-local function addCustomFromSpell(spellName)
+local function addCustomFromSpell(spellName, unitType)
     if not spellName or spellName == "" then
         return false, "Invalid spell name"
     end
+    unitType = unitType or currentUnitType
     settings = helpers.getSettings()
     if not settings.customBuffs then settings.customBuffs = {} end
     local exists = nil
@@ -491,17 +493,23 @@ local function addCustomFromSpell(spellName)
         if cb.id == spellName then exists = cb; break end
     end
     if not exists then
+        local iconPath = nil
+        if M.findIconByName then
+            local ok, p = pcall(M.findIconByName, spellName)
+            if ok then iconPath = p end
+        end
         table.insert(settings.customBuffs, {
             id = spellName,
             name = spellName,
             spellName = spellName,
             cooldown = 0,
             timeOfAction = 0,
+            iconFile = iconPath,
         })
         pcall(function() api.SaveSettings() end)
         updateCustomBuffsList(true)
     end
-    if BuffsToTrack.AddTrackedBuff(spellName, currentUnitType) then
+    if BuffsToTrack.AddTrackedBuff(spellName, unitType) then
         deactivateActivePreset()
         if helpers and helpers.updateSettings then helpers.updateSettings() end
         api:Emit("ADDON_CBT_BUFFS_CHANGED")
@@ -846,10 +854,10 @@ local function buildTrackedBuffsSection()
     recordButton:Show(settings and settings.debugBuffId and true or false)
     recordButton:SetHandler("OnClick", function()
         recordWindow.setProviders(
-            function() return M.getActiveBuffs and M.getActiveBuffs(currentUnitType) or {} end,
+            function(u) return M.getActiveBuffs and M.getActiveBuffs(u or currentUnitType) or {} end,
             function(lim) return M.getLoggedSpells and M.getLoggedSpells(lim) or {} end,
-            function(id) return addBuffFromSearch(id) end,
-            function(name) return addCustomFromSpell(name) end)
+            function(id) return addBuffFromSearch(id, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
+            function(name) return addCustomFromSpell(name, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end)
         recordWindow.scanStarter = function() if M.startScan then M.startScan("") end end
         recordWindow.open()
     end)
@@ -1138,19 +1146,16 @@ local function buildNewBuffInput(buffsListContainer)
     settingsControls.addBuffButton = addBuffButton
     addBuffButton:SetHandler("OnClick", addTrackedBuff)
 
-    -- Search buff button ВРЕМЕННО ОТКЛЮЧЕНА по просьбе пользователя
-    -- (функционал поиска баффов дорабатывается отдельно). Чтобы вернуть кнопку,
-    -- раскомментируйте блок ниже. Модуль buff_search_window и addBuffFromSearch
-    -- оставлены в коде нетронутыми.
-    -- local searchBuffButton = helpers.createButton('searchBuffButton', newBuffIdLabel, 'Search', 245, -7)
-    -- searchBuffButton:SetWidth(100)
-    -- searchBuffButton:Show(true)
-    -- settingsControls.searchBuffButton = searchBuffButton
-    -- searchBuffButton:SetHandler("OnClick", function()
-    --     if buffSearchModule and buffSearchModule.openBuffSearchWindow then
-    --         buffSearchModule.openBuffSearchWindow(addBuffFromSearch)
-    --     end
-    -- end)
+    -- Search: списком (включая кастомные баффы/навыки) найти и добавить в отслеживание
+    local searchBuffButton = helpers.createButton('searchBuffButton', newBuffIdLabel, 'Search', 245, -7)
+    searchBuffButton:SetWidth(100)
+    searchBuffButton:Show(true)
+    settingsControls.searchBuffButton = searchBuffButton
+    searchBuffButton:SetHandler("OnClick", function()
+        if buffSearchModule and buffSearchModule.openBuffSearchWindow then
+            buffSearchModule.openBuffSearchWindow(addBuffFromSearch)
+        end
+    end)
     
     -- Create highlighted panel for error messages
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
@@ -1995,11 +2000,18 @@ local function initSettingsPage()
     closeBtn:SetHandler("OnClick", function() settingsWindowClose() end)
 
     header:EnableDrag(true)
+    if header.RegisterForDrag then
+        pcall(function() header:RegisterForDrag("LeftButton") end)
+    end
     header:SetHandler("OnDragStart", function()
         settingsWindow:StartMoving()
         pcall(function() api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0) end)
     end)
     header:SetHandler("OnDragStop", function()
+        settingsWindow:StopMovingOrSizing()
+        pcall(function() api.Cursor:ClearCursor() end)
+    end)
+    header:SetHandler("OnDragEnd", function()
         settingsWindow:StopMovingOrSizing()
         pcall(function() api.Cursor:ClearCursor() end)
     end)

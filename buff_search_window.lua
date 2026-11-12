@@ -96,6 +96,18 @@ function setStatus(message, isError)
     end
 end
 
+-- Имя кастомного баффа по id (id может быть числом или именем/Spell)
+local function customBuffName(id)
+    local settings = api.GetSettings and api.GetSettings("CooldawnBuffTracker") or nil
+    local custom = settings and settings.customBuffs or {}
+    for _, cb in ipairs(custom) do
+        if cb and tostring(cb.id) == tostring(id) then
+            return cb.name or cb.spellName
+        end
+    end
+    return nil
+end
+
 -- ----- Поиск -----
 
 -- Заполняет currentResults по тексту запроса
@@ -136,6 +148,31 @@ function performSearch(query)
             local nm = nameIndex[idStr]
             if nm and nm:find(q, 1, true) then
                 table.insert(currentResults, idStr)
+            end
+        end
+    end
+
+    -- кастомные баффы/навыки: id может быть именем или Spell
+    local settings = api.GetSettings and api.GetSettings("CooldawnBuffTracker") or nil
+    local custom = settings and settings.customBuffs or {}
+    local lq = string.lower(query)
+    for _, cb in ipairs(custom) do
+        if cb and cb.id ~= nil then
+            local idv = tostring(cb.id)
+            local nm = tostring(cb.name or cb.spellName or "")
+            local match = false
+            if isNumeric then
+                match = idv:find(query, 1, true) ~= nil
+            else
+                match = (nm ~= "" and string.lower(nm):find(lq, 1, true) ~= nil)
+                    or string.lower(idv):find(lq, 1, true) ~= nil
+            end
+            if match and idv ~= "" then
+                local dup = false
+                for _, ex in ipairs(currentResults) do
+                    if tostring(ex) == idv then dup = true; break end
+                end
+                if not dup then table.insert(currentResults, cb.id) end
             end
         end
     end
@@ -184,11 +221,13 @@ function updateResultList()
     for i = startIndex, endIndex do
         local buffId = currentResults[i]
         -- Имя: из индекса (если есть) или из игры по требованию
-        local name = nil
-        if nameIndex and nameIndex[buffId] then
-            name = resolveName(buffId) or nameIndex[buffId]
-        else
-            name = resolveName(buffId)
+        local name = customBuffName(buffId)
+        if not name then
+            if nameIndex and nameIndex[buffId] then
+                name = resolveName(buffId) or nameIndex[buffId]
+            else
+                name = resolveName(buffId)
+            end
         end
         name = name or ("Buff #" .. buffId)
 

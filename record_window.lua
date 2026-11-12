@@ -12,6 +12,7 @@ local countLabel
 local statusLabel
 local pageLabel
 local mode = "buff" -- "buff" | "log"
+local unit = "player"
 local modeButtons = {}
 local PER_PAGE = 8
 local page = 1
@@ -38,7 +39,7 @@ local function refresh()
     results = {}
     if mode == "buff" then
         if providerActive then
-            local ok, list = pcall(providerActive)
+            local ok, list = pcall(providerActive, unit)
             if ok and type(list) == "table" then results = list end
         end
     else
@@ -103,7 +104,7 @@ local function makeRow(index)
     -- кнопок (см. references/ui-widgets-and-layout.md), Add перестал бы работать
     local row = win:CreateChildWidget("emptywidget", "cbtRecRow" .. index, 0, true)
     row:SetExtent(420, 30)
-    row:AddAnchor("TOPLEFT", win, 20, 132 + (index - 1) * 34)
+    row:AddAnchor("TOPLEFT", win, 20, 150 + (index - 1) * 34)
 
     local bg = row:CreateColorDrawable(0.10, 0.11, 0.13, 0.92, "background")
     bg:AddAnchor("TOPLEFT", row, 0, 0)
@@ -157,7 +158,7 @@ local function makeRow(index)
 end
 
 local function build()
-    win = CbtWindow.Create("cbtRecord", "Record (Debug)", 460, 470, function()
+    win = CbtWindow.Create("cbtRecord", "Record (Debug)", 460, 500, function()
         if win then win:Show(false) end
     end)
     if not win then return end
@@ -180,12 +181,37 @@ local function build()
         if statusLabel then statusLabel:SetText("Dump scan started...") end
     end)
 
-    countLabel = helpers.createLabel("cbtRecCount", win, "", 20, 76, 14)
+    -- юнит для вкладки Active buffs
+    local unitLabel = helpers.createLabel("cbtRecUnitLabel", win, "Unit:", 20, 76, 13)
+    unitLabel:SetExtent(40, 18)
+    setColor(unitLabel, COLORS.muted)
+    unitLabel:Show(true)
+
+    local unitButtons = {}
+    local function setUnit(u)
+        unit = u
+        for key, btn in pairs(unitButtons) do
+            setColor(btn.textLabel, (key == unit) and COLORS.text or COLORS.muted)
+        end
+        refresh()
+    end
+    local ux = 64
+    for _, u in ipairs({ "player", "playerpet", "target" }) do
+        local btn = helpers.createButton("cbtRecUnit_" .. u, win, (u == "playerpet") and "Mount" or (u == "player") and "Player" or "Target", ux, 72)
+        btn:SetExtent(80, 22)
+        btn:Show(true)
+        unitButtons[u] = btn
+        btn:SetHandler("OnClick", function() setUnit(u) end)
+        ux = ux + 86
+    end
+    M.setUnit = setUnit
+
+    countLabel = helpers.createLabel("cbtRecCount", win, "", 20, 102, 14)
     countLabel:SetExtent(420, 18)
     setColor(countLabel, COLORS.muted)
     countLabel:Show(true)
 
-    statusLabel = helpers.createLabel("cbtRecStatus", win, "", 20, 100, 13)
+    statusLabel = helpers.createLabel("cbtRecStatus", win, "", 20, 124, 13)
     statusLabel:SetExtent(420, 18)
     setColor(statusLabel, COLORS.text)
     statusLabel:Show(true)
@@ -194,33 +220,37 @@ local function build()
         rows[i] = makeRow(i)
     end
 
-    local prev = helpers.createButton("cbtRecPrev", win, "<", 20, 412)
+    local prev = helpers.createButton("cbtRecPrev", win, "<", 20, 446)
     prev:SetExtent(60, 26)
     prev:Show(true)
     prev:SetHandler("OnClick", function()
         if page > 1 then page = page - 1; refresh() end
     end)
 
-    pageLabel = helpers.createLabel("cbtRecPage", win, "1/1", 90, 416, 14)
+    pageLabel = helpers.createLabel("cbtRecPage", win, "1/1", 90, 450, 14)
     pageLabel:SetExtent(80, 20)
     setColor(pageLabel, COLORS.text)
     pageLabel:Show(true)
 
-    local nextBtn = helpers.createButton("cbtRecNext", win, ">", 170, 412)
+    local nextBtn = helpers.createButton("cbtRecNext", win, ">", 170, 446)
     nextBtn:SetExtent(60, 26)
     nextBtn:Show(true)
     nextBtn:SetHandler("OnClick", function() page = page + 1; refresh() end)
 
-    local closeBtn = helpers.createButton("cbtRecClose", win, "Close", 340, 412)
+    local closeBtn = helpers.createButton("cbtRecClose", win, "Close", 340, 446)
     closeBtn:SetExtent(100, 26)
     closeBtn:Show(true)
     closeBtn:SetHandler("OnClick", function() win:Show(false) end)
 
     local hint = helpers.createLabel("cbtRecHint", win,
-        "Add: buff -> custom entry + tracking. Skill -> custom entry with Spell filled.", 20, 380, 11)
+        "Add: buff -> custom entry + tracking. Skill -> custom entry with Spell filled.", 20, 424, 11)
     hint:SetExtent(420, 16)
     setColor(hint, COLORS.muted)
     hint:Show(true)
+end
+
+function M.getUnit()
+    return unit
 end
 
 function M.setProviders(activeFn, logFn, addBuffFn, addSpellFn)
