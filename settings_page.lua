@@ -57,10 +57,10 @@ end
 local trackedBuffsList = {} -- For storing buff list widgets
 local currentUnitType = "playerpet" -- By default, show settings for mount
 local buffListPage = 1 -- Текущая страница пагинации для списка баффов
-local buffsPerPage = 9 -- Количество записей на странице
+local buffsPerPage = 11 -- Количество записей на странице
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
 local customBuffPage = 1 -- Текущая страница пагинации для списка пользовательских баффов
-local customsPerPage = 6 -- Количество custom записей на странице
+local customsPerPage = 8 -- Количество custom записей на странице
 
 -- Обновляет текст кнопки Presets: показывает "*", когда активен пресет
 local function setPresetsButtonText()
@@ -1035,7 +1035,7 @@ local function buildTrackedBuffsSection()
         visibleBuffs = {}
         
         -- Определяем размер видимой области
-        local itemHeight = 23
+        local itemHeight = 22
         
         -- Вычисляем общее количество страниц
         local totalPages = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
@@ -1065,7 +1065,7 @@ local function buildTrackedBuffsSection()
         end
         
         -- Создаем видимые элементы списка для текущей страницы
-        local yOffset = 8
+        local yOffset = 6
         
         for i = startIndex, endIndex do
             local buffId = trackedBuffs[i]
@@ -1092,13 +1092,13 @@ local function buildTrackedBuffsSection()
             end
 
             -- Buff ID
-            local buffIdLabel = helpers.createLabel('buffIdLabel_' .. i, buffRow, tostring(buffId), 22, 0, 14)
-            buffIdLabel:SetExtent(36, 20)
+            local buffIdLabel = helpers.createLabel('buffIdLabel_' .. i, buffRow, tostring(buffId), 22, 0, 12)
+            buffIdLabel:SetExtent(44, 20)
             buffIdLabel:Show(true)
             
             -- Buff name
-            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 62, 0, 13)
-            buffNameLabel:SetExtent(160, 20)
+            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 68, 0, 12)
+            buffNameLabel:SetExtent(150, 20)
             buffNameLabel:Show(true)
 
             
@@ -1451,7 +1451,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
         end
         customBuffsList = {}
 
-        local itemHeight = 23
+        local itemHeight = 22
         
         -- Вычисляем общее количество страниц
         local totalPages = math.max(1, math.ceil(#customBuffs / customsPerPage))
@@ -1481,7 +1481,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
         end
 
         -- Создаем видимые элементы для текущей страницы
-        local yOffset = 8
+        local yOffset = 6
 
         for i = startIndex, endIndex do
             local buffData = customBuffs[i]
@@ -1504,8 +1504,8 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             end
 
             -- ID
-            local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, tostring(buffData.id), 22, 0, 13)
-            buffIdLabel:SetExtent(34, 20)
+            local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, tostring(buffData.id), 22, 0, 12)
+            buffIdLabel:SetExtent(40, 20)
             buffIdLabel:Show(true)
 
             -- Name
@@ -1513,8 +1513,8 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             if buffData.spellName and buffData.spellName ~= "" then
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 60, 0, 13)
-            buffNameLabel:SetExtent(110, 20)
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 66, 0, 12)
+            buffNameLabel:SetExtent(103, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown

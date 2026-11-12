@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.16.4
+
+- Denser lists: tracked entries 11 per page, custom entries 8 per page, row step
+  22 px (was 23) — the containers are filled instead of leaving half the height empty.
+- ID column widened (44 px) and names shifted right, font 12 — the id no longer
+  runs into the name in both lists.
+
 ### 1.16.3
 
 - «Unit:» label no longer overlaps the Mount/Player/Target buttons (short label,
@@ -524,7 +531,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.3
+**Current Version:** 1.16.4
 
 ## Credits
 
