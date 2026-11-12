@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.12.3
+
+- Combat-log spell triggers are debounced: DoT ticks and repeats of the same
+  spell no longer restart the cooldown. While the aura is present the debounce
+  window equals the buff duration, otherwise the cooldown. Previously every tick
+  re-anchored the start to the tick moment, so a dispelled buff showed a cooldown
+  off by the time since the last tick.
+- Debug: ON now prints timing lines
+  `[CBT] timer <id> <old>-><new> now=.. D=.. CD=.. fixed=.. ready=.. rem=..`
+  so the anchor can be verified against the game.
+
 ### 1.12.2
 
 - Cooldown start is anchored to the moment the aura is actually seen on a unit we
@@ -369,7 +380,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.12.2
+**Current Version:** 1.12.3
 
 ## Credits
 

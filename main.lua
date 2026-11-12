@@ -80,7 +80,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.12.2"
+  version = "1.12.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -356,6 +356,14 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   end
   
   buff.statusChangeTime = currentTime
+
+  -- Диагностика таймингов (Debug: ON): видно, от какого момента считается КД
+  if settings and settings.debugBuffId and oldStatus ~= buff.status then
+    safeLog(string.format("[CBT] timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s",
+      tostring(buffId), tostring(oldStatus), tostring(buff.status),
+      tonumber(currentTime) or 0, tostring(buff.timeOfAction), tostring(buff.cooldown),
+      tostring(buff.fixedTime), tostring(buff.readyAt), tostring(remainingTime)))
+  end
 end
 
 local function checkBuffStatus(buff, currentTime)
@@ -385,6 +393,8 @@ end
 -- pendingBySource: имя -> { [buffId] = время }, пока id игрока неизвестен
 local unitIdByName = {}
 local pendingBySource = {}
+-- Анти-дребезг триггеров по боевому логу: DoT-тики не должны перезапускать КД
+local lastTriggerTimes = {}
 local myNameExact = nil   -- мой ник ровно как в игре (string.lower не работает с кириллицей)
 
 -- Записать/обновить кулдаун навыка, применённого игроком sourceId
@@ -555,6 +565,7 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
           .. " spellName=" .. tostring(spellName))
       end
       learnSkillIcon(cb, spellId)
+
       local isSelf = (srcKey and myNameExact and srcKey == myNameExact) and true or false
       local sourceId = nil
       if isSelf then
@@ -562,6 +573,44 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
       elseif srcKey then
         sourceId = unitIdByName[srcKey]
       end
+
+      -- DoT-тики и повторные удары тем же навыком приходят в лог многократно.
+      -- Пока аура реально висит (present), окно глушения = длительность баффа,
+      -- иначе — кулдаун. Иначе тик через 24 c заново запускал бы отсчёт КД.
+      local cdNum = tonumber(cb.cooldown) or 0
+      local blockWindow = cdNum
+      local entry = nil
+      if isSelf then
+        entry = playerBuffData[cb.id] or buffData[cb.id]
+      elseif sourceId then
+        if currentTargetId and tostring(currentTargetId) == tostring(sourceId) then
+          entry = targetBuffData[cb.id]
+        end
+        if not entry and targetCache[sourceId] and targetCache[sourceId].buffStates then
+          entry = targetCache[sourceId].buffStates[cb.id]
+        end
+      end
+      if entry and entry.present then
+        local toa = tonumber(entry.timeOfAction) or tonumber(cb.timeOfAction) or 0
+        if toa > blockWindow then blockWindow = toa end
+      end
+
+      local blocked = false
+      if blockWindow > 1 then
+        local tkey = tostring(srcKey or "self") .. "|" .. tostring(cb.id)
+        local last = lastTriggerTimes[tkey]
+        if last and (now - last) < (blockWindow - 0.5) then
+          blocked = true
+          if settings.debugBuffId then
+            safeLog("[CBT] '" .. tostring(spellName) .. "': повторный триггер через "
+              .. string.format("%.1f", now - last) .. " c — игнор (окно " .. tostring(blockWindow) .. ")")
+          end
+        else
+          lastTriggerTimes[tkey] = now
+        end
+      end
+
+      if not blocked then
 
       if isSelf then
         local hits = triggerSelfBuff(cb.id, now)
@@ -599,6 +648,7 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         if settings.debugBuffId then
           safeLog("[CBT] '" .. spellName .. "': нет источника в событии")
         end
+      end
       end
     end
   end
