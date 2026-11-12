@@ -119,6 +119,11 @@ mount and target.
 
 ## Changelog
 
+### 1.15.1
+
+- Fixed the Edit (CD/D) dialog: the custom empty window was created but never
+  shown (`CreateEmptyWindow` starts hidden) — added `Show(true)`.
+
 ### 1.15.0
 
 - **Edit** button in every tracked-buff row opens the Cooldown / Duration editor.
@@ -471,7 +476,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.15.0
+**Current Version:** 1.15.1
 
 ## Credits
 

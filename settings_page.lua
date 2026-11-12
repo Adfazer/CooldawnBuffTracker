@@ -805,6 +805,7 @@ local function openCddDialog(buffId)
     end)
     if not wnd then return end
     cddWindow = wnd
+    wnd:Show(true)
 
     local title = helpers.createLabel('cbtCddName', wnd,
         tostring(BuffList.GetBuffName(buffId)) .. '  [' .. key .. ']', 15, 40, 14)
