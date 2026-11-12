@@ -111,8 +111,8 @@ mount and target.
   from the configured duration.
 - Early removal of a buff immediately switches the icon to its cooldown with the
   correct remainder (dispelled debuff no longer stays green).
-- Buff icons and names are taken from the game API; the built-in icon table is
-  used only as a fallback.
+- Buff icons for unknown ids are now resolved through the game API (`GetBuffTooltip`), with
+  the built-in icon table kept as the primary source for known ids and a default icon last.
 - Settings are no longer written from the per-frame update; import/export keeps
   fractional cooldowns (e.g. 16.2 instead of 16).
 - Removed dead modules, fixed widget leaks on `/reload`, and switched panels to

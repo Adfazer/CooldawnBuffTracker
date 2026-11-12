@@ -296,12 +296,14 @@ CooldawnBuffTracker/
   `x2ui/characterinfo/appellation.lua:114`, `x2ui/questcontext/common.lua:419`,
   `x2ui/community/expedition/expedition_management_infomation_sub.lua:106,115`.
 
-Вывод: 533-КБ таблица `ddsData` **не нужна как основной источник** — достаточно
-`api.Ability:GetBuffTooltip(id)` (через двоеточие!) с кэшем `id -> {path, name}` и маленькой
-fallback-картой для id, на которые тултип вернёт nil (серверные баффы, которых нет в клиентских
-данных). При этом `.path` используется ровно так, как его отдаёт клиент — без ручной склейки
-`"game/ui/icon/"` (корпус использует и `buff.path` напрямую: `LoseControl/main.lua:236`,
-`better-archeage/buff_tracker.lua:136`).
+Вывод: 533-КБ таблица `ddsData` **не обязательна как единственный источник** — для любого id
+есть `api.Ability:GetBuffTooltip(id)` (через двоеточие!) с кэшем `id -> {path, name}`. В этой
+ветке приоритет сознательно оставлен за таблицей для известных id (иконки не меняются между
+версиями), а `GetBuffTooltip` закрывает id, которых в таблице нет; порядок меняется одной строкой
+после сравнения в игре. Маленькая fallback-карта всё равно нужна только для id, где тултип
+вернул nil (серверные баффы без клиентских данных). При этом `.path` используется ровно так, как
+его отдаёт клиент — без ручной склейки `"game/ui/icon/"` (корпус использует и `buff.path`
+напрямую: `LoseControl/main.lua:236`, `better-archeage/buff_tracker.lua:136`).
 
 Проверить в игре (5 минут): прогнать `api.Ability:GetBuffTooltip(id)` по всем id из
 `trackedBuffs`/`customBuffs` и вывести `path/name` — приложение B, расширенное на тултип.
@@ -408,9 +410,9 @@ t=13 естественное окончание → 27.0, t=40 → ready); в �
 работают.
 
 **Этап 5 — данные и релиз (раздел 7) — ЧАСТИЧНО СДЕЛАНО в этой ветке.**
-Сделано: `GetBuffIcon` сначала спрашивает `api.Ability:GetBuffTooltip` (кэш `id -> path` на
-сессию), `ddsData` — только fallback; README дополнен установкой, разделом «How the timers
-work» и changelog.
+Сделано: `GetBuffIcon` кэширует `id -> path` на сессию; известные id берутся из `ddsData`
+(стабильность иконок), неизвестные — из `api.Ability:GetBuffTooltip`, последний fallback —
+дефолтная иконка; README дополнен установкой, разделом «How the timers work» и changelog.
 Осталось: манифест CAM (в репозитории `classic-addon-manager/addons` снять
 `dependencies: ['addonlibrary']` — отдельный PR), тег + GitHub Release после проверки в игре.
 

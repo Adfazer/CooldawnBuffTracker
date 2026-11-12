@@ -131,6 +131,12 @@ local function getCurrentTime()
   return msTime / 1000
 end
 
+-- Компактная подпись цвета {r,g,b,a} для сравнения раскладки
+local function colorSignature(c)
+  if type(c) ~= "table" then return "-" end
+  return tostring(c.r) .. "," .. tostring(c.g) .. "," .. tostring(c.b) .. "," .. tostring(c.a)
+end
+
 local function initBuffData()
   -- Инициализируем данные для всех типов юнитов
   local unitTypes = {"playerpet", "player", "target"}
@@ -238,25 +244,28 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   local cooldown = tonumber(buff.cooldown) or 0
   
   if status == "active" then
-    -- remainingTime (мс) — серверный остаток баффа. По нему восстанавливаем момент старта,
-    -- поэтому отсчёт не зависит от точности введённой длительности и одинаково работает
-    -- для player, playerpet и target.
-    if remainingTime ~= nil and remainingTime > 0 then
+    -- remainingTime (мс) — серверный остаток баффа. Отсчёт ведём прямо от него,
+    -- поэтому таймер не зависит от точности введённой длительности и одинаково
+    -- работает для player, playerpet и target.
+    if remainingTime ~= nil then
       local remainingSeconds = remainingTime / 1000
-      -- fixedTime = момент, когда бафф начал действовать
-      buff.fixedTime = currentTime - (timeOfAction - remainingSeconds)
+      -- Оценка момента старта: (настроенная длительность - остаток).
+      -- Отрицательное значение = API-остаток больше настроенной длительности
+      -- (устаревшие данные в customBuffs) — прижимаем к нулю, иначе readyAt уедет в будущее
+      -- и после конца баффа появится фантомный кулдаун.
+      local elapsed = timeOfAction - remainingSeconds
+      if elapsed < 0 then
+        elapsed = 0
+      end
+      buff.fixedTime = currentTime - elapsed
+      buff.activeUntil = currentTime + remainingSeconds
       buff.permanent = false
-    elseif remainingTime == nil and buff.permanent == nil then
-      -- API не отдаёт timeLeft: постоянный бафф без обратного отсчёта
-      buff.fixedTime = currentTime
-      buff.permanent = true
     else
+      -- API не отдаёт timeLeft: постоянный бафф без обратного отсчёта.
+      -- Ставим каждый раз при новой активации, в т.ч. после снятия и повторного наложения.
       buff.fixedTime = currentTime
-    end
-    if buff.permanent then
       buff.activeUntil = math.huge
-    else
-      buff.activeUntil = buff.fixedTime + timeOfAction
+      buff.permanent = true
     end
     buff.readyAt = buff.fixedTime + cooldown
     buff.missingCount = 0
@@ -526,9 +535,7 @@ local function createPanelCanvas(windowId, unitType)
     return nil
   end
 
-  local us = settings[unitType]
-
-  -- Set canvas size
+  local us = settings[unitType] or settings.playerpet
   canvas:SetExtent(us.iconSize * 3, us.iconSize * 1.5)
 
   -- Explicitly set canvas position from settings
@@ -875,9 +882,9 @@ local function updateBuffIcons(unitType)
     tostring(us.iconSize), tostring(us.iconSpacing), tostring(us.gridColumns),
     tostring(us.gridRows), tostring(us.maxIcons), tostring(us.gridRowSpacing),
     us.showLabel and "1" or "0", tostring(us.labelFontSize),
-    tostring(us.labelX), tostring(us.labelY),
+    tostring(us.labelX), tostring(us.labelY), colorSignature(us.labelTextColor),
     us.showTimer and "1" or "0", tostring(us.timerFontSize),
-    tostring(us.timerX), tostring(us.timerY),
+    tostring(us.timerX), tostring(us.timerY), colorSignature(us.timerTextColor),
     tostring(us.posX), tostring(us.posY), us.lockPositioning and "1" or "0",
     tostring(maxShown)
   }
@@ -1048,7 +1055,7 @@ local function updateBuffIcons(unitType)
         end
       else
         -- Скрываем неиспользуемые иконки (и сбрасываем кэш их состояния)
-        if icon:IsVisible() then
+        if icon.IsVisible == nil or icon:IsVisible() then
           icon:Show(false)
           if icon.nameLabel then icon.nameLabel:Show(false) end
           if icon.timerLabel then icon.timerLabel:Show(false) end
@@ -1410,8 +1417,11 @@ local function checkBuffs(unitType)
         cachedBuffStatus[buffId] = "active"
       end
     elseif buffInfo.status == "active" then
-      -- Бафф исчез: подтверждаем двумя опросами подряд (защита от мерцания)
-      buffInfo.missingCount = (buffInfo.missingCount or 0) + 1
+      -- Бафф исчез: подтверждаем двумя читаемыми опросами подряд (защита от мерцания).
+      -- Невалидные опросы (загрузка, юнит недоступен) счётчик не накручивают.
+      if disappearanceValid then
+        buffInfo.missingCount = (buffInfo.missingCount or 0) + 1
+      end
       if disappearanceValid and buffInfo.missingCount >= 2 then
         -- Досрочное снятие (диспел/смерть) или конец действия:
         -- активная фаза заканчивается СЕЙЧАС, а кулдаун считается от момента старта
@@ -1497,6 +1507,9 @@ local function checkBuffs(unitType)
           cooldown = buffInfo.cooldown,
           timeOfAction = buffInfo.timeOfAction,
           fixedTime = buffInfo.fixedTime,
+          activeUntil = buffInfo.activeUntil,
+          readyAt = buffInfo.readyAt,
+          permanent = buffInfo.permanent,
           status = buffInfo.status
         }
       end

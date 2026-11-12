@@ -12764,17 +12764,8 @@ function BuffList.GetBuffIcon(buffId)
         return cached
     end
 
-    -- 1) Игровой API: полный путь иконки баффа (клиент сам рисует ей бафф-бар)
-    local api = require("api")
-    if api and api.Ability and api.Ability.GetBuffTooltip then
-        local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
-        if ok and tooltip and tooltip.path then
-            iconPathCache[key] = tooltip.path
-            return tooltip.path
-        end
-    end
-
-    -- 2) Локальная таблица имён файлов — только fallback (серверные/кастомные id)
+    -- 1) Локальная таблица имён файлов — приоритет для стабильности:
+    -- у известных id иконка не должна меняться между версиями аддона.
     local iconPath = BuffList.ddsData[key]
     if iconPath then
         if not string.find(iconPath, "/", 1, true) then
@@ -12782,6 +12773,16 @@ function BuffList.GetBuffIcon(buffId)
         end
         iconPathCache[key] = iconPath
         return iconPath
+    end
+
+    -- 2) Игровой API: полный путь иконки баффа (для id, которых нет в таблице)
+    local api = require("api")
+    if api and api.Ability and api.Ability.GetBuffTooltip then
+        local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
+        if ok and tooltip and tooltip.path then
+            iconPathCache[key] = tooltip.path
+            return tooltip.path
+        end
     end
 
     -- 3) Дефолтная иконка
