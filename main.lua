@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.17.3"
+  version = "1.18.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -115,6 +115,7 @@ local live = false
 local combatEventWnd = nil
 -- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
 local mirrorTargetByBuff = {}
+
 
 local function formatTimerSeconds(seconds)
   if not seconds or seconds <= 0 then return "" end
@@ -2483,6 +2484,106 @@ local function processBuffIconScan()
   end
 end
 
+-- Отслеживание навыков маунта по расходу маны
+local playerInCombat = false
+local manaPrev = nil
+local manaRegenIdle = 0      -- мана/сек вне боя (EMA)
+local manaRegenCombat = 0    -- мана/сек в бою (EMA)
+local manaTimer = 0          -- накопитель до 100 мс
+
+-- Записи-навыки маунта: у кастомной записи задан manaCost > 0
+local function getManaEntries()
+  local out = {}
+  local ids = BuffsToTrack and BuffsToTrack.GetAllTrackedBuffIds
+    and BuffsToTrack.GetAllTrackedBuffIds("playerpet") or {}
+  local now = getCurrentTime()
+  for _, id in ipairs(ids) do
+    local cb = findCustomBuff(id)
+    local cost = cb and tonumber(cb.manaCost) or nil
+    if cost and cost > 0 then
+      local rec = buffData[id]
+      local ready = true
+      if rec and rec.readyAt and now < rec.readyAt - 0.05 and rec.status ~= "ready" then
+        ready = false
+      end
+      out[#out + 1] = {
+        id = id,
+        cost = cost,
+        mount = (cb.mountName or ""),
+        ready = ready
+      }
+    end
+  end
+  return out
+end
+
+-- Опрос маны маунта: реген оцениваем эмпирически (в бою/вне боя), траты ищем по дельте
+local function pollMountMana(dtSec)
+  if not settings or not settings.playerpet then return end
+  local hasMana = false
+  for _, cb in ipairs(settings.customBuffs or {}) do
+    if tonumber(cb.manaCost) and tonumber(cb.manaCost) > 0 then hasMana = true break end
+  end
+  if not hasMana then manaPrev = nil; return end
+  local mana = api.Unit:UnitMana("playerpet")
+  local maxMana = api.Unit:UnitMaxMana("playerpet")
+  if not mana or not maxMana or maxMana <= 0 then
+    manaPrev = nil
+    return
+  end
+  if manaPrev == nil then
+    manaPrev = mana
+    return
+  end
+  local dt = (dtSec and dtSec > 0) and dtSec or 0.1
+  local delta = mana - manaPrev
+
+  -- Реген: только положительные приращения и не на полной мане
+  if delta > 0 and mana < maxMana * 0.995 then
+    local rate = delta / dt
+    if rate < maxMana * 0.5 then
+      if playerInCombat then
+        manaRegenCombat = manaRegenCombat * 0.85 + rate * 0.15
+      else
+        manaRegenIdle = manaRegenIdle * 0.85 + rate * 0.15
+      end
+    end
+  end
+
+  -- Трата: отрицательная дельта; возвращаем к ней реген за интервал
+  if delta < -2 then
+    local regen = playerInCombat and manaRegenCombat or manaRegenIdle
+    local spend = -delta + (regen or 0) * dt
+    local entries = getManaEntries()
+    if #entries > 0 then
+      local petName = api.Unit:UnitName("playerpet") or ""
+      local best, bestDiff = nil, nil
+      for _, e in ipairs(entries) do
+        local mountOk = (e.mount == "" or e.mount == petName)
+        if mountOk and e.ready then
+          local tol = math.max(2, e.cost * 0.15)
+          local diff = math.abs(spend - e.cost)
+          if diff <= tol and (bestDiff == nil or diff < bestDiff) then
+            best, bestDiff = e, diff
+          end
+        end
+      end
+      if best then
+        setBuffStatus(best.id, "active", getCurrentTime(), "playerpet", nil)
+        if buffData[best.id] then buffData[best.id].synthetic = true end
+        if settings.debugBuffId then
+          safeLog(string.format("[CBT] mana cast %s cost=%s spend=%.1f regen=%.1f mount=%s",
+            tostring(best.id), tostring(best.cost), spend, regen or 0, petName))
+        end
+      elseif settings.debugBuffId then
+        safeLog(string.format("[CBT] mana drop %.1f (regen %.1f) — no entry matched", spend, regen or 0))
+      end
+    end
+  end
+
+  manaPrev = mana
+end
+
 local function OnUpdate(dt)
   if not live then return end
   processBuffIconScan()
@@ -2493,6 +2594,14 @@ local function OnUpdate(dt)
     if targetBuffCanvas and targetBuffCanvas:IsVisible() then targetBuffCanvas:Show(false) end
     return
   end
+  -- Мана маунта: сэмплим чаще, чем баффы (100 мс), чтобы не терять мелкие траты
+  manaTimer = manaTimer + dt
+  if manaTimer >= 100 then
+    local step = manaTimer / 1000
+    manaTimer = 0
+    pollMountMana(step)
+  end
+
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     checkBuffs("playerpet")  -- Проверяем баффы маунта
@@ -2855,6 +2964,13 @@ local function OnLoad()
     pcall(function() combatEventWnd:Clickable(false) end)
     pcall(function() combatEventWnd:EnablePick(false) end)
     combatEventWnd:SetHandler("OnEvent", function(self, event, ...)
+      if event == "UNIT_COMBAT_STATE_CHANGED" then
+        local inCombat, unitId = ...
+        if tostring(unitId) == tostring(api.Unit:GetUnitId("player")) then
+          playerInCombat = inCombat and true or false
+        end
+        return
+      end
       if event == "SPELLCAST_START" then
         local spellName, castingTime, caster = ...
         if settings and settings.debugBuffId then
@@ -2867,6 +2983,7 @@ local function OnLoad()
     end)
     pcall(function() combatEventWnd:RegisterEvent("COMBAT_MSG") end)
     pcall(function() combatEventWnd:RegisterEvent("SPELLCAST_START") end)
+    pcall(function() combatEventWnd:RegisterEvent("UNIT_COMBAT_STATE_CHANGED") end)
   end
   
   -- Создаем ассоциацию с обработчиком обновления настроек
@@ -2954,6 +3071,8 @@ local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
   mirrorTargetByBuff = {}
+  manaPrev = nil
+  manaTimer = 0
 
   -- Сохраняем позиции канвасов ДО их освобождения (иначе GetOffset на мёртвых виджетах)
   if helpers and helpers.updateSettings then

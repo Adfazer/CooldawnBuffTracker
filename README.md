@@ -119,6 +119,19 @@ mount and target.
 
 ## Changelog
 
+### 1.18.0
+
+- **Mount skills by mana spend**: custom entries can carry a mana cost and a mount name.
+  With a mana cost set the entry is a mana skill (`[M]` badge) — it is detected on the
+  Mount list by a drop in the mount's mana, not by an aura or the combat log.
+- Mana is sampled every 100 ms; regen is estimated empirically as an EMA separately in
+  combat and out of combat (`UNIT_COMBAT_STATE_CHANGED`) and added back to the observed
+  drop before matching a skill cost (±max(2, 15%)).
+- Mount name is optional: empty matches any mount, otherwise only that mount's spends
+  are attributed to the entry. Both fields are editable in the Edit dialog.
+- Mana entries may omit the buff id (key = skill name); icon falls back to the neutral
+  default if none is picked.
+
 ### 1.17.3
 
 - All addon windows (except the main settings window) now have a taller full-width title
@@ -610,7 +623,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.17.3
+**Current Version:** 1.18.0
 
 ## Credits
 

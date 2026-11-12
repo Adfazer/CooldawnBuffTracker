@@ -533,6 +533,19 @@ local function addCustomBuff()
     local cooldown = tonumber(settingsControls.newCustomBuffCooldown:GetText())
     local timeOfAction = tonumber(settingsControls.newCustomBuffTimeOfAction:GetText())
 
+    -- Mana-навык маунта: стоимость маны + имя маунта (пусто = любой маунт)
+    local manaCost = 0
+    if settingsControls.newCustomBuffMana then
+        manaCost = tonumber(settingsControls.newCustomBuffMana:GetText()) or 0
+        if manaCost < 0 then manaCost = 0 end
+    end
+    local mountName = ""
+    if settingsControls.newCustomBuffMount then
+        mountName = settingsControls.newCustomBuffMount:GetText() or ""
+        mountName = mountName:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+    local isManaEntry = manaCost > 0
+
     -- Имя навыка из боевого лога (можно задать, даже если id ещё неизвестен)
     local spellName = ""
     if settingsControls.newCustomBuffSpell then
@@ -546,6 +559,10 @@ local function addCustomBuff()
     -- id не обязателен: если его нет, ключом станет имя навыка
     if id == "" and spellName ~= "" then
         id = spellName
+    end
+
+    if isManaEntry and not timeOfAction then
+        timeOfAction = 0
     end
 
     if id == "" or name == "" or not cooldown or not timeOfAction then
@@ -569,11 +586,11 @@ local function addCustomBuff()
         end
     end
     
-    -- Проверяем наличие иконки с таким ID
+    -- Проверяем наличие иконки с таким ID (для mana-навыка id может быть именем)
     local buffIcon = BuffList.GetBuffIcon(id)
     local iconExists = buffIcon ~= nil
-    
-    if not iconExists then
+
+    if not iconExists and not isManaEntry then
         if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
             settingsControls.addCustomBuffError:SetText("Error: Icon for buff ID " .. id .. " not found")
             settingsControls.customBuffErrorPanel:Show(true)
@@ -588,6 +605,13 @@ local function addCustomBuff()
         timeOfAction = timeOfAction
     }
 
+    if isManaEntry then
+        newBuff.manaCost = manaCost
+        if mountName ~= "" then
+            newBuff.mountName = mountName
+        end
+    end
+
     -- Необязательное имя навыка из боевого лога: по нему бафф перезапускается
     if spellName ~= "" then
         newBuff.spellName = spellName
@@ -600,6 +624,8 @@ local function addCustomBuff()
     end
     if iconPath then
         newBuff.iconFile = iconPath
+    elseif isManaEntry then
+        newBuff.iconFile = "game/ui/icon/icon_buff_debuff.dds"
     end
 
     -- Добавляем бафф в настройки
@@ -618,6 +644,15 @@ local function addCustomBuff()
     end
     if settingsControls.newCustomBuffIcon then
         settingsControls.newCustomBuffIcon:SetText("")
+    end
+    if settingsControls.newCustomBuffMana then
+        settingsControls.newCustomBuffMana:SetText("")
+    end
+    if settingsControls.newCustomBuffMount then
+        settingsControls.newCustomBuffMount:SetText("")
+    end
+    if settingsControls.manaSkillHint then
+        settingsControls.manaSkillHint:Show(false)
     end
     if settingsControls.customBuffIconPreview then
         F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, "game/ui/icon/icon_buff_debuff.dds")
@@ -791,10 +826,12 @@ local function openCddDialog(buffId)
         if tostring(item.id) == key then cb = item; break end
     end
 
-    local curCd, curToa
+    local curCd, curToa, curMana, curMount
     if cb then
         curCd = tonumber(cb.cooldown) or 0
         curToa = tonumber(cb.timeOfAction) or 0
+        curMana = tonumber(cb.manaCost) or 0
+        curMount = cb.mountName or ""
     else
         local ov = s.buffOverrides[key]
         if ov then
@@ -804,13 +841,15 @@ local function openCddDialog(buffId)
             curCd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30
             curToa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3
         end
+        curMana = 0
+        curMount = ""
     end
 
     if cddWindow then
         pcall(function() CbtWindow.Destroy(cddWindow) end)
         cddWindow = nil
     end
-    local wnd = CbtWindow.Create("cbtCddWindow", "Cooldown / Duration", 360, 210, function()
+    local wnd = CbtWindow.Create("cbtCddWindow", "Cooldown / Duration", 380, 286, function()
         if cddWindow then cddWindow:Show(false) end
     end)
     if not wnd then return end
@@ -836,25 +875,53 @@ local function openCddDialog(buffId)
     toaEdit:SetWidth(70)
     toaEdit:Show(true)
 
+    local manaLabel = helpers.createLabel('cbtCddManaLabel', wnd, 'Mana cost:', 15, 130, 14)
+    manaLabel:SetWidth(140)
+    manaLabel:Show(true)
+    local manaEdit = helpers.createEdit('cbtCddMana', manaLabel, tostring(curMana), 120, 0)
+    manaEdit:SetWidth(70)
+    manaEdit:Show(true)
+
+    local mountLabel = helpers.createLabel('cbtCddMountLabel', wnd, 'Mount name:', 15, 160, 14)
+    mountLabel:SetWidth(140)
+    mountLabel:Show(true)
+    local mountEdit = helpers.createEdit('cbtCddMount', mountLabel, tostring(curMount), 120, 0)
+    mountEdit:SetWidth(180)
+    mountEdit:Show(true)
+
     local hint = helpers.createLabel('cbtCddHint', wnd,
-        'CD 0 = no cooldown. Applies to this buff only.', 15, 128, 12)
-    hint:SetWidth(330)
+        'Mana > 0 = mount skill by mana spend (empty mount = any). CD 0 = no cooldown.', 15, 190, 12)
+    hint:SetWidth(350)
     hint.style:SetColor(0.72, 0.74, 0.80, 1)
     hint:Show(true)
 
-    local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 160)
+    local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 222)
     saveBtn:SetExtent(120, 26)
     saveBtn:Show(true)
     saveBtn:SetHandler("OnClick", function()
         local cd = tonumber(cdEdit:GetText()) or 0
         local toa = tonumber(toaEdit:GetText()) or 0
+        local mana = tonumber(manaEdit:GetText()) or 0
+        local mount = mountEdit:GetText() or ""
+        mount = mount:gsub("^%s+", ""):gsub("%s+$", "")
         if cd < 0 then cd = 0 end
         if toa < 0 then toa = 0 end
+        if mana < 0 then mana = 0 end
         local updated = false
         for _, item in ipairs(s.customBuffs or {}) do
             if tostring(item.id) == key then
                 item.cooldown = cd
                 item.timeOfAction = toa
+                if mana > 0 then
+                    item.manaCost = mana
+                else
+                    item.manaCost = nil
+                end
+                if mount ~= "" then
+                    item.mountName = mount
+                else
+                    item.mountName = nil
+                end
                 updated = true
                 break
             end
@@ -1542,9 +1609,16 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             if buffData.spellName and buffData.spellName ~= "" then
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
+            local isManaRow = (tonumber(buffData.manaCost) or 0) > 0
+            if isManaRow then
+                displayName = "[M] " .. displayName
+            end
             local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 66, 0, 12)
             buffNameLabel:SetExtent(94, 20)
             buffNameLabel:Show(true)
+            if isManaRow then
+                pcall(function() buffNameLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
+            end
 
             -- Cooldown
             local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 164, 0, 12)
@@ -1855,6 +1929,44 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         iconSearch.open(settingsControls.newCustomBuffSpell and settingsControls.newCustomBuffSpell:GetText() or "")
     end)
 
+    -- Mana-навык маунта: стоимость маны + имя маунта
+    local newCustomBuffManaLabel = helpers.createLabel('newCustomBuffManaLabel', customBuffInputsLabel, 'Mana:', 268, 90, 14)
+    newCustomBuffManaLabel:SetWidth(46)
+    newCustomBuffManaLabel:Show(true)
+
+    local newCustomBuffMana = helpers.createEdit('newCustomBuffMana', newCustomBuffManaLabel, "", 48, 0)
+    newCustomBuffMana:SetWidth(50)
+    newCustomBuffMana:Show(true)
+    settingsControls.newCustomBuffMana = newCustomBuffMana
+
+    local newCustomBuffMountLabel = helpers.createLabel('newCustomBuffMountLabel', customBuffInputsLabel, 'Mount:', 372, 90, 14)
+    newCustomBuffMountLabel:SetWidth(52)
+    newCustomBuffMountLabel:Show(true)
+
+    local newCustomBuffMount = helpers.createEdit('newCustomBuffMount', newCustomBuffMountLabel, "", 56, 0)
+    newCustomBuffMount:SetWidth(136)
+    newCustomBuffMount:Show(true)
+    settingsControls.newCustomBuffMount = newCustomBuffMount
+
+    local manaSkillHint = helpers.createLabel('cbtManaSkillHint', customBuffInputsLabel,
+        'Mana skill: detected by mana spend (Mount list)', 268, 112, 11)
+    manaSkillHint:SetWidth(300)
+    manaSkillHint.style:SetColor(0.55, 0.95, 0.55, 1)
+    manaSkillHint:Show(false)
+    settingsControls.manaSkillHint = manaSkillHint
+
+    local function updateManaHint()
+        local v = 0
+        if settingsControls.newCustomBuffMana then
+            v = tonumber(settingsControls.newCustomBuffMana:GetText()) or 0
+        end
+        if settingsControls.manaSkillHint then
+            settingsControls.manaSkillHint:Show(v > 0)
+        end
+    end
+    pcall(function() newCustomBuffMana:SetHandler("OnTextChanged", updateManaHint) end)
+    pcall(function() newCustomBuffMana:SetHandler("OnChar", updateManaHint) end)
+
     -- Кнопка добавления пользовательского баффа
     local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add entry', 0, 90)
     addCustomBuffButton:SetWidth(130)
@@ -1866,7 +1978,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     local customBuffErrorPanel = api.Interface:CreateWidget('window', 'customBuffErrorPanel', settingsWindow)
     customBuffErrorPanel:SetExtent(350, 25)
     customBuffErrorPanel:RemoveAllAnchors()
-    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 120)
+    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 140)
     customBuffErrorPanel:Show(false)
     settingsControls.customBuffErrorPanel = customBuffErrorPanel
     
