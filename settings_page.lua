@@ -969,7 +969,8 @@ local function buildTrackedBuffsSection()
             function(u) return M.getActiveBuffs and M.getActiveBuffs(u or currentUnitType) or {} end,
             function(lim) return M.getLoggedSpells and M.getLoggedSpells(lim) or {} end,
             function(id) return addBuffFromSearch(id, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
-            function(name) return addCustomFromSpell(name, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end)
+            function(name) return addCustomFromSpell(name, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
+            function() if M.clearLoggedSpells then M.clearLoggedSpells() end end)
         recordWindow.scanStarter = function() if M.startScan then M.startScan("") end end
         recordWindow.open()
     end)

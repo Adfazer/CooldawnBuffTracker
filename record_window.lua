@@ -22,6 +22,9 @@ local providerActive
 local providerLog
 local addBuff
 local addSpell
+local clearLog
+local clearBtn
+local refreshAcc = 0
 
 local COLORS = {
     text  = {0.87, 0.69, 0.00, 1},
@@ -95,6 +98,9 @@ local function setMode(m)
     if modeButtons.buff and modeButtons.log then
         setColor(modeButtons.buff.textLabel, (mode == "buff") and COLORS.text or COLORS.muted)
         setColor(modeButtons.log.textLabel, (mode == "log") and COLORS.text or COLORS.muted)
+    end
+    if clearBtn then
+        clearBtn:Show(mode == "log")
     end
     refresh()
 end
@@ -206,6 +212,16 @@ local function build()
     end
     M.setUnit = setUnit
 
+    clearBtn = helpers.createButton("cbtRecClear", win, "Clear log", 330, 72)
+    clearBtn:SetExtent(110, 24)
+    clearBtn:Show(false)
+    clearBtn:SetHandler("OnClick", function()
+        if clearLog then clearLog() end
+        if statusLabel then statusLabel:SetText("Log cleared") end
+        page = 1
+        refresh()
+    end)
+
     countLabel = helpers.createLabel("cbtRecCount", win, "", 20, 102, 14)
     countLabel:SetExtent(420, 18)
     setColor(countLabel, COLORS.muted)
@@ -242,6 +258,16 @@ local function build()
     closeBtn:Show(true)
     closeBtn:SetHandler("OnClick", function() win:Show(false) end)
 
+    -- Живое обновление: список обновляется, пока окно открыто (не только по вкладкам)
+    win:SetHandler("OnUpdate", function(self, dt)
+        if not win or not win:IsVisible() then return end
+        refreshAcc = refreshAcc + (dt or 0)
+        if refreshAcc >= 400 then
+            refreshAcc = 0
+            refresh()
+        end
+    end)
+
     local hint = helpers.createLabel("cbtRecHint", win,
         "Add: buff -> custom entry + tracking. Skill -> custom entry with Spell filled.", 20, 424, 11)
     hint:SetExtent(420, 16)
@@ -253,11 +279,12 @@ function M.getUnit()
     return unit
 end
 
-function M.setProviders(activeFn, logFn, addBuffFn, addSpellFn)
+function M.setProviders(activeFn, logFn, addBuffFn, addSpellFn, clearFn)
     providerActive = activeFn
     providerLog = logFn
     addBuff = addBuffFn
     addSpell = addSpellFn
+    clearLog = clearFn
 end
 
 function M.open()

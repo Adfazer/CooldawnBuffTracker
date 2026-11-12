@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.16.8
+
+- Record window: new «Clear log» button (visible on the Log skills tab) wipes the
+  combat-log spell journal.
+- Record window refreshes in real time while open (every 400 ms via OnUpdate), not
+  only when switching tabs.
+
 ### 1.16.7
 
 - Removing an entry in **Custom entries** now also removes it from **Tracked entries**
@@ -567,7 +574,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.16.7
+**Current Version:** 1.16.8
 
 ## Credits
 

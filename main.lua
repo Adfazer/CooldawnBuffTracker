@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.16.7"
+  version = "1.16.8"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2282,6 +2282,16 @@ local function getActiveBuffs(unitType)
   return out
 end
 
+-- Очистка журнала навыков (кнопка Clear log в окне Record)
+local function clearLoggedSpells()
+  for i = #loggedSpellOrder, 1, -1 do
+    loggedSpellOrder[i] = nil
+  end
+  for k in pairs(loggedSpellMap) do
+    loggedSpellMap[k] = nil
+  end
+end
+
 -- Навыки из боевого лога (свежие сверху) для окна Record
 local function getLoggedSpells(limit)
   local out = {}
@@ -2309,6 +2319,7 @@ if settingsPage then
   settingsPage.applyBuffOverride = applyBuffOverride
   settingsPage.getActiveBuffs = getActiveBuffs
   settingsPage.getLoggedSpells = getLoggedSpells
+  settingsPage.clearLoggedSpells = clearLoggedSpells
   settingsPage.findIconByName = findIconByName
 end
 
