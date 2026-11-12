@@ -119,6 +119,18 @@ mount and target.
 
 ## Changelog
 
+### 1.12.2
+
+- Cooldown start is anchored to the moment the aura is actually seen on a unit we
+  were already polling, instead of being back-calculated from the configured
+  duration. Any mismatch between the configured D and the real aura shifted the
+  start (a few seconds), so a dispelled buff showed the cooldown off by that
+  amount. Only the very first poll after load / target switch still estimates the
+  start from the API remainder; later new auras count as fresh applications.
+- Removed the per-poll re-sync that recomputed the start from D (it kept the same
+  bias). Verified offline: CD 21 / D 90, dispel at 5 s → 16 s of cooldown left,
+  ready at 21 s.
+
 ### 1.12.1
 
 - Fixed custom buffs ignoring their own CD/D: panel entries were created from the
@@ -357,7 +369,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.12.1
+**Current Version:** 1.12.2
 
 ## Credits
 
