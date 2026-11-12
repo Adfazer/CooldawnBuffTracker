@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.3"
+  version = "1.8.4"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1810,20 +1810,21 @@ local function checkBuffs(unitType)
   end
 end
 
--- Скан клиентских тултипов навыков: строим полный дамп id -> name -> icon path.
--- Нужен, когда боевой лог присылает spellId=0 (иначе иконку не достать).
--- Дамп сохраняется в skill_dump.tbl рядом с main.lua и переиспользуется без повторного скана.
-local skillIconScan = nil
-local skillDump = nil
+-- Скан тултипов баффов: id -> name -> icon path.
+-- api.Skill:GetSkillTooltip жёстко вызывает SIK_DESCRIPTION и отдаёт только
+-- описание (name/path = nil), поэтому иконки берём из базы баффов — у большинства
+-- навыков бафф одноимённый. Дамп пишется в buff_dump.tbl и переиспользуется.
+local buffIconScan = nil
+local buffDump = nil
 
 local function normalizeSkillName(s)
   s = tostring(s or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
   return s
 end
 
-local function loadSkillDump()
+local function loadBuffDump()
   if not (api.File and api.File.Read) then return end
-  local ok, data = pcall(api.File.Read, api.File, "skill_dump.tbl")
+  local ok, data = pcall(api.File.Read, api.File, "buff_dump.tbl")
   if not ok or type(data) ~= "table" or type(data.dump) ~= "string" then return end
   local byName = {}
   local n = 0
@@ -1838,12 +1839,12 @@ local function loadSkillDump()
     end
   end
   if n > 0 then
-    skillDump = { byName = byName, count = n }
-    safeLog("[CBT] skill dump: " .. n .. " навыков загружено из skill_dump.tbl")
+    buffDump = { byName = byName, count = n }
+    safeLog("[CBT] buff dump: " .. n .. " баффов загружено из buff_dump.tbl")
   end
 end
 
-local function applySkillIcon(nameKey, id, path)
+local function applyBuffIcon(nameKey, id, path)
   local applied = 0
   for _, cb in ipairs(settings.customBuffs or {}) do
     if normalizeSkillName(cb.spellName) == nameKey then
@@ -1867,46 +1868,49 @@ local function applySkillIcon(nameKey, id, path)
   if settingsPage and settingsPage.onSkillIconFound then
     pcall(settingsPage.onSkillIconFound, nameKey, id, path)
   end
-  safeLog("[CBT] skill dump: '" .. nameKey .. "' -> id=" .. tostring(id)
+  safeLog("[CBT] buff dump: '" .. nameKey .. "' -> id=" .. tostring(id)
     .. " path=" .. tostring(path) .. " (обновлено записей: " .. applied .. ")")
 end
 
-local function probeSkillTooltip(id)
-  local ok, info = pcall(api.Skill.GetSkillTooltip, api.Skill, id)
+local function probeBuffTooltip(id)
+  local ok, info = pcall(api.Ability.GetBuffTooltip, api.Ability, id, 1)
   if not ok then
-    safeLog("[CBT] probe " .. tostring(id) .. ": error " .. tostring(info))
+    safeLog("[CBT] buff probe " .. tostring(id) .. ": error " .. tostring(info))
     return
   end
   if type(info) ~= "table" then
-    safeLog("[CBT] probe " .. tostring(id) .. ": " .. type(info) .. " value=" .. tostring(info))
+    safeLog("[CBT] buff probe " .. tostring(id) .. ": " .. type(info) .. " value=" .. tostring(info))
     return
   end
-  local keys = {}
+  local parts = {}
   for k, v in pairs(info) do
-    if #keys < 10 then keys[#keys + 1] = tostring(k) .. "=" .. tostring(v) end
+    if #parts < 14 then
+      local sv = tostring(v)
+      if #sv > 40 then sv = "<" .. tostring(#sv) .. " chars>" end
+      parts[#parts + 1] = tostring(k) .. "=" .. sv
+    end
   end
-  safeLog("[CBT] probe " .. tostring(id) .. ": name=" .. tostring(info.name)
-    .. " path=" .. tostring(info.path) .. " type=" .. tostring(info.type)
-    .. " skillId=" .. tostring(info.skillId) .. " | " .. table.concat(keys, ", "))
+  safeLog("[CBT] buff probe " .. tostring(id) .. ": name=" .. tostring(info.name)
+    .. " path=" .. tostring(info.path) .. " | " .. table.concat(parts, ", "))
 end
 
-local function startSkillIconScan(name)
+local function startBuffIconScan(name)
   name = tostring(name or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local key = normalizeSkillName(name)
-  if key ~= "" and skillDump and skillDump.byName[key] then
-    local e = skillDump.byName[key]
-    applySkillIcon(key, e.id, e.path)
+  if key ~= "" and buffDump and buffDump.byName[key] then
+    local e = buffDump.byName[key]
+    applyBuffIcon(key, e.id, e.path)
     return true
   end
-  if not (api.Skill and api.Skill.GetSkillTooltip) then return false end
-  -- Пробы известных skill type из клиента (character_create_ability.lua)
-  for _, probeId in ipairs({ 13282, 10455, 23587, 10670, 11314, 10664, 16210, 10694, 23592, 10534, 13286, 23596 }) do
-    probeSkillTooltip(probeId)
+  if not (api.Ability and api.Ability.GetBuffTooltip) then return false end
+  -- Пробы известных buff id (из клиентской таблицы иконок)
+  for _, probeId in ipairs({ 1, 100, 131, 330, 3523, 6413, 6747, 10000, 20000 }) do
+    probeBuffTooltip(probeId)
   end
-  skillIconScan = {
+  buffIconScan = {
     target = key,
     rangeIndex = 1,
-    ranges = { { 1, 40000 }, { 8000000, 8001000 } },
+    ranges = { { 1, 50000 }, { 8000000, 8001000 } },
     nextId = 1,
     entries = {},
     tables = 0,
@@ -1914,27 +1918,27 @@ local function startSkillIconScan(name)
     errors = 0,
     firstError = nil,
   }
-  safeLog("[CBT] skill scan: дамп всех навыков"
+  safeLog("[CBT] buff scan: дамп всех баффов"
     .. (key ~= "" and (" + поиск '" .. name .. "'") or "")
-    .. " (1..40000, 8000000..8001000)")
+    .. " (1..50000, 8000000..8001000)")
   return true
 end
 
 -- Кросс-модульная точка: settings_page не видит глобалы main (приватное окружение)
 if settingsPage then
-  settingsPage.startScan = startSkillIconScan
+  settingsPage.startScan = startBuffIconScan
 end
 
-local function processSkillIconScan()
-  if not skillIconScan then return end
-  local st = skillIconScan
+local function processBuffIconScan()
+  if not buffIconScan then return end
+  local st = buffIconScan
   local r = st.ranges[st.rangeIndex]
   if not r then
     -- Скан закончен: сохраняем дамп и применяем найденное
     local text = table.concat(st.entries, "\n")
     local saved = false
     if api.File and api.File.Write then
-      saved = pcall(api.File.Write, api.File, "skill_dump.tbl",
+      saved = pcall(api.File.Write, api.File, "buff_dump.tbl",
         { version = 1, count = #st.entries, dump = text })
     end
     local byName = {}
@@ -1947,28 +1951,28 @@ local function processSkillIconScan()
         end
       end
     end
-    skillDump = { byName = byName, count = #st.entries }
-    safeLog("[CBT] skill dump: " .. #st.entries .. " навыков, "
-      .. (saved and "сохранён в skill_dump.tbl" or "НЕ сохранён (api.File недоступен)")
+    buffDump = { byName = byName, count = #st.entries }
+    safeLog("[CBT] buff dump: " .. #st.entries .. " баффов, "
+      .. (saved and "сохранён в buff_dump.tbl" or "НЕ сохранён (api.File недоступен)")
       .. "; таблиц=" .. tostring(st.tables) .. " с именем=" .. tostring(st.named)
       .. " ошибок=" .. tostring(st.errors)
       .. (st.firstError and (" | первая ошибка: " .. st.firstError) or ""))
     if st.target ~= "" then
       local e = byName[st.target]
       if e then
-        applySkillIcon(st.target, e.id, e.path)
+        applyBuffIcon(st.target, e.id, e.path)
       else
-        safeLog("[CBT] skill dump: '" .. st.target .. "' не найден")
+        safeLog("[CBT] buff dump: '" .. st.target .. "' не найден")
       end
     end
-    skillIconScan = nil
+    buffIconScan = nil
     return
   end
   if st.nextId < r[1] then st.nextId = r[1] end
   local last = math.min(st.nextId + 150 - 1, r[2])
-  local getter = api.Skill.GetSkillTooltip
+  local getter = api.Ability.GetBuffTooltip
   for id = st.nextId, last do
-    local ok, info = pcall(getter, api.Skill, id)
+    local ok, info = pcall(getter, api.Ability, id, 1)
     if not ok then
       st.errors = st.errors + 1
       if not st.firstError then st.firstError = tostring(info) end
@@ -1995,7 +1999,7 @@ end
 
 local function OnUpdate(dt)
   if not live then return end
-  processSkillIconScan()
+  processBuffIconScan()
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     checkBuffs("playerpet")  -- Проверяем баффы маунта
@@ -2143,7 +2147,7 @@ local function OnLoad()
   initBuffData()
 
   -- Загружаем ранее сохранённый дамп навыков (id -> name -> иконка)
-  loadSkillDump()
+  loadBuffDump()
 
   safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
   

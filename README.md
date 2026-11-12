@@ -119,6 +119,16 @@ mount and target.
 
 ## Changelog
 
+### 1.8.4
+
+- Skill-tooltip scanning is dropped: the addon API always requests
+  `SIK_DESCRIPTION`, and that table has description/synergy fields only —
+  `name`/`path`/`type` are nil (confirmed by probes 13282, 10455, 23587, ...).
+- **Find icon** now dumps the **buff** tooltips instead (`api.Ability:GetBuffTooltip`,
+  ids 1..50000 and 8000000..8001000) into `buff_dump.tbl`: id, name and icon path.
+  Most skills share their name with the buff they apply, so the lookup by spell
+  name still works; the dump is loaded at startup and reused without scanning.
+
 ### 1.8.3
 
 - Scan diagnostics: on start it probes 12 known client skill types (13282,
@@ -261,7 +271,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.3
+**Current Version:** 1.8.4
 
 ## Credits
 
