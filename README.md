@@ -8,6 +8,23 @@ CooldawnBuffTracker helps players track buff durations and ability cooldowns in 
 
 Track buffs and debuffs for multiple unit types.
 
+## Installation
+
+1. Copy the `CooldawnBuffTracker` folder into
+   `Documents\AAClassic\Addon\`, so that the file layout is
+   `Addon\CooldawnBuffTracker\main.lua`.
+2. Add one line with the folder name to `Documents\AAClassic\Addon\addons.txt`:
+
+   ```
+   CooldawnBuffTracker
+   ```
+
+3. Restart the client or run `/reload`. The addon appears in the in-game Addon
+   Manager; the settings window opens from there (Options button).
+
+Keep the folder name exactly `CooldawnBuffTracker` — it is the addon id used for
+settings storage and all `require` paths.
+
 ## Features
 
 ### Core
@@ -56,6 +73,21 @@ Track buffs and debuffs for multiple unit types.
 ### Debugging
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
 
+## How the timers work
+
+- The addon reads the real remaining time of every tracked buff from the game
+  (`UnitBuff.timeLeft`) for player, mount and target. The countdown therefore
+  matches the game's own buff timer and is correct even when the buff was
+  already active before you logged in, targeted the unit or reloaded the UI.
+- Cooldowns are counted from the moment the buff was applied. If a buff is
+  removed early (dispelled, target died), the green highlight ends immediately
+  and the remaining cooldown is shown. Example: a 3 s buff with a 30 s cooldown,
+  targeted with 2 s left, shows 29 s; if it is dispelled with 1 s left, the icon
+  switches to a red 28 s countdown.
+- Permanent buffs (no duration) are displayed without a countdown.
+- If the game does not report a remaining time for a buff, the addon falls back
+  to a local countdown based on the configured time-of-action.
+
 ## Using Import / Export
 
 Open the settings window and click the Import/Export button.
@@ -69,6 +101,26 @@ Open the settings window and click the Import/Export button.
 
 A configuration contains your custom buffs and the tracked-buff lists for player,
 mount and target.
+
+## Changelog
+
+### Unreleased
+
+- Timers are now equally accurate for player, mount and target: the real
+  remaining time comes from the game API instead of a local countdown started
+  from the configured duration.
+- Early removal of a buff immediately switches the icon to its cooldown with the
+  correct remainder (dispelled debuff no longer stays green).
+- Buff icons and names are taken from the game API; the built-in icon table is
+  used only as a fallback.
+- Settings are no longer written from the per-frame update; import/export keeps
+  fractional cooldowns (e.g. 16.2 instead of 16).
+- Removed dead modules, fixed widget leaks on `/reload`, and switched panels to
+  the HUD UI layer.
+
+### 1.5.0
+
+- Grid layout (columns × rows, max icons), row spacing, presets, import/export.
 
 ## Version
 

@@ -518,253 +518,29 @@ local function addBuffIcon(parent, index, unitType)
   return icon
 end
 
-local function createBuffCanvas()
-  local canvas = api.Interface:CreateEmptyWindow("MountBuffCanvas")
+-- Общий конструктор панели: одинаков для mount/player/target,
+-- отличается только id окна и ключом настроек (unitType).
+local function createPanelCanvas(windowId, unitType)
+  local canvas = api.Interface:CreateEmptyWindow(windowId)
   if not canvas then
     return nil
   end
-  
-  -- Set canvas size
-  canvas:SetExtent(settings.playerpet.iconSize * 3, settings.playerpet.iconSize * 1.5)
-  
-  -- Explicitly set canvas position from settings
-  canvas:RemoveAllAnchors()
-  canvas:AddAnchor("TOPLEFT", "UIParent", settings.playerpet.posX, settings.playerpet.posY)
-  
-  canvas:Clickable(true)
-  
-  if canvas.SetUILayer then
-    canvas:SetUILayer("hud")
-  end
-  
-  local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
-  if bg then
-    bg:SetTextureInfo("bg_quest")
-    bg:SetColor(0, 0, 0, 0.4)
-    bg:AddAnchor("TOPLEFT", canvas, 0, 0)
-    bg:AddAnchor("BOTTOMRIGHT", canvas, 0, 0)
-    canvas.bg = bg
-  end
-  
-  canvas:Show(false)
-  
-  canvas.buffIcons = {}
-  for i = 1, MAX_GRID_ICONS do
-    canvas.buffIcons[i] = addBuffIcon(canvas, i, "playerpet")
-    
-    -- Ensure that the icon has the correct position based on settings
-    if canvas.buffIcons[i] then
-      canvas.buffIcons[i]:RemoveAllAnchors()
-      canvas.buffIcons[i]:SetExtent(settings.playerpet.iconSize, settings.playerpet.iconSize)
-      
-      -- Explicitly calculate icon position taking into account current interval
-      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.playerpet)
-    end
-  end
-  
-  -- Implementation of drag functionality for canvas
-  -- Flag to track dragging state
-  canvas.isDragging = false
-  
-  -- Define functions for dragging
-  canvas.OnDragStart = function(self, arg)
-    -- Check if movement is blocked
-    if settings.playerpet.lockPositioning then
-      return
-    end
-    
-    self.isDragging = true
-    -- Make the background more visible during dragging
-    if self.bg then
-      self.bg:SetColor(0, 0, 0, 0.6)  -- Higher opacity during dragging
-    end
-    
-    self:StartMoving()
-    api.Cursor:ClearCursor()
-    api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0)
-  end
-  
-  canvas.OnDragStop = function(self)
-    -- Check if movement is blocked
-    if settings.playerpet.lockPositioning then
-      return
-    end
-    
-    self:StopMovingOrSizing()
-    -- Return to normal opacity after dragging
-    if self.bg then
-      self.bg:SetColor(0, 0, 0, 0.4)
-    end
-    
-    local x, y = self:GetOffset()
-    settings.playerpet.posX = x
-    settings.playerpet.posY = y
-    
-    -- Update fields in settings window if it's open
-    if settingsPage and settingsPage.updatePositionFields then
-      settingsPage.updatePositionFields(x, y)
-    end
-    
-    -- Save settings through helpers
-    if helpers and helpers.updateSettings then
-      helpers.updateSettings()
-    end
-    
-    self.isDragging = false
-    api.Cursor:ClearCursor()
-  end
-  
-  -- Set event handlers for dragging
-  canvas:SetHandler("OnDragStart", canvas.OnDragStart)
-  canvas:SetHandler("OnDragStop", canvas.OnDragStop)
-  
-  -- Register dragging with left mouse button
-  if canvas.RegisterForDrag ~= nil then
-    canvas:RegisterForDrag("LeftButton")
-  end
-  
-  -- Enable/disable dragging based on settings
-  if canvas.EnableDrag ~= nil then
-    canvas:EnableDrag(not settings.playerpet.lockPositioning)
-  end
-  
-  return canvas
-end
 
--- Create new function for player buff canvas creation
-local function createPlayerBuffCanvas()
-  local canvas = api.Interface:CreateEmptyWindow("PlayerBuffCanvas")
-  if not canvas then
-    return nil
-  end
-  
-  -- Set canvas size
-  canvas:SetExtent(settings.player.iconSize * 3, settings.player.iconSize * 1.5)
-  
-  -- Explicitly set canvas position from settings
-  canvas:RemoveAllAnchors()
-  canvas:AddAnchor("TOPLEFT", "UIParent", settings.player.posX, settings.player.posY)
-  
-  canvas:Clickable(true)
-  
-  if canvas.SetUILayer then
-    canvas:SetUILayer("hud")
-  end
-  
-  local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
-  if bg then
-    bg:SetTextureInfo("bg_quest")
-    bg:SetColor(0, 0, 0, 0.4)
-    bg:AddAnchor("TOPLEFT", canvas, 0, 0)
-    bg:AddAnchor("BOTTOMRIGHT", canvas, 0, 0)
-    canvas.bg = bg
-  end
-  
-  canvas:Show(false)
-  
-  canvas.buffIcons = {}
-  for i = 1, MAX_GRID_ICONS do
-    canvas.buffIcons[i] = addBuffIcon(canvas, i, "player")
-    
-    -- Ensure that the icon has the correct position based on settings
-    if canvas.buffIcons[i] then
-      canvas.buffIcons[i]:RemoveAllAnchors()
-      canvas.buffIcons[i]:SetExtent(settings.player.iconSize, settings.player.iconSize)
-      
-      -- Explicitly calculate icon position taking into account current interval
-      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.player)
-    end
-  end
-  
-  -- Implementation of drag functionality for canvas
-  -- Flag to track dragging state
-  canvas.isDragging = false
-  
-  -- Define functions for dragging
-  canvas.OnDragStart = function(self, arg)
-    -- Check if movement is blocked
-    if settings.player.lockPositioning then
-      return
-    end
-    
-    self.isDragging = true
-    -- Make the background more visible during dragging
-    if self.bg then
-      self.bg:SetColor(0, 0, 0, 0.6)  -- Higher opacity during dragging
-    end
-    
-    self:StartMoving()
-    api.Cursor:ClearCursor()
-    api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0)
-  end
-  
-  canvas.OnDragStop = function(self)
-    -- Check if movement is blocked
-    if settings.player.lockPositioning then
-      return
-    end
-    
-    self:StopMovingOrSizing()
-    -- Return to normal opacity after dragging
-    if self.bg then
-      self.bg:SetColor(0, 0, 0, 0.4)
-    end
-    
-    local x, y = self:GetOffset()
-    settings.player.posX = x
-    settings.player.posY = y
-    
-    -- Update fields in settings window if it's open
-    if settingsPage and settingsPage.updatePositionFields then
-      settingsPage.updatePositionFields(x, y)
-    end
-    
-    -- Save settings through helpers
-    if helpers and helpers.updateSettings then
-      helpers.updateSettings()
-    end
-    
-    self.isDragging = false
-    api.Cursor:ClearCursor()
-  end
-  
-  -- Set event handlers for dragging
-  canvas:SetHandler("OnDragStart", canvas.OnDragStart)
-  canvas:SetHandler("OnDragStop", canvas.OnDragStop)
-  
-  -- Register dragging with left mouse button
-  if canvas.RegisterForDrag ~= nil then
-    canvas:RegisterForDrag("LeftButton")
-  end
-  
-  -- Enable/disable dragging based on settings
-  if canvas.EnableDrag ~= nil then
-    canvas:EnableDrag(not settings.player.lockPositioning)
-  end
-  
-  return canvas
-end
+  local us = settings[unitType]
 
--- Create target buff canvas
-local function createTargetBuffCanvas()
-  local canvas = api.Interface:CreateEmptyWindow("TargetBuffCanvas")
-  if not canvas then
-    return nil
-  end
-  
   -- Set canvas size
-  canvas:SetExtent(settings.target.iconSize * 3, settings.target.iconSize * 1.5)
-  
+  canvas:SetExtent(us.iconSize * 3, us.iconSize * 1.5)
+
   -- Explicitly set canvas position from settings
   canvas:RemoveAllAnchors()
-  canvas:AddAnchor("TOPLEFT", "UIParent", settings.target.posX, settings.target.posY)
-  
+  canvas:AddAnchor("TOPLEFT", "UIParent", us.posX, us.posY)
+
   canvas:Clickable(true)
-  
+
   if canvas.SetUILayer then
     canvas:SetUILayer("hud")
   end
-  
+
   local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
   if bg then
     bg:SetTextureInfo("bg_quest")
@@ -773,80 +549,94 @@ local function createTargetBuffCanvas()
     bg:AddAnchor("BOTTOMRIGHT", canvas, 0, 0)
     canvas.bg = bg
   end
-  
+
   canvas:Show(false)
-  
+
   -- Store unit type for later use
-  canvas.unitType = "target"
-  
+  canvas.unitType = unitType
+
   canvas.buffIcons = {}
   for i = 1, MAX_GRID_ICONS do
-    canvas.buffIcons[i] = addBuffIcon(canvas, i, "target")
-    
+    canvas.buffIcons[i] = addBuffIcon(canvas, i, unitType)
+
+    -- Ensure that the icon has the correct position based on settings
     if canvas.buffIcons[i] then
       canvas.buffIcons[i]:RemoveAllAnchors()
-      canvas.buffIcons[i]:SetExtent(settings.target.iconSize, settings.target.iconSize)
-      
-      anchorIconInGrid(canvas.buffIcons[i], canvas, i, settings.target)
+      canvas.buffIcons[i]:SetExtent(us.iconSize, us.iconSize)
+
+      -- Explicitly calculate icon position taking into account current interval
+      anchorIconInGrid(canvas.buffIcons[i], canvas, i, us)
     end
   end
-  
-  -- Implementation of drag functionality
+
+  -- Implementation of drag functionality for canvas
   canvas.isDragging = false
-  
+
   canvas.OnDragStart = function(self, arg)
-    if settings.target.lockPositioning then
+    if settings[unitType].lockPositioning then
       return
     end
-    
+
     self.isDragging = true
     if self.bg then
-      self.bg:SetColor(0, 0, 0, 0.6)
+      self.bg:SetColor(0, 0, 0, 0.6)  -- Higher opacity during dragging
     end
-    
+
     self:StartMoving()
     api.Cursor:ClearCursor()
     api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0)
   end
-  
+
   canvas.OnDragStop = function(self)
-    if settings.target.lockPositioning then
+    if settings[unitType].lockPositioning then
       return
     end
-    
+
     self:StopMovingOrSizing()
     if self.bg then
       self.bg:SetColor(0, 0, 0, 0.4)
     end
-    
+
     local x, y = self:GetOffset()
-    settings.target.posX = x
-    settings.target.posY = y
-    
+    settings[unitType].posX = x
+    settings[unitType].posY = y
+
     if settingsPage and settingsPage.updatePositionFields then
       settingsPage.updatePositionFields(x, y)
     end
-    
+
     if helpers and helpers.updateSettings then
       helpers.updateSettings()
     end
-    
+
     self.isDragging = false
     api.Cursor:ClearCursor()
   end
-  
+
   canvas:SetHandler("OnDragStart", canvas.OnDragStart)
   canvas:SetHandler("OnDragStop", canvas.OnDragStop)
-  
+
   if canvas.RegisterForDrag ~= nil then
     canvas:RegisterForDrag("LeftButton")
   end
-  
+
   if canvas.EnableDrag ~= nil then
-    canvas:EnableDrag(not settings.target.lockPositioning)
+    canvas:EnableDrag(not settings[unitType].lockPositioning)
   end
-  
+
   return canvas
+end
+
+local function createBuffCanvas()
+  return createPanelCanvas("MountBuffCanvas", "playerpet")
+end
+
+local function createPlayerBuffCanvas()
+  return createPanelCanvas("PlayerBuffCanvas", "player")
+end
+
+local function createTargetBuffCanvas()
+  return createPanelCanvas("TargetBuffCanvas", "target")
 end
 
 -- Function to cleanup old target cache entries
@@ -1074,8 +864,31 @@ local function updateBuffIcons(unitType)
   end
   
   -- Обновляем все иконки и скрываем неиспользуемые
-  -- Этап 4: число одновременно показанных иконок ограничено настройкой maxIcons
-  local maxShown = math.min(#activeBuffs, getMaxIcons(settings[unitType]))
+  -- Число одновременно показанных иконок ограничено настройкой maxIcons
+  local us = settings[unitType]
+  local maxShown = math.min(#activeBuffs, getMaxIcons(us))
+
+  -- Подпись раскладки: геометрия + набор/иконки/имена показанных баффов.
+  -- Пока подпись не меняется, виджеты не пересобираются — обновляются только
+  -- цвет статуса и текст таймера. Это главный выигрыш по нагрузке.
+  local sigParts = {
+    tostring(us.iconSize), tostring(us.iconSpacing), tostring(us.gridColumns),
+    tostring(us.gridRows), tostring(us.maxIcons), tostring(us.gridRowSpacing),
+    us.showLabel and "1" or "0", tostring(us.labelFontSize),
+    tostring(us.labelX), tostring(us.labelY),
+    us.showTimer and "1" or "0", tostring(us.timerFontSize),
+    tostring(us.timerX), tostring(us.timerY),
+    tostring(us.posX), tostring(us.posY), us.lockPositioning and "1" or "0",
+    tostring(maxShown)
+  }
+  for i = 1, maxShown do
+    sigParts[#sigParts + 1] = tostring(activeBuffs[i].id) .. "="
+      .. tostring(activeBuffs[i].buff.icon) .. "=" .. tostring(activeBuffs[i].buff.name)
+  end
+  local layoutSig = table.concat(sigParts, "|")
+  local relayout = (canvas.layoutSig ~= layoutSig)
+
+  local currentTime = tonumber(getCurrentTime()) or 0
   for i, icon in ipairs(canvas.buffIcons or {}) do
     if icon and icon.Show then
       -- Показываем и настраиваем только иконки, которые используются
@@ -1084,53 +897,54 @@ local function updateBuffIcons(unitType)
         local buffId = buffInfo.id
         local buff = buffInfo.buff
         
-        -- Обновляем размер иконки согласно текущим настройкам
-        icon:SetExtent(settings[unitType].iconSize, settings[unitType].iconSize)
-        
-        -- Этап 4: позиция иконки в сетке (слева направо, сверху вниз)
-        anchorIconInGrid(icon, canvas, i, settings[unitType])
-        
-        -- Устанавливаем изображение для иконки
-        F_SLOT.SetIconBackGround(icon, buff.icon)
-        
-        -- Явно устанавливаем иконку видимой
-        icon:Show(true)
-        
-        -- Сохраняем ID баффа для использования в обработчиках событий и отладчике
-        icon.buffId = buffId
-        
-        -- Добавляем debug ID для отладчика баффов
-        if BuffDebugger and BuffDebugger.SetBuffIdForIcon then
-          BuffDebugger.SetBuffIdForIcon(icon, buffId, unitType)
+        if relayout then
+          -- Обновляем размер иконки согласно текущим настройкам
+          icon:SetExtent(us.iconSize, us.iconSize)
+          -- Позиция иконки в сетке (слева направо, сверху вниз)
+          anchorIconInGrid(icon, canvas, i, us)
+          -- Устанавливаем изображение для иконки
+          F_SLOT.SetIconBackGround(icon, buff.icon)
+          -- Явно устанавливаем иконку видимой
+          icon:Show(true)
         end
-        
-        -- Отображаем имя баффа, если включено в настройках
-        if icon.nameLabel and settings[unitType].showLabel then
-          -- Обновляем размер шрифта метки на основе текущих настроек
-          icon.nameLabel.style:SetFontSize(settings[unitType].labelFontSize or 14)
-          
-          -- Обновляем позицию метки на основе текущих настроек
-          icon.nameLabel:RemoveAllAnchors()
-          icon.nameLabel:AddAnchor("CENTER", icon, settings[unitType].labelX or 0, settings[unitType].labelY or -30)
-          
-          -- Обновляем цвет текста метки из настроек
-          local labelTextColor = settings[unitType].labelTextColor or {r = 1, g = 1, b = 1, a = 1}
-          icon.nameLabel.style:SetColor(labelTextColor.r, labelTextColor.g, labelTextColor.b, labelTextColor.a)
-          
-          icon.nameLabel:SetText(buff.name or "")
-          icon.nameLabel:Show(true)
-        elseif icon.nameLabel then
-          icon.nameLabel:Show(false)
+
+        -- Сохраняем ID баффа и привязку к отладчику только при смене
+        if icon.buffId ~= buffId then
+          icon.buffId = buffId
+          if BuffDebugger and BuffDebugger.SetBuffIdForIcon then
+            BuffDebugger.SetBuffIdForIcon(icon, buffId, unitType)
+          end
+        end
+
+        if relayout then
+          -- Отображаем имя баффа, если включено в настройках
+          if icon.nameLabel and us.showLabel then
+            -- Обновляем размер шрифта метки на основе текущих настроек
+            icon.nameLabel.style:SetFontSize(us.labelFontSize or 14)
+
+            -- Обновляем позицию метки на основе текущих настроек
+            icon.nameLabel:RemoveAllAnchors()
+            icon.nameLabel:AddAnchor("CENTER", icon, us.labelX or 0, us.labelY or -30)
+
+            -- Обновляем цвет текста метки из настроек
+            local labelTextColor = us.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
+            icon.nameLabel.style:SetColor(labelTextColor.r, labelTextColor.g, labelTextColor.b, labelTextColor.a)
+
+            icon.nameLabel:SetText(buff.name or "")
+            icon.nameLabel:Show(true)
+          elseif icon.nameLabel then
+            icon.nameLabel:Show(false)
+          end
         end
         
         -- Определяем текущий статус баффа
-        local currentTime = tonumber(getCurrentTime()) or 0
         local currentStatus = buff.status
         if buff.fixedTime then
           currentStatus = checkBuffStatus(buff, currentTime)
         end
-        
-        -- Устанавливаем цвет иконки в зависимости от статуса
+
+        -- Цвет статуса меняется редко: оверлей/рамки трогаем только при смене
+        if relayout or icon.lastStatus ~= currentStatus then
         if currentStatus == "ready" then
           -- Для готового баффа - прозрачный оверлей (без подсветки)
           if icon.statusOverlay then
@@ -1182,9 +996,11 @@ local function updateBuffIcons(unitType)
             icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
           end
         end
-        
-        -- Отображаем таймер, если включено в настройках
-        if icon.timerLabel and settings[unitType].showTimer then
+          icon.lastStatus = currentStatus
+        end
+
+        -- Таймер: текст меняется не чаще 10 раз/с — SetText только по изменению
+        if icon.timerLabel and us.showTimer then
           local timerText = ""
           
           if currentStatus == "active" and buff.activeUntil and buff.activeUntil ~= math.huge then
@@ -1199,89 +1015,85 @@ local function updateBuffIcons(unitType)
             end
           end
           
-          -- Обновляем размер шрифта таймера на основе текущих настроек
-          icon.timerLabel.style:SetFontSize(settings[unitType].timerFontSize or 16)
-          
-          -- Обновляем позицию таймера на основе текущих настроек
-          icon.timerLabel:RemoveAllAnchors()
-          icon.timerLabel:AddAnchor("CENTER", icon, settings[unitType].timerX or 0, settings[unitType].timerY or 0)
-          
-          icon.timerLabel:SetText(timerText)
-          
-          -- Устанавливаем цвет текста таймера из настроек
-          local timerTextColor = settings[unitType].timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-          
-          -- Добавляем проверку на nil для каждого компонента цвета
-          local r = (timerTextColor and timerTextColor.r) or 1
-          local g = (timerTextColor and timerTextColor.g) or 1
-          local b = (timerTextColor and timerTextColor.b) or 1
-          local a = (timerTextColor and timerTextColor.a) or 1
-          
-          icon.timerLabel.style:SetColor(r, g, b, a)
-          
-          -- Показываем таймер только если есть текст
-          icon.timerLabel:Show(timerText ~= "")
-          
-          -- Показываем фон таймера, если есть текст
-          if icon.timerBg then
-            -- Обновляем размер фона таймера
-            icon.timerBg:SetExtent(settings[unitType].iconSize, settings[unitType].iconSize/2)
-            icon.timerBg:RemoveAllAnchors()
-            icon.timerBg:AddAnchor("BOTTOM", icon, 0, 0)
-            
-            icon.timerBg:Show(timerText ~= "")
+          if relayout then
+            -- Шрифт/позиция/цвет таймера — только при пересборке раскладки
+            icon.timerLabel.style:SetFontSize(us.timerFontSize or 16)
+            icon.timerLabel:RemoveAllAnchors()
+            icon.timerLabel:AddAnchor("CENTER", icon, us.timerX or 0, us.timerY or 0)
+            local timerTextColor = us.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
+            icon.timerLabel.style:SetColor(
+              (timerTextColor and timerTextColor.r) or 1,
+              (timerTextColor and timerTextColor.g) or 1,
+              (timerTextColor and timerTextColor.b) or 1,
+              (timerTextColor and timerTextColor.a) or 1)
+            if icon.timerBg then
+              icon.timerBg:SetExtent(us.iconSize, us.iconSize/2)
+              icon.timerBg:RemoveAllAnchors()
+              icon.timerBg:AddAnchor("BOTTOM", icon, 0, 0)
+            end
+          end
+
+          if icon.lastTimerText ~= timerText then
+            icon.timerLabel:SetText(timerText)
+            icon.timerLabel:Show(timerText ~= "")
+            if icon.timerBg then icon.timerBg:Show(timerText ~= "") end
+            icon.lastTimerText = timerText
           end
         elseif icon.timerLabel then
-          icon.timerLabel:Show(false)
-          if icon.timerBg then
-            icon.timerBg:Show(false)
+          if icon.lastTimerText ~= "" then
+            icon.timerLabel:Show(false)
+            if icon.timerBg then icon.timerBg:Show(false) end
+            icon.lastTimerText = ""
           end
         end
       else
-        -- Скрываем неиспользуемые иконки
-        icon:Show(false)
-        if icon.nameLabel then icon.nameLabel:Show(false) end
-        if icon.timerLabel then icon.timerLabel:Show(false) end
-        if icon.timerBg then icon.timerBg:Show(false) end
+        -- Скрываем неиспользуемые иконки (и сбрасываем кэш их состояния)
+        if icon:IsVisible() then
+          icon:Show(false)
+          if icon.nameLabel then icon.nameLabel:Show(false) end
+          if icon.timerLabel then icon.timerLabel:Show(false) end
+          if icon.timerBg then icon.timerBg:Show(false) end
+        end
+        icon.lastStatus = nil
+        icon.lastTimerText = nil
       end
     end
   end
   
-  -- Обновляем размер canvas под фактическую сетку (Этап 4)
-  local us = settings[unitType]
-  local cols = getGridColumns(us)
-  local shown = math.min(#activeBuffs, getMaxIcons(us))
-  local usedCols = math.max(1, math.min(shown, cols))
-  local usedRows = math.max(1, math.ceil(shown / cols))
-  local totalWidth = usedCols * us.iconSize + (usedCols - 1) * us.iconSpacing
-  totalWidth = math.max(totalWidth, us.iconSize * 2)
-  local rowSpacing = tonumber(us.gridRowSpacing) or us.iconSpacing
-  local totalHeight = usedRows * us.iconSize + (usedRows - 1) * rowSpacing
-  totalHeight = math.max(totalHeight, us.iconSize * 1.2)
+  if relayout then
+    -- Обновляем размер canvas под фактическую сетку
+    local cols = getGridColumns(us)
+    local usedCols = math.max(1, math.min(maxShown, cols))
+    local usedRows = math.max(1, math.ceil(maxShown / cols))
+    local totalWidth = usedCols * us.iconSize + (usedCols - 1) * us.iconSpacing
+    totalWidth = math.max(totalWidth, us.iconSize * 2)
+    local rowSpacing = tonumber(us.gridRowSpacing) or us.iconSpacing
+    local totalHeight = usedRows * us.iconSize + (usedRows - 1) * rowSpacing
+    totalHeight = math.max(totalHeight, us.iconSize * 1.2)
 
-  -- "Язычок" справа: всегда оставляем пустую область фона, за которую можно
-  -- перетаскивать канвас (иначе иконки-кнопки заняли бы всю ширину и тащить
-  -- было бы не за что).
-  local dragHandle = math.max(12, math.floor(us.iconSize * 0.4))
+    -- "Язычок" справа: всегда оставляем пустую область фона, за которую можно
+    -- перетаскивать канвас (иначе иконки-кнопки заняли бы всю ширину и тащить
+    -- было бы не за что).
+    local dragHandle = math.max(12, math.floor(us.iconSize * 0.4))
 
-  -- Устанавливаем новый размер canvas
-  canvas:SetWidth(totalWidth + dragHandle)
-  canvas:SetHeight(totalHeight)
-  
-  -- Устанавливаем позицию только если canvas не перетаскивается
-  if canvas.isDragging ~= true then
-    canvas:RemoveAllAnchors()
-    canvas:AddAnchor("TOPLEFT", "UIParent", settings[unitType].posX, settings[unitType].posY)
-    
-    -- Убеждаемся, что перетаскивание все еще правильно включено/выключено
-    if canvas.EnableDrag ~= nil then
-      canvas:EnableDrag(not settings[unitType].lockPositioning)
+    canvas:SetWidth(totalWidth + dragHandle)
+    canvas:SetHeight(totalHeight)
+
+    -- Позиция и состояние drag — только при пересборке и не во время перетаскивания
+    if canvas.isDragging ~= true then
+      canvas:RemoveAllAnchors()
+      canvas:AddAnchor("TOPLEFT", "UIParent", us.posX, us.posY)
+      if canvas.EnableDrag ~= nil then
+        canvas:EnableDrag(not us.lockPositioning)
+      end
     end
+
+    if canvas.bg then
+      canvas.bg:SetColor(0, 0, 0, 0.4)
+    end
+    canvas.layoutSig = layoutSig
   end
-  
-  if canvas.bg then
-    canvas.bg:SetColor(0, 0, 0, 0.4)
-  end
+
   canvas:Show(true)
 end
 

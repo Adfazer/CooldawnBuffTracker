@@ -12749,31 +12749,43 @@ function BuffList.GetBuffTimeOfAction(buffId)
     return buffInfo and buffInfo.timeOfAction or 5
 end
 
+-- Кэш путей иконок: id -> полный путь (заполняется один раз за сессию)
+local iconPathCache = {}
+local DEFAULT_BUFF_ICON = "game/ui/icon/icon_skill_buff274.dds"
+
 -- Function to get the icon path for a given buff ID
 function BuffList.GetBuffIcon(buffId)
-    -- Check predefined icons first
-    local iconPath = BuffList.ddsData[buffId]
-    
-    -- If no predefined icon, try to get icon from game API
-    if not iconPath then
-        local api = require("api")
-        if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
-            local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
-            if ok and tooltip and tooltip.path then
-                iconPath = tooltip.path
-            end
+    if buffId == nil then
+        return DEFAULT_BUFF_ICON
+    end
+    local key = tostring(buffId)
+    local cached = iconPathCache[key]
+    if cached then
+        return cached
+    end
+
+    -- 1) Игровой API: полный путь иконки баффа (клиент сам рисует ей бафф-бар)
+    local api = require("api")
+    if api and api.Ability and api.Ability.GetBuffTooltip then
+        local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
+        if ok and tooltip and tooltip.path then
+            iconPathCache[key] = tooltip.path
+            return tooltip.path
         end
     end
-    
-    -- Return icon path or default
-    if not iconPath then
-        return "game/ui/icon/icon_skill_buff274.dds"
-    end
-    -- tooltip.path уже полный (ui/icon/...), из таблицы — только имя файла
-    if string.find(iconPath, "/", 1, true) then
+
+    -- 2) Локальная таблица имён файлов — только fallback (серверные/кастомные id)
+    local iconPath = BuffList.ddsData[key]
+    if iconPath then
+        if not string.find(iconPath, "/", 1, true) then
+            iconPath = "game/ui/icon/" .. iconPath
+        end
+        iconPathCache[key] = iconPath
         return iconPath
     end
-    return "game/ui/icon/" .. iconPath
+
+    -- 3) Дефолтная иконка
+    return DEFAULT_BUFF_ICON
 end
 
 -- Function to check if a buff ID is valid and exists in the game
