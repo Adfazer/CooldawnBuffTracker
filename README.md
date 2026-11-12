@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.18.4
+
+- Layer model fixed: tracked buff panels are pinned to the `game` layer (above the world,
+  below windows), while every addon window sits on `normal` — the same layer as the stock
+  inventory/auction windows. Settings are no longer hidden behind the tracked panels and
+  no longer force themselves above game windows.
+
 ### 1.18.3
 
 - All addon windows moved from the `dialog` layer to the `game` layer — the same as the
@@ -648,7 +655,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.3
+**Current Version:** 1.18.4
 
 ## Credits
 

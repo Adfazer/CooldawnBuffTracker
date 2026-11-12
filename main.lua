@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.18.3"
+  version = "1.18.4"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -990,6 +990,8 @@ local function createPanelCanvas(windowId, unitType)
   end
 
   local us = settings[unitType] or settings.playerpet
+  -- HUD-панели держим на слое game: они выше мира, но НИЖЕ любых окон
+  pcall(function() canvas:SetUILayer("game") end)
   canvas:SetExtent(us.iconSize * 3, us.iconSize * 1.5)
 
   -- Explicitly set canvas position from settings

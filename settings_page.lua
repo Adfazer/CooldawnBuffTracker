@@ -2367,7 +2367,7 @@ local function initSettingsPage()
         return
     end
     settingsWindow:SetExtent(1200, 600)
-    settingsWindow:SetUILayer("game")
+    settingsWindow:SetUILayer("normal")
     pcall(function() settingsWindow:SetCloseOnEscape(true) end)
     pcall(function() settingsWindow:EnableHidingIsRemove(false) end)
 

@@ -10,7 +10,7 @@ function M.Create(id, title, w, h, onClose)
     local win = api.Interface:CreateEmptyWindow(id)
     if not win then return nil end
     win:SetExtent(w, h)
-    win:SetUILayer("game")
+    win:SetUILayer("normal")
     pcall(function() win:SetCloseOnEscape(true) end)
     pcall(function() win:EnableHidingIsRemove(false) end)
     win:AddAnchor("CENTER", "UIParent", 0, 0)
