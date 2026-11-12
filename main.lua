@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.20.2"
+  version = "1.20.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2746,6 +2746,27 @@ local debugAuraState = {}
 local debugAuraTarget = nil
 local debugAuraTimer = 0
 local debugAuraNames = {}
+local debugAuraLines = {}
+local debugAuraFlushTimer = 0
+local debugAuraDirty = false
+local debugWasOn = false
+local AURA_DUMP_PATH = "CooldawnBuffTracker/aura_dump.tbl"
+
+local function debugRecord(line)
+  if #debugAuraLines > 20000 then table.remove(debugAuraLines, 1) end
+  debugAuraLines[#debugAuraLines + 1] = string.format("%.1f %s",
+    tonumber(getCurrentTime()) or 0, tostring(line))
+  debugAuraDirty = true
+end
+
+local function flushAuraDump()
+  if not debugAuraDirty then return end
+  debugAuraDirty = false
+  local ok = pcall(function()
+    api.File:Write(AURA_DUMP_PATH, { dump = table.concat(debugAuraLines, "\n") })
+  end)
+  if not ok then safeLog("[CBT] aura dump: write failed") end
+end
 
 local function debugAuraName(buffId)
   local nm = debugAuraNames[buffId]
@@ -2762,8 +2783,8 @@ end
 
 local function logTargetClass()
   local id = api.Unit:GetUnitId("target")
-  safeLog("[CBT] target id=" .. tostring(id) .. " name=" .. tostring(api.Unit:UnitName("target")))
-  safeLog("[CBT] UnitClass=" .. tostring(api.Unit:UnitClass("target"))
+  debugRecord("[target] id=" .. tostring(id) .. " name=" .. tostring(api.Unit:UnitName("target")))
+  debugRecord("[class] UnitClass=" .. tostring(api.Unit:UnitClass("target"))
     .. " GetUnitClassName=" .. tostring(api.Ability:GetUnitClassName("target")))
   if not id then return end
   local ok, info = pcall(api.Unit.GetUnitInfoById, api.Unit, id)
@@ -2775,7 +2796,7 @@ local function logTargetClass()
       if ok2 then nm = tostring(n2) end
       parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) .. "(" .. nm .. ")"
     end
-    safeLog("[CBT] class: " .. table.concat(parts, " "))
+    debugRecord("[class] " .. table.concat(parts, " "))
   end
 end
 
@@ -2798,10 +2819,10 @@ local function watchTargetAuras()
         now[key] = { stack = tonumber(b.stack) or 0, kind = kind }
         local prev = debugAuraState[key]
         if not prev then
-          safeLog(string.format("[CBT] + %s id=%s name=%s stack=%s time=%s",
+          debugRecord(string.format("+ %s id=%s name=%s stack=%s time=%s",
             kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
         elseif prev.stack ~= now[key].stack then
-          safeLog(string.format("[CBT] ~ %s id=%s name=%s stack=%s time=%s",
+          debugRecord(string.format("~ %s id=%s name=%s stack=%s time=%s",
             kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
         end
       end
@@ -2814,7 +2835,7 @@ local function watchTargetAuras()
 
   for key, prev in pairs(debugAuraState) do
     if not now[key] then
-      safeLog(string.format("[CBT] - %s id=%s name=%s", prev.kind, key, debugAuraName(tonumber(key) or key)))
+      debugRecord(string.format("- %s id=%s name=%s", prev.kind, key, debugAuraName(tonumber(key) or key)))
     end
   end
   debugAuraState = now
@@ -2837,12 +2858,31 @@ local function OnUpdate(dt)
   end
 
   if settings and settings.debugBuffId then
+    if not debugWasOn then
+      debugWasOn = true
+      debugAuraLines = {}
+      debugAuraState = {}
+      debugAuraTarget = nil
+      debugAuraDirty = true
+      debugRecord("[session] aura dump started")
+      flushAuraDump()
+      safeLog("[CBT] aura dump -> " .. AURA_DUMP_PATH)
+    end
     debugAuraTimer = debugAuraTimer + dt
     if debugAuraTimer >= 100 then
       debugAuraTimer = 0
       watchTargetAuras()
     end
+    debugAuraFlushTimer = debugAuraFlushTimer + dt
+    if debugAuraFlushTimer >= 1000 then
+      debugAuraFlushTimer = 0
+      flushAuraDump()
+    end
   else
+    if debugWasOn then
+      flushAuraDump()
+      debugWasOn = false
+    end
     debugAuraState = {}
     debugAuraTarget = nil
     debugAuraTimer = 0
@@ -3118,6 +3158,7 @@ end
 local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
+  pcall(flushAuraDump)
   mirrorTargetByBuff = {}
   manaPrev = nil
   manaLastSpendTime = 0

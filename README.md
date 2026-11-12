@@ -123,6 +123,13 @@ mount and target.
 
 ## Changelog
 
+### 1.20.3
+
+- Debug aura log is written to a file instead of chat: while Debug is on, the target's
+  buffs/debuffs are polled every 100 ms and appended to
+  `CooldawnBuffTracker/aura_dump.tbl` (flushed once a second, reset when Debug is enabled,
+  target id/name and class/skillsets included). Chat only announces the dump path.
+
 ### 1.20.2
 
 - Debug: continuous target aura log instead of the manual Dump button. While Debug is on,
@@ -740,7 +747,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.20.2
+**Current Version:** 1.20.3
 
 ## Credits
 
