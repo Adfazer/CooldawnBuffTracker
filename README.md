@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.16.7
+
+- Removing an entry in **Custom entries** now also removes it from **Tracked entries**
+  on all three units (a custom entry without tracking makes no sense). Removing
+  from Tracked entries still keeps the custom entry in the catalog.
+
 ### 1.16.6
 
 Skill audit fixes (aac-addon-dev):
@@ -561,7 +567,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.16.6
+**Current Version:** 1.16.7
 
 ## Credits
 

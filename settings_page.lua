@@ -1556,13 +1556,29 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             end)
             removeButton:Show(true)
 
-            -- Remove button handler
+            -- Remove button handler: удаление кастомной записи убирает её и из
+            -- отслеживания во всех трёх панелях (без записи она теряет CD/D).
             removeButton:SetHandler("OnClick", function()
+                local removedId = buffData.id
                 table.remove(settings.customBuffs, i)
+                for _, ut in ipairs({ "playerpet", "player", "target" }) do
+                    local list = settings[ut] and settings[ut].trackedBuffs
+                    if type(list) == "table" then
+                        for k = #list, 1, -1 do
+                            if tostring(list[k]) == tostring(removedId) then
+                                table.remove(list, k)
+                            end
+                        end
+                    end
+                end
+                deactivateActivePreset()
                 updateCustomBuffsList()
+                updateTrackedBuffsList()
                 if helpers and helpers.updateSettings then
                     helpers.updateSettings()
                 end
+                api:Emit("ADDON_CBT_BUFFS_CHANGED")
+                api.Log:Info("[CBT] custom entry removed: " .. tostring(removedId))
             end)
 
             table.insert(customBuffsList, buffRow)
