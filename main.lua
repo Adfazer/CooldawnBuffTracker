@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.20.0"
+  version = "1.20.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -116,6 +116,7 @@ local settings = {}
 local live = false
 -- Окно-приёмник боевого лога (для триггера по имени навыка)
 local combatEventWnd = nil
+local dumpTargetDebug   -- forward: используется в OnLoad, определён ниже
 -- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
 local mirrorTargetByBuff = {}
 
@@ -2544,6 +2545,7 @@ if settingsPage then
   settingsPage.getActiveBuffs = getActiveBuffs
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
+  settingsPage.dumpTargetDebug = dumpTargetDebug
   settingsPage.findIconByName = findIconByName
 end
 
@@ -2739,6 +2741,54 @@ local function pollMountMana(dtSec)
   end
 
   manaPrev = mana
+end
+
+-- Debug: дамп таргета — класс/ветки и все баффы/дебаффы с id и именами
+dumpTargetDebug = function()
+  local id = api.Unit:GetUnitId("target")
+  safeLog("[CBT] target id=" .. tostring(id) .. " name=" .. tostring(api.Unit:UnitName("target")))
+  safeLog("[CBT] UnitClass=" .. tostring(api.Unit:UnitClass("target"))
+    .. " GetUnitClassName=" .. tostring(api.Ability:GetUnitClassName("target")))
+  if id then
+    local ok, info = pcall(api.Unit.GetUnitInfoById, api.Unit, id)
+    if ok and type(info) == "table" then
+      local cls = info.class
+      if type(cls) == "table" then
+        local parts = {}
+        for k, v in pairs(cls) do
+          local nm = ""
+          local ok2, n2 = pcall(api.Ability.GetSkillsetNameById, api.Ability, v)
+          if ok2 then nm = tostring(n2) end
+          parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) .. "(" .. nm .. ")"
+        end
+        safeLog("[CBT] class: " .. table.concat(parts, " "))
+      else
+        safeLog("[CBT] class: " .. tostring(cls))
+      end
+    else
+      safeLog("[CBT] GetUnitInfoById failed")
+    end
+  end
+
+  local function dumpAuras(kind, countFn, getFn)
+    local n = countFn("target") or 0
+    for i = 1, n do
+      local b = getFn("target", i)
+      if b and b.buff_id then
+        local nm = BuffList.GetBuffName(b.buff_id)
+        if not nm or nm == "" then
+          local ok, tip = pcall(api.Ability.GetBuffTooltip, api.Ability, b.buff_id, 1)
+          if ok and type(tip) == "table" then nm = tip.name end
+        end
+        safeLog(string.format("[CBT] %s %d id=%s name=%s stack=%s time=%s",
+          kind, i, tostring(b.buff_id), tostring(nm), tostring(b.stack), tostring(b.timeLeft)))
+      end
+    end
+  end
+  pcall(dumpAuras, "buff", function(u) return api.Unit:UnitBuffCount(u) end,
+    function(u, i) return api.Unit:UnitBuff(u, i) end)
+  pcall(dumpAuras, "debuff", function(u) return api.Unit:UnitDeBuffCount(u) end,
+    function(u, i) return api.Unit:UnitDeBuff(u, i) end)
 end
 
 local function OnUpdate(dt)

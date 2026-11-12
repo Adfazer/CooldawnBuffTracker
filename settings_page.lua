@@ -1474,6 +1474,16 @@ local function buildTrackedBuffsSection()
     end)
     settingsControls.recordButton = recordButton
 
+    local dumpButton = helpers.createButton('dumpTargetButton', trackedBuffsGroupLabel, 'Dump target', 676, 44)
+    dumpButton:SetExtent(104, 24)
+    dumpButton:RemoveAllAnchors()
+    dumpButton:AddAnchor("TOPLEFT", settingsWindow, 676, 44)
+    dumpButton:Show(settings and settings.debugBuffId and true or false)
+    dumpButton:SetHandler("OnClick", function()
+        if M.dumpTargetDebug then M.dumpTargetDebug() end
+    end)
+    settingsControls.dumpTargetButton = dumpButton
+
 
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
@@ -2219,6 +2229,9 @@ local function buildCustomBuffInputs(customBuffsListContainer)
             debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
         if settingsControls.recordButton then
             settingsControls.recordButton:Show(settings.debugBuffId and true or false)
+        end
+        if settingsControls.dumpTargetButton then
+            settingsControls.dumpTargetButton:Show(settings.debugBuffId and true or false)
         end
 
             -- Save settings
