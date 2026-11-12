@@ -1637,13 +1637,13 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
 
             if showId then
                 local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, idText, 22, 0, 12)
-                buffIdLabel:SetExtent(52, 20)
+                buffIdLabel:SetExtent(56, 20)
                 pcall(function() buffIdLabel.style:SetFontSize(13) end)
                 buffIdLabel:Show(true)
             end
 
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 78, 0, 14)
-            buffNameLabel:SetExtent(144, 20)
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 90, 0, 14)
+            buffNameLabel:SetExtent(132, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown

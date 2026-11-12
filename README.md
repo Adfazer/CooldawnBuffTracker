@@ -119,6 +119,11 @@ mount and target.
 
 ## Changelog
 
+### 1.19.0
+
+- Custom entries: the name column moved right (x=90) with a wider 56 px ID column, so the
+  ID no longer overlaps the name.
+
 ### 1.18.9
 
 - «Record (Debug)» moved to the right of the Debug button (same row).
@@ -701,7 +706,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.9
+**Current Version:** 1.19.0
 
 ## Credits
 
