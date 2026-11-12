@@ -84,9 +84,10 @@ settings storage and all `require` paths.
   and the remaining cooldown is shown. Example: a 3 s buff with a 30 s cooldown,
   targeted with 2 s left, shows 29 s; if it is dispelled with 1 s left, the icon
   switches to a red 28 s countdown.
-- Permanent buffs (no duration) are displayed without a countdown.
-- If the game does not report a remaining time for a buff, the addon falls back
-  to a local countdown based on the configured time-of-action.
+- Buffs/auras that report no remaining time (for example an item skill without
+  its own duration) use the configured time-of-action, so the green phase and
+  the cooldown follow your custom values; set 0 for an instant effect.
+  This is the fallback whenever the game does not report a remaining time.
 
 ## Using Import / Export
 
@@ -103,6 +104,13 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.6.3
+
+- Buffs with no remaining time reported by the game (for example an item skill
+  that has no duration of its own) now use the configured time-of-action for the
+  green phase instead of being treated as permanent. Set 0 for an instant
+  effect; the cooldown then follows your custom value as usual.
 
 ### 1.6.2
 
@@ -144,7 +152,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.6.2
+**Current Version:** 1.6.3
 
 ## Credits
 

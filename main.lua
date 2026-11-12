@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.6.2"
+  version = "1.6.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -268,11 +268,12 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       buff.activeUntil = buff.fixedTime + timeOfAction
       buff.permanent = false
     else
-      -- API не отдаёт timeLeft: постоянный бафф без обратного отсчёта.
-      -- Ставим каждый раз при новой активации, в т.ч. после снятия и повторного наложения.
+      -- API не отдаёт timeLeft (у предмета/навыка нет длительности):
+      -- берём длительность из настроек, как в 1.5.0. Это важно для бафов вещей,
+      -- у которых есть только навык с кулдауном и нет собственного таймера.
       buff.fixedTime = currentTime
-      buff.activeUntil = math.huge
-      buff.permanent = true
+      buff.activeUntil = currentTime + timeOfAction
+      buff.permanent = false
     end
     buff.readyAt = buff.fixedTime + cooldown
     buff.missingCount = 0
