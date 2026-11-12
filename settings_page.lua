@@ -1,5 +1,6 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
+local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local iconSearch = require('CooldawnBuffTracker/icon_search_window')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 local recordWindow = require('CooldawnBuffTracker/record_window')
@@ -62,6 +63,83 @@ local customBuffsList = {} -- Для хранения виджетов спис�
 local customBuffPage = 1 -- Текущая страница пагинации для списка пользовательских баффов
 local customsPerPage = 9 -- Количество custom записей на странице
 
+-- =========================================================================
+-- Модель канвасов (1.20)
+-- Вся правая колонка (иконка/сетка/позиция/таймер/цвета) читает и пишет
+-- ТОЛЬКО выбранный канвас выбранного юнита: settings[unitType].canvases[i].
+-- trackedBuffs/mirror — общие для юнита; canvasOf[id] задаёт канвас записи.
+-- =========================================================================
+
+local canvasPopup = nil
+local canvasPopupSeq = 0
+local renameWindow = nil
+local deleteWindow = nil
+local canvasMenuButton = nil
+
+local function currentUnitConfig()
+    if not settings then settings = helpers.getSettings() end
+    return settings and settings[currentUnitType]
+end
+
+-- Индекс выбранного канваса юнита (по умолчанию текущего), всегда валидный.
+local function selectedCanvasIndex(unitType)
+    unitType = unitType or currentUnitType
+    local s = settings
+    if not s then s = helpers.getSettings() end
+    local unit = s and s[unitType]
+    if not unit or type(unit.canvases) ~= "table" or #unit.canvases == 0 then return 1 end
+    local idx = math.floor(tonumber(unit.selectedCanvas) or 1)
+    if idx < 1 then idx = 1 end
+    if idx > #unit.canvases then idx = #unit.canvases end
+    return idx
+end
+
+-- Конфиг выбранного канваса — единственный источник для правой колонки.
+local function selectedCanvasCfg()
+    local unit = currentUnitConfig()
+    if not unit or type(unit.canvases) ~= "table" then return nil end
+    return unit.canvases[selectedCanvasIndex()]
+end
+
+local function canvasIndexOfId(unit, buffId)
+    local map = unit and unit.canvasOf
+    local idx = map and tonumber(map[tostring(buffId)])
+    if not idx then return 1 end
+    idx = math.floor(idx)
+    if idx < 1 then idx = 1 end
+    return idx
+end
+
+local function setCanvasOf(buffId, index, unitType)
+    local unit = unitType and settings and settings[unitType] or currentUnitConfig()
+    if not unit then return end
+    if type(unit.canvasOf) ~= "table" then unit.canvasOf = {} end
+    unit.canvasOf[tostring(buffId)] = index
+end
+
+local function trackedForCanvas(unit, list, index)
+    local out = {}
+    for _, id in ipairs(list or {}) do
+        if canvasIndexOfId(unit, id) == index then out[#out + 1] = id end
+    end
+    return out
+end
+
+local function isTrackedOnUnit(unit, buffId)
+    for _, id in ipairs((unit and unit.trackedBuffs) or {}) do
+        if tostring(id) == tostring(buffId) then return true end
+    end
+    return false
+end
+
+local function canvasName(index)
+    local unit = currentUnitConfig()
+    local cfg = unit and unit.canvases and unit.canvases[index]
+    local name = cfg and cfg.name
+    if type(name) ~= "string" or name == "" then name = "Canvas " .. tostring(index) end
+    return name
+end
+
 -- Обновляет текст кнопки Presets: показывает "*", когда активен пресет
 local function setPresetsButtonText()
     if settingsControls.presetsButton then
@@ -93,33 +171,33 @@ local function updateTrackedBuffsList(resetPage)
         end
     end
     trackedBuffsList = {}
-    
+
     -- Сбросим страницу только при явном запросе (например при переключении вкладок)
     if resetPage then
         buffListPage = 1
     end
-    
+
     -- Проверяем существование контейнера
     if not settingsControls.buffsListContainer then
         api.Log:Err("[CBT] Containers not found!")
         return
     end
-    
+
     -- Убедимся, что контейнер виден
     settingsControls.buffsListContainer:Show(true)
-    
+
     -- Обновляем видимые элементы
     if settingsControls.updateVisibleItems then
         settingsControls.updateVisibleItems()
     else
         api.Log:Err("[CBT] updateVisibleItems not found!")
     end
-    
+
     -- Убедимся, что все остальные элементы интерфейса отображаются
     -- Проверяем поле ввода и кнопку добавления
     if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
     if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
-    
+
     -- Проверяем группы настроек иконок, позиций и таймера
     if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
     if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
@@ -161,112 +239,121 @@ end
 
 local function saveSettings()
     -- Get current settings
-    local mainSettings = api.GetSettings("CooldawnBuffTracker")
-    
-    -- Update values from controls for selected unit type
-    if not mainSettings[currentUnitType] then
-        mainSettings[currentUnitType] = {}
-    end
+    settings = helpers.getSettings()
+
+    local unitSettings = settings[currentUnitType]
+    if not unitSettings then return end
+
+    -- Правая колонка пишет ТОЛЬКО в выбранный канвас выбранного юнита.
+    local canvasIndex = selectedCanvasIndex()
+    local cfg = unitSettings.canvases and unitSettings.canvases[canvasIndex]
+    if not cfg then return end
 
     -- Снимок значений ДО записи — чтобы понять, менял ли пользователь настройки
     -- (нужно для деактивации активного пресета только при реальном изменении)
     local prevSnapshot = {
-        iconSize = mainSettings[currentUnitType].iconSize,
-        iconSpacing = mainSettings[currentUnitType].iconSpacing,
-        posX = mainSettings[currentUnitType].posX,
-        posY = mainSettings[currentUnitType].posY,
-        timerFontSize = mainSettings[currentUnitType].timerFontSize,
-        gridColumns = mainSettings[currentUnitType].gridColumns,
-        gridRows = mainSettings[currentUnitType].gridRows,
-        maxIcons = mainSettings[currentUnitType].maxIcons,
-        gridRowSpacing = mainSettings[currentUnitType].gridRowSpacing
+        iconSize = cfg.iconSize,
+        iconSpacing = cfg.iconSpacing,
+        posX = cfg.posX,
+        posY = cfg.posY,
+        timerFontSize = cfg.timerFontSize,
+        gridColumns = cfg.gridColumns,
+        gridRows = cfg.gridRows,
+        maxIcons = cfg.maxIcons,
+        gridRowSpacing = cfg.gridRowSpacing
     }
 
     -- Update icon size settings
-    mainSettings[currentUnitType].iconSize = tonumber(settingsControls.iconSize:GetText())
-    mainSettings[currentUnitType].iconSpacing = tonumber(settingsControls.iconSpacing:GetText())
-    
-    -- Check values and set default values if needed
-    if not mainSettings[currentUnitType].iconSize or mainSettings[currentUnitType].iconSize <= 0 then 
-        mainSettings[currentUnitType].iconSize = 40 
+    if settingsControls.iconSize then
+        cfg.iconSize = tonumber(settingsControls.iconSize:GetText())
     end
-    
-    if not mainSettings[currentUnitType].iconSpacing or mainSettings[currentUnitType].iconSpacing < 0 then
-        mainSettings[currentUnitType].iconSpacing = 5
+    if settingsControls.iconSpacing then
+        cfg.iconSpacing = tonumber(settingsControls.iconSpacing:GetText())
+    end
+
+    -- Check values and set default values if needed
+    if not cfg.iconSize or cfg.iconSize <= 0 then
+        cfg.iconSize = 40
+    end
+
+    if not cfg.iconSpacing or cfg.iconSpacing < 0 then
+        cfg.iconSpacing = 5
     end
 
     -- Этап 4: читаем и валидируем настройки сетки иконок
     if settingsControls.gridColumns then
-        mainSettings[currentUnitType].gridColumns = tonumber(settingsControls.gridColumns:GetText())
+        cfg.gridColumns = tonumber(settingsControls.gridColumns:GetText())
     end
     if settingsControls.gridRows then
-        mainSettings[currentUnitType].gridRows = tonumber(settingsControls.gridRows:GetText())
+        cfg.gridRows = tonumber(settingsControls.gridRows:GetText())
     end
     if settingsControls.maxIcons then
-        mainSettings[currentUnitType].maxIcons = tonumber(settingsControls.maxIcons:GetText())
+        cfg.maxIcons = tonumber(settingsControls.maxIcons:GetText())
     end
     if settingsControls.gridRowSpacing then
-        mainSettings[currentUnitType].gridRowSpacing = tonumber(settingsControls.gridRowSpacing:GetText())
+        cfg.gridRowSpacing = tonumber(settingsControls.gridRowSpacing:GetText())
     end
 
     do
-        local gridCfg = mainSettings[currentUnitType]
-        if not gridCfg.gridColumns or gridCfg.gridColumns < 1 then gridCfg.gridColumns = 1 end
-        if gridCfg.gridColumns > 40 then gridCfg.gridColumns = 40 end
-        if not gridCfg.gridRows or gridCfg.gridRows < 1 then gridCfg.gridRows = 1 end
-        if gridCfg.gridRows > 40 then gridCfg.gridRows = 40 end
-        local capacity = gridCfg.gridColumns * gridCfg.gridRows
+        if not cfg.gridColumns or cfg.gridColumns < 1 then cfg.gridColumns = 1 end
+        if cfg.gridColumns > 40 then cfg.gridColumns = 40 end
+        if not cfg.gridRows or cfg.gridRows < 1 then cfg.gridRows = 1 end
+        if cfg.gridRows > 40 then cfg.gridRows = 40 end
+        local capacity = cfg.gridColumns * cfg.gridRows
         if capacity > 40 then capacity = 40 end
-        if not gridCfg.maxIcons or gridCfg.maxIcons < 1 then gridCfg.maxIcons = capacity end
-        if gridCfg.maxIcons > capacity then gridCfg.maxIcons = capacity end
-        if not gridCfg.gridRowSpacing or gridCfg.gridRowSpacing < 0 then gridCfg.gridRowSpacing = 5 end
-        if gridCfg.gridRowSpacing > 200 then gridCfg.gridRowSpacing = 200 end
+        if not cfg.maxIcons or cfg.maxIcons < 1 then cfg.maxIcons = capacity end
+        if cfg.maxIcons > capacity then cfg.maxIcons = capacity end
+        if not cfg.gridRowSpacing or cfg.gridRowSpacing < 0 then cfg.gridRowSpacing = 5 end
+        if cfg.gridRowSpacing > 200 then cfg.gridRowSpacing = 200 end
         -- Отражаем фактически применённые (склампленные) значения обратно в поля ввода
-        if settingsControls.gridColumns then settingsControls.gridColumns:SetText(tostring(gridCfg.gridColumns)) end
-        if settingsControls.gridRows then settingsControls.gridRows:SetText(tostring(gridCfg.gridRows)) end
-        if settingsControls.maxIcons then settingsControls.maxIcons:SetText(tostring(gridCfg.maxIcons)) end
-        if settingsControls.gridRowSpacing then settingsControls.gridRowSpacing:SetText(tostring(gridCfg.gridRowSpacing)) end
+        if settingsControls.gridColumns then settingsControls.gridColumns:SetText(tostring(cfg.gridColumns)) end
+        if settingsControls.gridRows then settingsControls.gridRows:SetText(tostring(cfg.gridRows)) end
+        if settingsControls.maxIcons then settingsControls.maxIcons:SetText(tostring(cfg.maxIcons)) end
+        if settingsControls.gridRowSpacing then settingsControls.gridRowSpacing:SetText(tostring(cfg.gridRowSpacing)) end
     end
 
     -- Update position settings
-    mainSettings[currentUnitType].posX = tonumber(settingsControls.posX:GetText())
-    mainSettings[currentUnitType].posY = tonumber(settingsControls.posY:GetText())
-    -- Lock positioning is saved immediately on button click, use current settings value
-    mainSettings[currentUnitType].lockPositioning = settings[currentUnitType] and settings[currentUnitType].lockPositioning or false
-    
-    -- Update timer settings (common for all unit types)
-    if settingsControls.timerFontSize then
-        mainSettings[currentUnitType].timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
+    if settingsControls.posX then
+        cfg.posX = tonumber(settingsControls.posX:GetText())
     end
-    
+    if settingsControls.posY then
+        cfg.posY = tonumber(settingsControls.posY:GetText())
+    end
+    -- Lock positioning is saved immediately on button click, use current canvas value
+    if cfg.lockPositioning == nil then cfg.lockPositioning = false end
+
+    -- Update timer settings (per canvas)
+    if settingsControls.timerFontSize then
+        cfg.timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
+    end
+
     if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
         local rgb = settingsControls.timerTextColor.colorBG:GetColor()
-        mainSettings[currentUnitType].timerTextColor = rgb
+        cfg.timerTextColor = rgb
     end
 
     if settingsControls.labelTextColor and settingsControls.labelTextColor.colorBG then
         local lblRgb = settingsControls.labelTextColor.colorBG:GetColor()
-        mainSettings[currentUnitType].labelTextColor = lblRgb
+        cfg.labelTextColor = lblRgb
     end
 
-    -- Если числовые настройки реально изменились — деактивируем активный пресет
-    local us = mainSettings[currentUnitType]
-    if us.iconSize ~= prevSnapshot.iconSize
-        or us.iconSpacing ~= prevSnapshot.iconSpacing
-        or us.posX ~= prevSnapshot.posX
-        or us.posY ~= prevSnapshot.posY
-        or us.timerFontSize ~= prevSnapshot.timerFontSize
-        or us.gridColumns ~= prevSnapshot.gridColumns
-        or us.gridRows ~= prevSnapshot.gridRows
-        or us.maxIcons ~= prevSnapshot.maxIcons
-        or us.gridRowSpacing ~= prevSnapshot.gridRowSpacing then
+    -- Если настройки этого канваса реально изменились — деактивируем пресет
+    if cfg.iconSize ~= prevSnapshot.iconSize
+        or cfg.iconSpacing ~= prevSnapshot.iconSpacing
+        or cfg.posX ~= prevSnapshot.posX
+        or cfg.posY ~= prevSnapshot.posY
+        or cfg.timerFontSize ~= prevSnapshot.timerFontSize
+        or cfg.gridColumns ~= prevSnapshot.gridColumns
+        or cfg.gridRows ~= prevSnapshot.gridRows
+        or cfg.maxIcons ~= prevSnapshot.maxIcons
+        or cfg.gridRowSpacing ~= prevSnapshot.gridRowSpacing then
         deactivateActivePreset()
     end
 
     -- Сохраняем пользовательские баффы
-    local currentCustomBuffs = api.GetSettings("CooldawnBuffTracker").customBuffs or {}
-    mainSettings.customBuffs = {}
-    
+    local currentCustomBuffs = settings.customBuffs or {}
+    settings.customBuffs = {}
+
     -- Если есть баффы в текущих настройках, используем их
     if settings.customBuffs and #settings.customBuffs > 0 then
         for i, buffData in ipairs(settings.customBuffs) do
@@ -274,25 +361,24 @@ local function saveSettings()
             for k, v in pairs(buffData) do
                 buff[k] = v
             end
-            table.insert(mainSettings.customBuffs, buff)
+            table.insert(settings.customBuffs, buff)
         end
-    -- Иначе сохраняем текущие кастомные баффы из mainSettings
     elseif currentCustomBuffs and #currentCustomBuffs > 0 then
         for i, buffData in ipairs(currentCustomBuffs) do
             local buff = {}
             for k, v in pairs(buffData) do
                 buff[k] = v
             end
-            table.insert(mainSettings.customBuffs, buff)
+            table.insert(settings.customBuffs, buff)
         end
     end
-    
+
     -- Debug mode is saved immediately on button click, use current settings value
-    mainSettings.debugBuffId = settings.debugBuffId or false
-    
+    settings.debugBuffId = settings.debugBuffId or false
+
     -- Save settings and explicitly apply
     api.SaveSettings()
-    
+
     -- Save settings through helpers, which will completely restart UI
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
@@ -332,17 +418,17 @@ end
 local function settingsWindowClose()
     -- Обновляем настройки перед сохранением
     settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
-    
+
     -- Debug mode is already saved on button click, no need to update here
-    
+
     -- Сохраняем настройки перед закрытием окна
     saveSettings()
-    
+
     if settingsWindow then
         settingsWindow:Show(false)
         helpers.setSettingsPageOpened(false)
     end
-    
+
     local F_ETC = require('CooldawnBuffTracker/util/etc')
     if F_ETC then
         F_ETC.HidePallet()
@@ -353,10 +439,10 @@ end
 local function addTrackedBuff()
     -- Always update list on any interaction
     updateTrackedBuffsList()
-    
+
     local buffId = settingsControls.newBuffId:GetText() or ""
     buffId = buffId:gsub("^%s+", ""):gsub("%s+$", "")
-    
+
     if buffId == "" then
         if settingsControls.addBuffError and settingsControls.errorPanel then
             settingsControls.addBuffError:SetText("Error: enter a buff ID or the skill name")
@@ -364,7 +450,7 @@ local function addTrackedBuff()
         end
         return
     end
-    
+
     -- Ищем сначала по ID, затем по отображаемому имени и по имени навыка (spellName)
     local resolvedId = nil
     if settings and settings.customBuffs then
@@ -383,7 +469,7 @@ local function addTrackedBuff()
             end
         end
     end
-    
+
     if not resolvedId then
         -- Показываем ошибку, если баф не найден в списке кастомных бафов
         if settingsControls.addBuffError and settingsControls.errorPanel then
@@ -392,9 +478,15 @@ local function addTrackedBuff()
         end
         return
     end
-    
+
     buffId = resolvedId
-    
+
+    -- Запись попадает на ВЫБРАННЫЙ канвас выбранного юнита (уже отслеживаемую
+    -- запись не переносим: для переноса есть кнопка Mv)
+    if not isTrackedOnUnit(currentUnitConfig(), buffId) then
+        setCanvasOf(buffId, selectedCanvasIndex(currentUnitType), currentUnitType)
+    end
+
     -- Try to add buff for selected unit type
     if BuffsToTrack.AddTrackedBuff(buffId, currentUnitType) then
         -- Список баффов изменился — активный пресет больше не актуален
@@ -403,24 +495,24 @@ local function addTrackedBuff()
         -- Clear input field
         settingsControls.newBuffId:SetText("")
         if settingsControls.hideAc then settingsControls.hideAc() end
-        
+
         -- Hide error message
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
         end
-        
+
         -- Update main interface
         if helpers and helpers.updateSettings then
             helpers.updateSettings()
         end
-        
+
         -- Explicitly call buffs list update event
         api:Emit("ADDON_CBT_BUFFS_CHANGED")
-        
+
         -- Go to last page to show newly added buff
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
         buffListPage = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
-        
+
         if settingsControls.updateVisibleItems then
             settingsControls.updateVisibleItems()
         end
@@ -464,7 +556,10 @@ local function addBuffFromSearch(buffId, unitType)
         updateCustomBuffsList(true)
     end
 
-    -- Добавляем в отслеживание для текущего типа юнита
+    -- Добавляем в отслеживание для выбранного типа юнита (на его выбранный канвас)
+    if not isTrackedOnUnit(settings and settings[unitType], buffId) then
+        setCanvasOf(buffId, selectedCanvasIndex(unitType), unitType)
+    end
     if BuffsToTrack.AddTrackedBuff(buffId, unitType) then
         -- Список баффов изменился — активный пресет больше не актуален
         deactivateActivePreset()
@@ -516,6 +611,9 @@ local function addCustomFromSpell(spellName, unitType)
         })
         pcall(function() api.SaveSettings() end)
         updateCustomBuffsList(true)
+    end
+    if not isTrackedOnUnit(settings and settings[unitType], spellName) then
+        setCanvasOf(spellName, selectedCanvasIndex(unitType), unitType)
     end
     if BuffsToTrack.AddTrackedBuff(spellName, unitType) then
         deactivateActivePreset()
@@ -594,7 +692,7 @@ local function addCustomBuff()
             end
         end
     end
-    
+
     -- Проверяем наличие иконки с таким ID (для mana-навыка id может быть именем)
     local buffIcon = BuffList.GetBuffIcon(id)
     local iconExists = buffIcon ~= nil
@@ -676,11 +774,11 @@ local function addCustomBuff()
     if helpers and helpers.updateSettings then
         helpers.updateSettings()
     end
-    
+
     -- Go to last page to show newly added buff
     local customBuffs = settings.customBuffs or {}
     customBuffPage = math.max(1, math.ceil(#customBuffs / customsPerPage))
-    
+
     if settingsControls.updateCustomVisibleItems then
         settingsControls.updateCustomVisibleItems()
     end
@@ -690,42 +788,49 @@ end
 local function updateSettingsFields()
     -- Update settings from current data
     settings = helpers.getSettings()
-    
+
     -- Check if settings for selected unit type exist
     if not settings[currentUnitType] then
         settings[currentUnitType] = {}
     end
-    
-    -- Update settings fields for selected unit type
+
+    -- Правая колонка показывает значения ВЫБРАННОГО канваса.
     local unitSettings = settings[currentUnitType]
-    
+    local cfg = unitSettings.canvases and unitSettings.canvases[selectedCanvasIndex()] or {}
+    unitSettings.selectedCanvas = selectedCanvasIndex()
+
+    -- Имя канваса в селекторе
+    if canvasMenuButton then
+        canvasMenuButton:SetText("Canvas: " .. canvasName(unitSettings.selectedCanvas))
+    end
+
     -- Update position fields
     if settingsControls.posX then
-        settingsControls.posX:SetText(tostring(unitSettings.posX or 0))
+        settingsControls.posX:SetText(tostring(cfg.posX or 0))
     end
-    
+
     if settingsControls.posY then
-        settingsControls.posY:SetText(tostring(unitSettings.posY or 0))
+        settingsControls.posY:SetText(tostring(cfg.posY or 0))
     end
-    
+
     -- Update lock button text
     if settingsControls.lockButton then
-        settingsControls.lockButton:SetText(unitSettings.lockPositioning and "Lock: ON" or "Lock: OFF")
+        settingsControls.lockButton:SetText(cfg.lockPositioning and "Lock: ON" or "Lock: OFF")
     end
-    
+
     -- Update debug button text (global setting, not per unit type)
     if settingsControls.debugBuffButton then
         settingsControls.debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
     end
-    
+
     -- Update timer settings
     if settingsControls.timerFontSize then
-        settingsControls.timerFontSize:SetText(tostring(unitSettings.timerFontSize or 16))
+        settingsControls.timerFontSize:SetText(tostring(cfg.timerFontSize or 16))
     end
-    
+
     -- Update timer text color
     if settingsControls.timerTextColor and settingsControls.timerTextColor.colorBG then
-        local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
+        local textColor = cfg.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
         settingsControls.timerTextColor.colorBG:SetColor(
             textColor.r or 1,
             textColor.g or 1,
@@ -736,7 +841,7 @@ local function updateSettingsFields()
 
     -- Update label text color
     if settingsControls.labelTextColor and settingsControls.labelTextColor.colorBG then
-        local lblColor = unitSettings.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
+        local lblColor = cfg.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
         settingsControls.labelTextColor.colorBG:SetColor(
             lblColor.r or 1,
             lblColor.g or 1,
@@ -747,54 +852,54 @@ local function updateSettingsFields()
 
     -- Update icon size settings
     if settingsControls.iconSize then
-        settingsControls.iconSize:SetText(tostring(unitSettings.iconSize or 40))
+        settingsControls.iconSize:SetText(tostring(cfg.iconSize or 40))
     end
-    
+
     if settingsControls.iconSpacing then
-        settingsControls.iconSpacing:SetText(tostring(unitSettings.iconSpacing or 5))
+        settingsControls.iconSpacing:SetText(tostring(cfg.iconSpacing or 5))
     end
 
     -- Этап 4: поля сетки иконок
     if settingsControls.gridColumns then
-        settingsControls.gridColumns:SetText(tostring(unitSettings.gridColumns or 10))
+        settingsControls.gridColumns:SetText(tostring(cfg.gridColumns or 10))
     end
 
     if settingsControls.gridRows then
-        settingsControls.gridRows:SetText(tostring(unitSettings.gridRows or 1))
+        settingsControls.gridRows:SetText(tostring(cfg.gridRows or 1))
     end
 
     if settingsControls.maxIcons then
-        local defMax = (unitSettings.gridColumns or 10) * (unitSettings.gridRows or 1)
-        settingsControls.maxIcons:SetText(tostring(unitSettings.maxIcons or defMax))
+        local defMax = (cfg.gridColumns or 10) * (cfg.gridRows or 1)
+        settingsControls.maxIcons:SetText(tostring(cfg.maxIcons or defMax))
     end
 
     if settingsControls.gridRowSpacing then
-        settingsControls.gridRowSpacing:SetText(tostring(unitSettings.gridRowSpacing or unitSettings.iconSpacing or 5))
+        settingsControls.gridRowSpacing:SetText(tostring(cfg.gridRowSpacing or cfg.iconSpacing or 5))
     end
 
     -- Update label settings
     if settingsControls.labelFontSize then
-        settingsControls.labelFontSize:SetText(tostring(unitSettings.labelFontSize or 14))
+        settingsControls.labelFontSize:SetText(tostring(cfg.labelFontSize or 14))
     end
-    
+
     if settingsControls.labelX then
-        settingsControls.labelX:SetText(tostring(unitSettings.labelX or 0))
+        settingsControls.labelX:SetText(tostring(cfg.labelX or 0))
     end
-    
+
     if settingsControls.labelY then
-        settingsControls.labelY:SetText(tostring(unitSettings.labelY or -30))
+        settingsControls.labelY:SetText(tostring(cfg.labelY or -30))
     end
-    
+
     -- Update show label button text
     if settingsControls.showLabel then
-        settingsControls.showLabel:SetText(unitSettings.showLabel and "Show label: ON" or "Show label: OFF")
+        settingsControls.showLabel:SetText(cfg.showLabel and "Show label: ON" or "Show label: OFF")
     end
-    
+
     if settingsControls.showTimer then
-        settingsControls.showTimer:SetChecked(unitSettings.showTimer ~= false) -- Default enabled
+        settingsControls.showTimer:SetChecked(cfg.showTimer ~= false) -- Default enabled
     end
-    
-    -- Update tracked buffs list
+
+    -- Update tracked buffs list (только записи выбранного канваса)
     updateTrackedBuffsList()
 end
 
@@ -970,23 +1075,303 @@ local function openCddDialog(buffId)
     cancelBtn:SetHandler("OnClick", function() wnd:Show(false) end)
 end
 
+-- =========================================================================
+-- Селектор канвасов: выпадающий список + Add / Rename / Delete
+-- =========================================================================
+
+local closeCanvasPopup
+
+closeCanvasPopup = function()
+    if canvasPopup then
+        pcall(function() CbtWindow.Destroy(canvasPopup) end)
+        canvasPopup = nil
+    end
+end
+
+-- Небольшой тёмный попап со списком кнопок (селектор канваса и Mv).
+local function showCanvasPopup(title, items, onPick)
+    closeCanvasPopup()
+    canvasPopupSeq = canvasPopupSeq + 1
+    local seq = canvasPopupSeq
+    local w = CbtWindow.Create("cbtCanvasPopup" .. tostring(seq), title, 250, 74 + #items * 26, closeCanvasPopup)
+    if not w then return end
+    canvasPopup = w
+
+    local hint = helpers.createLabel("cbtCanvasPopupHint" .. tostring(seq), w, "Select canvas:", 15, 42, 13)
+    hint:SetWidth(215)
+    hint.style:SetColor(0.72, 0.74, 0.80, 1)
+    hint:Show(true)
+
+    for i, item in ipairs(items) do
+        local b = helpers.createButton("cbtCanvasPopupBtn" .. tostring(seq) .. "_" .. tostring(i), w, item.label, 15, 62 + (i - 1) * 26)
+        b:SetExtent(220, 22)
+        b:Show(true)
+        if item.current then
+            pcall(function() b.textLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
+        end
+        b:SetHandler("OnClick", function()
+            closeCanvasPopup()
+            if onPick then onPick(item.value) end
+        end)
+    end
+
+    w:Show(true)
+end
+
+-- Список канвасов текущего юнита в выпадающем меню.
+local function openCanvasListPopup()
+    local unit = currentUnitConfig()
+    if not unit or not unit.canvases then return end
+    local sel = selectedCanvasIndex()
+    local items = {}
+    for i = 1, #unit.canvases do
+        items[#items + 1] = {
+            label = (i == sel and "* " or "") .. canvasName(i),
+            value = i,
+            current = (i == sel),
+        }
+    end
+    showCanvasPopup("Canvases", items, function(index)
+        unit.selectedCanvas = index
+        pcall(function() api.SaveSettings() end)
+        -- Поля справа должны показать значения выбранного канваса
+        updateSettingsFields()
+    end)
+end
+
+-- Добавить канвас: копия раскладки текущего, выбранный канвас переключается.
+local function addCanvas()
+    local unit = currentUnitConfig()
+    if not unit or type(unit.canvases) ~= "table" then return end
+    local src = unit.canvases[selectedCanvasIndex()]
+    if not src then return end
+
+    local newCfg = defaultSettings.cloneValue(src)
+    newCfg.name = "Canvas " .. tostring(#unit.canvases + 1)
+    local size = tonumber(src.iconSize) or 40
+    newCfg.posY = (tonumber(src.posY) or 30) + size + 30
+    table.insert(unit.canvases, newCfg)
+    unit.selectedCanvas = #unit.canvases
+
+    pcall(function() api.SaveSettings() end)
+    -- Пересоздаём панели под новый набор канвасов
+    if helpers and helpers.updateSettings then
+        helpers.updateSettings()
+    end
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
+    updateSettingsFields()
+end
+
+-- Переименовать выбранный канвас (маленький диалог с полем ввода).
+local function openRenameCanvasDialog()
+    local unit = currentUnitConfig()
+    if not unit or not unit.canvases then return end
+    local index = selectedCanvasIndex()
+    local currentName = canvasName(index)
+
+    if renameWindow then
+        pcall(function() CbtWindow.Destroy(renameWindow) end)
+        renameWindow = nil
+    end
+    local w = CbtWindow.Create("cbtCanvasRename", "Rename canvas", 360, 180, function()
+        if renameWindow then renameWindow:Show(false) end
+    end)
+    if not w then return end
+    renameWindow = w
+
+    local lbl = helpers.createLabel("cbtCanvasRenameLabel", w, "Name:", 15, 44, 14)
+    lbl:SetWidth(60)
+    lbl:Show(true)
+
+    local edit = helpers.createEdit("cbtCanvasRenameEdit", lbl, currentName, 60, -2)
+    edit:SetWidth(250)
+    edit:SetMaxTextLength(24)
+    edit:Show(true)
+
+    local function apply()
+        local name = edit:GetText() or ""
+        name = name:gsub("^%s+", ""):gsub("%s+$", "")
+        if name == "" then name = currentName end
+        local cfg = selectedCanvasCfg()
+        if cfg then cfg.name = name end
+        pcall(function() api.SaveSettings() end)
+        if helpers and helpers.updateSettings then helpers.updateSettings() end
+        updateSettingsFields()
+        w:Show(false)
+    end
+
+    local saveBtn = helpers.createButton("cbtCanvasRenameSave", w, "Save", 15, 86)
+    saveBtn:SetExtent(120, 26)
+    saveBtn:Show(true)
+    saveBtn:SetHandler("OnClick", apply)
+
+    local cancelBtn = helpers.createButton("cbtCanvasRenameCancel", w, "Cancel", 143, 86)
+    cancelBtn:SetExtent(100, 26)
+    cancelBtn:Show(true)
+    cancelBtn:SetHandler("OnClick", function() w:Show(false) end)
+
+    -- Enter в поле = Save
+    pcall(function()
+        edit:SetHandler("OnEnterPressed", function(self)
+            if self and self.ClearFocus then self:ClearFocus() end
+            apply()
+        end)
+    end)
+
+    w:Show(true)
+end
+
+-- Удалить выбранный канвас вместе со всеми его записями (с подтверждением).
+local function deleteCanvas(index)
+    local unit = currentUnitConfig()
+    if not unit or type(unit.canvases) ~= "table" then return false end
+    if #unit.canvases <= 1 then return false end
+    if index < 1 or index > #unit.canvases then return false end
+
+    table.remove(unit.canvases, index)
+
+    -- Все записи этого канваса снимаются; индексы выше сдвигаются на -1.
+    local keep = {}
+    for _, id in ipairs(unit.trackedBuffs or {}) do
+        local ci = canvasIndexOfId(unit, id)
+        if ci ~= index then keep[#keep + 1] = id end
+    end
+    local newOf = {}
+    for _, id in ipairs(keep) do
+        local ci = canvasIndexOfId(unit, id)
+        if ci > index then ci = ci - 1 end
+        newOf[tostring(id)] = ci
+    end
+    unit.trackedBuffs = keep
+    unit.canvasOf = newOf
+    if type(unit.mirror) == "table" then
+        for key in pairs(unit.mirror) do
+            if newOf[key] == nil then unit.mirror[key] = nil end
+        end
+    end
+    unit.enabled = (#keep > 0)
+
+    local selected = index
+    if selected > #unit.canvases then selected = #unit.canvases end
+    if selected < 1 then selected = 1 end
+    unit.selectedCanvas = selected
+
+    pcall(function() api.SaveSettings() end)
+    if helpers and helpers.updateSettings then helpers.updateSettings() end
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
+    updateTrackedBuffsList(true)
+    updateSettingsFields()
+    return true
+end
+
+local function openDeleteCanvasDialog()
+    local unit = currentUnitConfig()
+    if not unit or not unit.canvases then return end
+    if #unit.canvases <= 1 then
+        if settingsControls.customBuffErrorPanel and settingsControls.addCustomBuffError then
+            settingsControls.addCustomBuffError:SetText("Error: the last canvas cannot be deleted")
+            settingsControls.customBuffErrorPanel:Show(true)
+        end
+        return
+    end
+
+    local index = selectedCanvasIndex()
+    local name = canvasName(index)
+    local count = #trackedForCanvas(unit, unit.trackedBuffs, index)
+
+    if deleteWindow then
+        pcall(function() CbtWindow.Destroy(deleteWindow) end)
+        deleteWindow = nil
+    end
+    local w = CbtWindow.Create("cbtCanvasDelete", "Delete canvas", 420, 200, function()
+        if deleteWindow then deleteWindow:Show(false) end
+    end)
+    if not w then return end
+    deleteWindow = w
+
+    local line1 = helpers.createLabel("cbtCanvasDeleteLine1", w,
+        'Delete canvas "' .. tostring(name) .. '" ?', 15, 46, 15)
+    line1:SetWidth(385)
+    pcall(function() line1.style:SetColor(0.95, 0.55, 0.45, 1) end)
+    line1:Show(true)
+
+    local line2 = helpers.createLabel("cbtCanvasDeleteLine2", w,
+        tostring(count) .. ' tracked entries will be removed from this unit.', 15, 70, 13)
+    line2:SetWidth(385)
+    line2.style:SetColor(0.78, 0.80, 0.85, 1)
+    line2:Show(true)
+
+    local delBtn = helpers.createButton("cbtCanvasDeleteConfirm", w, "Delete", 15, 104)
+    delBtn:SetExtent(120, 26)
+    delBtn:Show(true)
+    delBtn:SetHandler("OnClick", function()
+        deleteCanvas(index)
+        w:Show(false)
+    end)
+
+    local cancelBtn = helpers.createButton("cbtCanvasDeleteCancel", w, "Cancel", 143, 104)
+    cancelBtn:SetExtent(100, 26)
+    cancelBtn:Show(true)
+    cancelBtn:SetHandler("OnClick", function() w:Show(false) end)
+
+    w:Show(true)
+end
+
+-- Строка выбора канваса: [Canvas: Main] [Add] [Rename] [Delete]
+local function buildCanvasSelector()
+    local label = helpers.createLabel('canvasLabel', settingsWindow, 'Canvas:', 340, 72, 14)
+    label:SetWidth(52)
+    label:Show(true)
+
+    canvasMenuButton = helpers.createButton('canvasMenuButton', settingsWindow,
+        'Canvas: ' .. canvasName(selectedCanvasIndex()), 394, 71)
+    canvasMenuButton:SetExtent(150, 20)
+    pcall(function() canvasMenuButton.textLabel.style:SetFontSize(12) end)
+    canvasMenuButton:Show(true)
+    canvasMenuButton:SetHandler("OnClick", function() openCanvasListPopup() end)
+    settingsControls.canvasMenuButton = canvasMenuButton
+
+    local addButton = helpers.createButton('canvasAddButton', settingsWindow, 'Add', 548, 71)
+    addButton:SetExtent(44, 20)
+    pcall(function() addButton.textLabel.style:SetFontSize(12) end)
+    addButton:Show(true)
+    addButton:SetHandler("OnClick", addCanvas)
+    settingsControls.canvasAddButton = addButton
+
+    local renameButton = helpers.createButton('canvasRenameButton', settingsWindow, 'Rename', 596, 71)
+    renameButton:SetExtent(66, 20)
+    pcall(function() renameButton.textLabel.style:SetFontSize(12) end)
+    renameButton:Show(true)
+    renameButton:SetHandler("OnClick", openRenameCanvasDialog)
+    settingsControls.canvasRenameButton = renameButton
+
+    local deleteButton = helpers.createButton('canvasDeleteButton', settingsWindow, 'Delete', 666, 71)
+    deleteButton:SetExtent(58, 20)
+    pcall(function() deleteButton.textLabel.style:SetFontSize(12) end)
+    deleteButton:Show(true)
+    deleteButton:SetHandler("OnClick", openDeleteCanvasDialog)
+    settingsControls.canvasDeleteButton = deleteButton
+
+    return canvasMenuButton
+end
+
 local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
                                            'Unit:', 20, 44, 16)
     unitTypeLabel:SetWidth(45)
     unitTypeLabel:Show(true)
-    
+
     -- Mount settings button
     local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 70, 44)
     mountButton:SetWidth(80)
     mountButton:Show(true)
-    
+
     -- Player settings button
     local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 160, 44)
     playerButton:SetWidth(80)
     playerButton:Show(true)
-    
+
     -- Target settings button
     local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 250, 44)
     targetButton:SetWidth(80)
@@ -1008,7 +1393,7 @@ local function buildUnitTypeSelector()
             targetButton:SetText("* Target")
         end
     end
-    
+
     -- Unit type button click handlers
     mountButton:SetHandler("OnClick", function()
         currentUnitType = "playerpet"
@@ -1017,7 +1402,7 @@ local function buildUnitTypeSelector()
         -- Update all settings fields for mount settings display
         updateSettingsFields()
     end)
-    
+
     playerButton:SetHandler("OnClick", function()
         currentUnitType = "player"
         updateUnitTypeButtons()
@@ -1025,7 +1410,7 @@ local function buildUnitTypeSelector()
         -- Update all settings fields for player settings display
         updateSettingsFields()
     end)
-    
+
     targetButton:SetHandler("OnClick", function()
         currentUnitType = "target"
         updateUnitTypeButtons()
@@ -1033,7 +1418,7 @@ local function buildUnitTypeSelector()
         -- Update all settings fields for target settings display
         updateSettingsFields()
     end)
-    
+
     -- Initialize button style
     updateUnitTypeButtons()
 end
@@ -1044,7 +1429,7 @@ local function buildTrackedBuffsSection()
                                                     '', 34, 84, 20)  -- Удаляем текст "Buff tracker management"
     trackedBuffsGroupLabel:SetWidth(390) -- Increase header width
     trackedBuffsGroupLabel:Show(true)
-    
+
     -- SECOND BLOCK - Tracked buffs list
     local trackedBuffsListHeader = helpers.createLabel('trackedBuffsListHeader', trackedBuffsGroupLabel,
                                                     'Tracked entries:', 0, 10, 16)
@@ -1070,19 +1455,19 @@ local function buildTrackedBuffsSection()
     end)
     settingsControls.recordButton = recordButton
 
-    
+
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
     buffsListContainer:SetExtent(334, 220) -- Увеличенная высота контейнера для списка (6 элементов)
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 35)
     buffsListContainer:Show(true)
     buffsListContainer:Clickable(true) -- Включаем кликабельность для обработки колесика мыши
-    
+
     -- Enable scissor clipping to prevent elements from rendering outside container bounds
     if buffsListContainer.EnableScissor then
         buffsListContainer:EnableScissor(true)
     end
-    
+
     -- Добавляем рамку для визуального обозначения границ списка
     local containerBorder = buffsListContainer:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     containerBorder:SetCoords(0, 0, 27, 16)
@@ -1090,12 +1475,12 @@ local function buildTrackedBuffsSection()
     containerBorder:SetColor(0.28, 0.30, 0.34, 1)
     containerBorder:AddAnchor("TOPLEFT", buffsListContainer, -1, -1)
     containerBorder:AddAnchor("BOTTOMRIGHT", buffsListContainer, 1, 1)
-    
+
     -- Visible background for container
     local containerBg = buffsListContainer:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     containerBg:AddAnchor("TOPLEFT", buffsListContainer, 0, 0)
     containerBg:AddAnchor("BOTTOMRIGHT", buffsListContainer, 0, 0)
-    
+
     -- Создаем внутренний контейнер для содержимого, который будет прокручиваться
     local buffsContentContainer = api.Interface:CreateWidget('window', 'buffsContentContainer', buffsListContainer)
     buffsContentContainer:SetWidth(314) -- Ширина с отступами
@@ -1103,22 +1488,27 @@ local function buildTrackedBuffsSection()
     buffsContentContainer:RemoveAllAnchors()
     buffsContentContainer:AddAnchor("TOPLEFT", buffsListContainer, 10, 5)
     buffsContentContainer:Show(true)
-    
+
     settingsControls.buffsListContainer = buffsListContainer
     settingsControls.buffsContentContainer = buffsContentContainer
-    
+
     -- Текущая позиция прокрутки
     -- Храним отображаемые в данный момент элементы списка
     local visibleBuffs = {}
-    
-    -- Функция обновления видимых элементов списка с пагинацией
+
+    -- Функция обновления видимых элементов списка с пагинацией.
+    -- Показываем только записи ВЫБРАННОГО канваса (canvasOf), порядок сохраняется.
     local function updateVisibleItems()
         -- Получаем ссылки на необходимые элементы
         local container = settingsControls.buffsListContainer
-        
-        -- Получаем список отслеживаемых бафов
-        local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
-        
+        if not container then return end
+
+        local unit = currentUnitConfig()
+        local canvasIdx = selectedCanvasIndex()
+        local allTracked = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
+        local trackedBuffs = trackedForCanvas(unit, allTracked, canvasIdx)
+        local hasSeveralCanvases = unit and unit.canvases and #unit.canvases > 1
+
         -- Очищаем предыдущие элементы
         for _, widget in ipairs(visibleBuffs) do
             if widget then
@@ -1128,26 +1518,26 @@ local function buildTrackedBuffsSection()
             end
         end
         visibleBuffs = {}
-        
+
         -- Определяем размер видимой области
         local itemHeight = 22
-        
+
         -- Вычисляем общее количество страниц
         local totalPages = math.max(1, math.ceil(#trackedBuffs / buffsPerPage))
-        
+
         -- Корректируем текущую страницу если нужно
         if buffListPage > totalPages then buffListPage = totalPages end
         if buffListPage < 1 then buffListPage = 1 end
-        
+
         -- Вычисляем диапазон элементов для текущей страницы
         local startIndex = (buffListPage - 1) * buffsPerPage + 1
         local endIndex = math.min(startIndex + buffsPerPage - 1, #trackedBuffs)
-        
+
         -- Обновляем индикатор страницы
         if settingsControls.buffPageIndicator then
             settingsControls.buffPageIndicator:SetText(buffListPage .. "/" .. totalPages)
         end
-        
+
         -- Если список пуст, показываем сообщение
         if #trackedBuffs == 0 then
             local emptyLabel = helpers.createLabel('emptyBuffsList', container, "Nothing tracked yet", 0, 0, 16)
@@ -1158,26 +1548,26 @@ local function buildTrackedBuffsSection()
             table.insert(visibleBuffs, emptyLabel)
             return
         end
-        
+
         -- Создаем видимые элементы списка для текущей страницы
         local yOffset = 6
-        
+
         for i = startIndex, endIndex do
             local buffId = trackedBuffs[i]
             if not buffId then break end
-            
+
             -- Get buff name if possible
             local buffName = BuffList.GetBuffName(buffId) or ("Buff #" .. buffId)
-            
+
             -- Create row with buff information
-            local buffRow = api.Interface:CreateWidget('window', 'trackedBuff_' .. i, container)
+            local buffRow = api.Interface:CreateWidget('window', 'trackedBuff_' .. canvasIdx .. '_' .. i, container)
             buffRow:SetExtent(304, 20)
             buffRow:AddAnchor("TOPLEFT", container, 10, yOffset)
             buffRow:Show(true)
-            
+
             -- Icon
             if CreateItemIconButton and F_SLOT and F_SLOT.SetIconBackGround then
-                local iconBtn = CreateItemIconButton('trackedBuffIcon_' .. i, buffRow)
+                local iconBtn = CreateItemIconButton('trackedBuffIcon_' .. canvasIdx .. '_' .. i, buffRow)
                 if iconBtn then
                     iconBtn:SetExtent(18, 18)
                     iconBtn:AddAnchor("LEFT", buffRow, 0, 0)
@@ -1186,74 +1576,75 @@ local function buildTrackedBuffsSection()
                 end
             end
 
-            -- Buff name only (ID убран, чтобы не перекрывать имя)
-            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 22, 0, 14)
-            buffNameLabel:SetExtent(110, 20)
+            -- Buff name only
+            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. canvasIdx .. '_' .. i, buffRow, buffName, 20, 0, 14)
+            buffNameLabel:SetExtent(96, 20)
+            pcall(function() buffNameLabel.style:SetEllipsis(true) end)
             buffNameLabel:Show(true)
 
-            
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 134, 0)
-            upButton:SetExtent(26, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. canvasIdx .. '_' .. i, buffRow, 'Up', 118, 0)
+            upButton:SetExtent(24, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
-                if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
+                if M.moveTrackedWithinCanvas and M.moveTrackedWithinCanvas(buffId, "up", currentUnitType) then
                     deactivateActivePreset()
-                    -- Get updated list and find new index of buff
-                    local updatedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
-                    local newIndex = nil
-                    for idx, id in ipairs(updatedBuffs) do
-                        if id == buffId then
-                            newIndex = idx
-                            break
-                        end
-                    end
-                    -- Switch to page where buff moved
-                    if newIndex then
-                        buffListPage = math.max(1, math.ceil(newIndex / buffsPerPage))
-                        updateVisibleItems()
-                    end
+                    updateVisibleItems()
                     if helpers and helpers.updateSettings then
                         helpers.updateSettings()
                     end
                 end
             end)
-            
+
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 162, 0)
-            downButton:SetExtent(34, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. canvasIdx .. '_' .. i, buffRow, 'Down', 144, 0)
+            downButton:SetExtent(30, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
-                if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
+                if M.moveTrackedWithinCanvas and M.moveTrackedWithinCanvas(buffId, "down", currentUnitType) then
                     deactivateActivePreset()
-                    -- Get updated list and find new index of buff
-                    local updatedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
-                    local newIndex = nil
-                    for idx, id in ipairs(updatedBuffs) do
-                        if id == buffId then
-                            newIndex = idx
-                            break
-                        end
-                    end
-                    -- Switch to page where buff moved
-                    if newIndex then
-                        buffListPage = math.max(1, math.ceil(newIndex / buffsPerPage))
-                        updateVisibleItems()
-                    end
+                    updateVisibleItems()
                     if helpers and helpers.updateSettings then
                         helpers.updateSettings()
                     end
                 end
             end)
-            
+
+            -- Mv: перенос записи на другой канвас этого же юнита
+            if hasSeveralCanvases then
+                local mvButton = helpers.createButton('moveBuffButton_' .. canvasIdx .. '_' .. i, buffRow, 'Mv', 176, 0)
+                mvButton:SetExtent(26, 20)
+                pcall(function() mvButton.textLabel.style:SetFontSize(11) end)
+                mvButton:Show(true)
+                mvButton:SetHandler("OnClick", function()
+                    local unitNow = currentUnitConfig()
+                    if not unitNow or not unitNow.canvases then return end
+                    local currentCanvas = canvasIndexOfId(unitNow, buffId)
+                    local items = {}
+                    for ci = 1, #unitNow.canvases do
+                        if ci ~= currentCanvas then
+                            items[#items + 1] = { label = canvasName(ci), value = ci }
+                        end
+                    end
+                    if #items == 0 then return end
+                    showCanvasPopup("Move entry to canvas", items, function(index)
+                        setCanvasOf(buffId, index, currentUnitType)
+                        pcall(function() api.SaveSettings() end)
+                        api:Emit("ADDON_CBT_BUFFS_CHANGED")
+                        deactivateActivePreset()
+                        updateVisibleItems()
+                    end)
+                end)
+            end
+
             -- Mirror: ауру читаем с player, а её таймер показываем на текущем target
             if currentUnitType == "target" then
                 local mirrorKey = tostring(buffId)
                 local mirrorOn = settings.target and settings.target.mirror and settings.target.mirror[mirrorKey]
                 -- Состояние видно по тексту: Mir ON / Mir OFF (+ цвет)
-                local mirButton = helpers.createButton('mirrorBuffButton_' .. i, buffRow,
-                    mirrorOn and 'Mir ON' or 'Mir OFF', 198, 0)
-                mirButton:SetExtent(48, 20)
+                local mirButton = helpers.createButton('mirrorBuffButton_' .. canvasIdx .. '_' .. i, buffRow,
+                    mirrorOn and 'Mir ON' or 'Mir OFF', 204, 0)
+                mirButton:SetExtent(46, 20)
                 pcall(function() mirButton.textLabel.style:SetFontSize(11) end)
                 mirButton:Show(true)
                 if mirrorOn then
@@ -1276,14 +1667,22 @@ local function buildTrackedBuffsSection()
             end
 
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 248, 0)
-            removeButton:SetExtent(54, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. canvasIdx .. '_' .. i, buffRow, 'Remove', 252, 0)
+            removeButton:SetExtent(52, 20)
             pcall(function() removeButton.textLabel.style:SetFontSize(11) end)
             removeButton:Show(true)
-            
-            -- Remove button handler
+
+            -- Remove button handler: снимает запись и её привязку к канвасу
             removeButton:SetHandler("OnClick", function()
                 if BuffsToTrack.RemoveTrackedBuff(buffId, currentUnitType) then
+                    local unitNow = currentUnitConfig()
+                    if unitNow and type(unitNow.canvasOf) == "table" then
+                        unitNow.canvasOf[tostring(buffId)] = nil
+                    end
+                    if unitNow and type(unitNow.mirror) == "table" then
+                        unitNow.mirror[tostring(buffId)] = nil
+                    end
+                    api.SaveSettings()
                     deactivateActivePreset()
                     -- Update list after removal
                     updateTrackedBuffsList()
@@ -1291,17 +1690,17 @@ local function buildTrackedBuffsSection()
                     if helpers and helpers.updateSettings then
                         helpers.updateSettings()
                     end
-                    
+
                     -- Explicitly call buffs list update event
                     api:Emit("ADDON_CBT_BUFFS_CHANGED")
                 end
             end)
-            
+
             -- Добавляем элементы в список видимых
             table.insert(visibleBuffs, buffRow)
             yOffset = yOffset + itemHeight
         end
-        
+
         -- Убедимся, что остальные элементы интерфейса не были затронуты
         if settingsControls.newBuffIdLabel then
             settingsControls.newBuffIdLabel:Show(true)
@@ -1316,7 +1715,7 @@ local function buildTrackedBuffsSection()
             settingsControls.timerGroupLabel:Show(true)
         end
     end
-    
+
     -- Кнопки пагинации для buff list
     local buffPrevButton = helpers.createButton('buffPrevButton', buffsListContainer, '<', 0, 0)
     buffPrevButton:SetExtent(30, 25)
@@ -1330,7 +1729,7 @@ local function buildTrackedBuffsSection()
     end)
     buffPrevButton:Show(true)
     settingsControls.buffPrevButton = buffPrevButton
-    
+
     -- Индикатор страницы
     local buffPageIndicator = helpers.createLabel('buffPageIndicator', buffsListContainer, "1/1", 0, 0, 14)
     buffPageIndicator:SetExtent(50, 25)
@@ -1339,7 +1738,7 @@ local function buildTrackedBuffsSection()
     buffPageIndicator.style:SetAlign(ALIGN.CENTER)
     buffPageIndicator:Show(true)
     settingsControls.buffPageIndicator = buffPageIndicator
-    
+
     local buffNextButton = helpers.createButton('buffNextButton', buffsListContainer, '>', 0, 0)
     buffNextButton:SetExtent(30, 25)
     buffNextButton:RemoveAllAnchors()
@@ -1354,10 +1753,10 @@ local function buildTrackedBuffsSection()
     end)
     buffNextButton:Show(true)
     settingsControls.buffNextButton = buffNextButton
-    
+
     -- Сохраняем функцию обновления в контролах
     settingsControls.updateVisibleItems = updateVisibleItems
-    
+
     -- IMMEDIATELY fill list of tracked buffs
     updateTrackedBuffsList(true)
     return buffsListContainer, trackedBuffsGroupLabel
@@ -1369,19 +1768,19 @@ local function buildNewBuffInput(buffsListContainer)
     newBuffIdLabel:SetWidth(100)
     newBuffIdLabel:Show(true)
     settingsControls.newBuffIdLabel = newBuffIdLabel
-    
+
     -- Явно размещаем поле ввода нового баффа после списка обычных баффов
     newBuffIdLabel:RemoveAllAnchors()
     newBuffIdLabel:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 0, 40)
-    
+
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 64, 0)
-    if newBuffId then 
-        newBuffId:SetMaxTextLength(32) 
+    if newBuffId then
+        newBuffId:SetMaxTextLength(32)
         newBuffId:SetWidth(180)
         newBuffId:Show(true)
     end
     settingsControls.newBuffId = newBuffId
-    
+
     -- Add buff button
     local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 250, -7)
     addBuffButton:SetWidth(80)
@@ -1477,20 +1876,20 @@ local function buildNewBuffInput(buffsListContainer)
         hideAc()
     end)
 
-    
+
     -- Create highlighted panel for error messages
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
     errorPanel:SetExtent(320, 25)
     errorPanel:RemoveAllAnchors()
     errorPanel:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 0, -26)
-    
+
     -- Frame for error panel for better highlighting
     local errorPanelBorder = errorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     errorPanelBorder:SetCoords(0, 0, 27, 16)
     errorPanelBorder:SetInset(0, 8, 0, 7)
     errorPanelBorder:AddAnchor("TOPLEFT", errorPanel, -1, -1)
     errorPanelBorder:AddAnchor("BOTTOMRIGHT", errorPanel, 1, 1)
-    
+
     -- Background for error panel - make more visible
     local errorPanelBg = errorPanel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     errorPanelBg:AddAnchor("TOPLEFT", errorPanel, 0, 0)
@@ -1502,7 +1901,7 @@ local function buildNewBuffInput(buffsListContainer)
     addBuffError.style:SetColor(0.95, 0.45, 0.45, 1) -- Red color for error message
     addBuffError:Show(true)
     settingsControls.addBuffError = addBuffError
-    
+
     -- By default error panel is hidden
     errorPanel:Show(false)
     settingsControls.errorPanel = errorPanel
@@ -1516,23 +1915,23 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     customBuffsListHeader:SetWidth(474)
     customBuffsListHeader:Show(true)
     settingsControls.customBuffsListHeader = customBuffsListHeader
-    
+
     -- Явно размещаем заголовок для пользовательских баффов после панели ошибок ввода Buff ID
     customBuffsListHeader:RemoveAllAnchors()
     customBuffsListHeader:AddAnchor("TOPLEFT", settingsWindow, 376, 94)
-    
+
     -- Контейнер для списка пользовательских баффов
     local customBuffsListContainer = api.Interface:CreateWidget('window', 'customBuffsListContainer', customBuffsListHeader)
     customBuffsListContainer:SetExtent(474, 220)
     customBuffsListContainer:AddAnchor("TOPLEFT", customBuffsListHeader, 0, 35)
     customBuffsListContainer:Show(true)
     customBuffsListContainer:Clickable(true)
-    
+
     -- Enable scissor clipping to prevent elements from rendering outside container bounds
     if customBuffsListContainer.EnableScissor then
         customBuffsListContainer:EnableScissor(true)
     end
-    
+
     settingsControls.customBuffsListContainer = customBuffsListContainer
 
     -- Рамка для контейнера
@@ -1573,18 +1972,18 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
         customBuffsList = {}
 
         local itemHeight = 22
-        
+
         -- Вычисляем общее количество страниц
         local totalPages = math.max(1, math.ceil(#customBuffs / customsPerPage))
-        
+
         -- Корректируем текущую страницу если нужно
         if customBuffPage > totalPages then customBuffPage = totalPages end
         if customBuffPage < 1 then customBuffPage = 1 end
-        
+
         -- Вычисляем диапазон элементов для текущей страницы
         local startIndex = (customBuffPage - 1) * customsPerPage + 1
         local endIndex = math.min(startIndex + customsPerPage - 1, #customBuffs)
-        
+
         -- Обновляем индикатор страницы
         if settingsControls.customPageIndicator then
             settingsControls.customPageIndicator:SetText(customBuffPage .. "/" .. totalPages)
@@ -1668,6 +2067,10 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 -- и отслеживаемых баффов хранятся строкой (из поля ввода), и аддон
                 -- сопоставляет их по совпадению типа. Приведение к числу ломает поиск
                 -- данных баффа -> "unknown buff".
+                -- Запись добавляется на выбранный канвас текущего юнита.
+                if not isTrackedOnUnit(currentUnitConfig(), buffData.id) then
+                    setCanvasOf(buffData.id, selectedCanvasIndex(currentUnitType), currentUnitType)
+                end
                 if BuffsToTrack.AddTrackedBuff(buffData.id, currentUnitType) then
                     updateTrackedBuffsList()
                     api:Emit("ADDON_CBT_BUFFS_CHANGED")
@@ -1694,13 +2097,21 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 local removedId = buffData.id
                 table.remove(settings.customBuffs, i)
                 for _, ut in ipairs({ "playerpet", "player", "target" }) do
-                    local list = settings[ut] and settings[ut].trackedBuffs
+                    local unit = settings[ut]
+                    local list = unit and unit.trackedBuffs
                     if type(list) == "table" then
                         for k = #list, 1, -1 do
                             if tostring(list[k]) == tostring(removedId) then
                                 table.remove(list, k)
                             end
                         end
+                    end
+                    -- запись без метаданных бессмысленна: снимаем и привязку к канвасу
+                    if unit and type(unit.canvasOf) == "table" then
+                        unit.canvasOf[tostring(removedId)] = nil
+                    end
+                    if unit and type(unit.mirror) == "table" then
+                        unit.mirror[tostring(removedId)] = nil
                     end
                 end
                 deactivateActivePreset()
@@ -1731,7 +2142,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     end)
     customPrevButton:Show(true)
     settingsControls.customPrevButton = customPrevButton
-    
+
     -- Индикатор страницы
     local customPageIndicator = helpers.createLabel('customPageIndicator', customBuffsListContainer, "1/1", 0, 0, 14)
     customPageIndicator:SetExtent(50, 25)
@@ -1740,7 +2151,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     customPageIndicator.style:SetAlign(ALIGN.CENTER)
     customPageIndicator:Show(true)
     settingsControls.customPageIndicator = customPageIndicator
-    
+
     local customNextButton = helpers.createButton('customNextButton', customBuffsListContainer, '>', 0, 0)
     customNextButton:SetExtent(30, 25)
     customNextButton:RemoveAllAnchors()
@@ -1768,7 +2179,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     customBuffInputsLabel:SetWidth(570)
     customBuffInputsLabel:Show(true)
     settingsControls.customBuffInputsLabel = customBuffInputsLabel
-    
+
     -- Явно размещаем заголовок блока добавления пользовательских баффов
     customBuffInputsLabel:RemoveAllAnchors()
     customBuffInputsLabel:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 0, 40)
@@ -1779,23 +2190,23 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     if debugBuffButton then
         debugBuffButton:SetExtent(100, 25)
         debugBuffButton:Show(true)
-        
+
         -- Toggle handler for debug button
         debugBuffButton:SetHandler("OnClick", function()
             -- Toggle state
             settings.debugBuffId = not settings.debugBuffId
-            
+
             -- Update button text
             debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
         if settingsControls.recordButton then
             settingsControls.recordButton:Show(settings.debugBuffId and true or false)
         end
-            
+
             -- Save settings
             local mainSettings = api.GetSettings("CooldawnBuffTracker")
             mainSettings.debugBuffId = settings.debugBuffId
             api.SaveSettings()
-            
+
             -- Reinitialize/shutdown debugger based on new setting
             local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
             if settings.debugBuffId then
@@ -1815,16 +2226,17 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         debugBuffButton:AddAnchor("TOPLEFT", settingsWindow, 440, 44)
         debugBuffButton:SetExtent(110, 24)
     end
-    
+
     -- Import/Export button
     local importExportButton = helpers.createButton('importExportButton', customBuffInputsLabel, 'Import/Export', 360, -5)
     if importExportButton then
         importExportButton:SetExtent(120, 25)
         importExportButton:Show(true)
-        
+
         importExportButton:SetHandler("OnClick", function()
             importExport.openImportExportWindow(function()
-                -- После успешного импорта обновляем списки баффов
+                -- После успешного импорта обновляем списки баффов и поля канваса
+                updateSettingsFields()
                 updateTrackedBuffsList(true)
                 updateCustomBuffsList(true)
                 api.Log:Info("[CBT] Buff lists refreshed after import")
@@ -1856,47 +2268,47 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         presetsButton:SetExtent(100, 25)
     end
     setPresetsButtonText() -- отразить активный пресет, если есть
-    
+
     -- Поле ID
     local newCustomBuffIdLabel = helpers.createLabel('newCustomBuffIdLabel', customBuffInputsLabel, 'ID:', 0, 25, 14)
     newCustomBuffIdLabel:SetWidth(100)
     newCustomBuffIdLabel:Show(true)
-    
+
     local newCustomBuffId = helpers.createEdit('newCustomBuffId', newCustomBuffIdLabel, "", 20, 0)
     newCustomBuffId:SetWidth(60)
     newCustomBuffId:Show(true)
     settingsControls.newCustomBuffId = newCustomBuffId
-    
+
     -- Поле Name
     local newCustomBuffNameLabel = helpers.createLabel('newCustomBuffNameLabel', customBuffInputsLabel, 'NM:', 100, 25, 14)
     newCustomBuffNameLabel:SetWidth(100)
     newCustomBuffNameLabel:Show(true)
-    
+
     local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 34, 0)
     newCustomBuffName:SetWidth(130)
     newCustomBuffName:Show(true)
     settingsControls.newCustomBuffName = newCustomBuffName
-    
+
     -- Поле Cooldown
     local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 280, 25, 14)
     newCustomBuffCooldownLabel:SetWidth(100)
     newCustomBuffCooldownLabel:Show(true)
-    
+
     local newCustomBuffCooldown = helpers.createEdit('newCustomBuffCooldown', newCustomBuffCooldownLabel, "", 20, 0)
     newCustomBuffCooldown:SetWidth(44)
     newCustomBuffCooldown:Show(true)
     settingsControls.newCustomBuffCooldown = newCustomBuffCooldown
-    
+
     -- Поле Duration
     local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 360, 25, 14)
     newCustomBuffTimeOfActionLabel:SetWidth(100)
     newCustomBuffTimeOfActionLabel:Show(true)
-    
+
     local newCustomBuffTimeOfAction = helpers.createEdit('newCustomBuffTimeOfAction', newCustomBuffTimeOfActionLabel, "", 20, 0)
     newCustomBuffTimeOfAction:SetWidth(44)
     newCustomBuffTimeOfAction:Show(true)
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
-    
+
     -- Поле Spell: имя навыка из боевого лога (необязательно). Если задано,
     -- каждое событие COMBAT_MSG с этим spellName перезапускает отсчёт баффа.
     local newCustomBuffSpellLabel = helpers.createLabel('newCustomBuffSpellLabel', customBuffInputsLabel, 'Spell:', 0, 55, 14)
@@ -1996,7 +2408,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     addCustomBuffButton:Show(true)
     settingsControls.addCustomBuffButton = addCustomBuffButton
     addCustomBuffButton:SetHandler("OnClick", addCustomBuff)
-    
+
     -- Панель ошибок для пользовательских баффов
     local customBuffErrorPanel = api.Interface:CreateWidget('window', 'customBuffErrorPanel', settingsWindow)
     customBuffErrorPanel:SetExtent(350, 25)
@@ -2004,7 +2416,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 145)
     customBuffErrorPanel:Show(false)
     settingsControls.customBuffErrorPanel = customBuffErrorPanel
-    
+
     -- Рамка для панели ошибок пользовательских баффов
     local customErrorPanelBorder = customBuffErrorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
     customErrorPanelBorder:SetCoords(0, 0, 27, 16)
@@ -2033,37 +2445,38 @@ local function buildIconSection(customBuffErrorPanel)
     iconGroupLabel:SetWidth(320)
     iconGroupLabel:Show(true)
     settingsControls.iconGroupLabel = iconGroupLabel
-    
+
     -- Явно устанавливаем якорь для группы настроек иконок
     iconGroupLabel:RemoveAllAnchors()
     iconGroupLabel:AddAnchor("TOPLEFT", settingsWindow, 860, 84)
-    
+
     -- Icon size
     local iconSizeLabel = helpers.createLabel('iconSizeLabel', iconGroupLabel,
                                             'Icon size:', 0, 25, 15)
     iconSizeLabel:SetWidth(150) -- Set label width
     iconSizeLabel:Show(true)
-    
+
+    local iconCfg = selectedCanvasCfg() or {}
     local iconSize = helpers.createEdit('iconSize', iconSizeLabel,
-                                      tostring(settings[currentUnitType] and settings[currentUnitType].iconSize or 40), 200, 0)
-    if iconSize then 
-        iconSize:SetMaxTextLength(4) 
+                                      tostring(iconCfg.iconSize or 40), 200, 0)
+    if iconSize then
+        iconSize:SetMaxTextLength(4)
         iconSize:SetWidth(50) -- Increase input field width
         iconSize:Show(true)
     end
     settingsControls.iconSize = iconSize
     bindApplyOnEnter(iconSize)
-    
+
     -- Icon spacing
     local iconSpacingLabel = helpers.createLabel('iconSpacingLabel', iconSizeLabel,
                                                'Icon spacing:', 0, 25, 15)
     iconSpacingLabel:SetWidth(150) -- Set label width
     iconSpacingLabel:Show(true)
-    
+
     local iconSpacing = helpers.createEdit('iconSpacing', iconSpacingLabel,
-                                         tostring(settings[currentUnitType] and settings[currentUnitType].iconSpacing or 5), 200, 0)
-    if iconSpacing then 
-        iconSpacing:SetMaxTextLength(4) 
+                                         tostring(iconCfg.iconSpacing or 5), 200, 0)
+    if iconSpacing then
+        iconSpacing:SetMaxTextLength(4)
         iconSpacing:SetWidth(50) -- Increase input field width
         iconSpacing:Show(true)
     end
@@ -2075,7 +2488,7 @@ local function buildIconSection(customBuffErrorPanel)
     -- якорится к iconGroupLabel и потому не вмешивается в цепочку остальных
     -- контролов (Columns / Rows / Max icons).
     -- =============================================================
-    local gridUnitSettings = settings[currentUnitType] or {}
+    local gridUnitSettings = iconCfg
     local gridDefCols = gridUnitSettings.gridColumns or 10
     local gridDefRows = gridUnitSettings.gridRows or 1
     local gridDefMax = gridUnitSettings.maxIcons or (gridDefCols * gridDefRows)
@@ -2149,33 +2562,26 @@ local function buildIconSection(customBuffErrorPanel)
     -- нижний элемент сетки — к нему якорим кнопку "Thank you", чтобы не наезжала
     settingsControls.gridBottomLabel = rowSpacingLabel
 
-    -- Show label button (ON/OFF toggle)
-    local showLabelButtonText = settings[currentUnitType] and settings[currentUnitType].showLabel and "Show label: ON" or "Show label: OFF"
+    -- Show label button (ON/OFF toggle) — пишет в выбранный канвас
+    local showLabelButtonText = (selectedCanvasCfg() or {}).showLabel and "Show label: ON" or "Show label: OFF"
     local showLabelButton = helpers.createButton('showLabelButton', iconSpacingLabel, showLabelButtonText, 0, 25)
     showLabelButton:SetExtent(120, 25)
     showLabelButton:Show(true)
-    
+
     -- Toggle handler for show label button
     showLabelButton:SetHandler("OnClick", function()
-        -- Toggle state
-        local unitSettings = settings[currentUnitType] or {}
-        unitSettings.showLabel = not unitSettings.showLabel
-        settings[currentUnitType] = unitSettings
+        local cfg = selectedCanvasCfg()
+        if not cfg then return end
+        cfg.showLabel = not cfg.showLabel
 
         -- Настройка изменена вручную — деактивируем активный пресет
         deactivateActivePreset()
 
         -- Update button text
-        showLabelButton:SetText(unitSettings.showLabel and "Show label: ON" or "Show label: OFF")
-        
-        -- Save settings
-        local mainSettings = api.GetSettings("CooldawnBuffTracker")
-        if not mainSettings[currentUnitType] then
-            mainSettings[currentUnitType] = {}
-        end
-        mainSettings[currentUnitType].showLabel = unitSettings.showLabel
+        showLabelButton:SetText(cfg.showLabel and "Show label: ON" or "Show label: OFF")
+
         api.SaveSettings()
-        
+
         -- Update display through helpers.updateSettings()
         if helpers and helpers.updateSettings then
             helpers.updateSettings()
@@ -2192,73 +2598,68 @@ local function buildPositionSection(showLabelButton, iconSpacingLabel)
     positionLabel:SetWidth(320)
     positionLabel:Show(true)
     settingsControls.positionLabel = positionLabel
-    
+
     -- Якорим группу позиционирования ПОД кнопкой "Show label", иначе заголовок
     -- "Icon position" наезжает на эту кнопку снизу.
     positionLabel:RemoveAllAnchors()
     positionLabel:AddAnchor("TOPLEFT", showLabelButton, "BOTTOMLEFT", 0, 15)
-    
+
     -- X coordinate
     local posXLabel = helpers.createLabel('posXLabel', positionLabel,
                                         'Position X:', 0, 25, 15)
     posXLabel:SetWidth(150) -- Set label width
     posXLabel:Show(true)
-    
+
+    local posCfg = selectedCanvasCfg() or {}
     local posX = helpers.createEdit('posX', posXLabel,
-                                  tostring(settings[currentUnitType] and settings[currentUnitType].posX or 0), 200, 0)
-    if posX then 
-        posX:SetMaxTextLength(6) 
+                                  tostring(posCfg.posX or 0), 200, 0)
+    if posX then
+        posX:SetMaxTextLength(6)
         posX:SetWidth(50) -- Increase input field width
         posX:Show(true)
     end
     settingsControls.posX = posX
     bindApplyOnEnter(posX)
-    
+
     -- Y coordinate
     local posYLabel = helpers.createLabel('posYLabel', posXLabel,
                                         'Position Y:', 0, 25, 15)
     posYLabel:SetWidth(150) -- Set label width
     posYLabel:Show(true)
-    
+
     local posY = helpers.createEdit('posY', posYLabel,
-                                  tostring(settings[currentUnitType] and settings[currentUnitType].posY or 0), 200, 0)
-    if posY then 
-        posY:SetMaxTextLength(6) 
+                                  tostring(posCfg.posY or 0), 200, 0)
+    if posY then
+        posY:SetMaxTextLength(6)
         posY:SetWidth(50) -- Increase input field width
         posY:Show(true)
     end
     settingsControls.posY = posY
     bindApplyOnEnter(posY)
-    
+
     -- Lock positioning button (ON/OFF toggle)
-    local lockIsOn = settings[currentUnitType] and settings[currentUnitType].lockPositioning or false
+    local lockIsOn = posCfg.lockPositioning or false
     local lockButtonText = lockIsOn and "Lock: ON" or "Lock: OFF"
     local lockButton = helpers.createButton('lockButton', posYLabel, lockButtonText, 0, 25)
     if lockButton then
         lockButton:SetExtent(100, 25)
         lockButton:Show(true)
-        
+
         -- Toggle handler for lock button
         lockButton:SetHandler("OnClick", function()
-            -- Toggle state
-            local unitSettings = settings[currentUnitType] or {}
-            unitSettings.lockPositioning = not unitSettings.lockPositioning
-            settings[currentUnitType] = unitSettings
+            -- Toggle state ВЫБРАННОГО канваса
+            local cfg = selectedCanvasCfg()
+            if not cfg then return end
+            cfg.lockPositioning = not cfg.lockPositioning
 
             -- Настройка изменена вручную — деактивируем активный пресет
             deactivateActivePreset()
 
             -- Update button text
-            lockButton:SetText(unitSettings.lockPositioning and "Lock: ON" or "Lock: OFF")
-            
-            -- Save settings
-            local mainSettings = api.GetSettings("CooldawnBuffTracker")
-            if not mainSettings[currentUnitType] then
-                mainSettings[currentUnitType] = {}
-            end
-            mainSettings[currentUnitType].lockPositioning = unitSettings.lockPositioning
+            lockButton:SetText(cfg.lockPositioning and "Lock: ON" or "Lock: OFF")
+
             api.SaveSettings()
-            
+
             -- Notify main to update dragging state
             api:Emit("ADDON_CBT_BUFFS_CHANGED")
         end)
@@ -2273,51 +2674,50 @@ local function buildTimerSection(lockButton)
                                              'Timer settings', 0, 35, 18)
     timerGroupLabel:SetWidth(320)
     timerGroupLabel:Show(true)
-    
+
     -- Явно устанавливаем якорь для группы настроек таймера
     timerGroupLabel:RemoveAllAnchors()
     timerGroupLabel:AddAnchor("TOPLEFT", lockButton, "BOTTOMLEFT", 0, 10)
-    
+
     -- Timer font size
     local timerFontSizeLabel = helpers.createLabel('timerFontSizeLabel', timerGroupLabel,
                                                 'Font size:', 0, 25, 15)
     timerFontSizeLabel:SetWidth(150) -- Set label width
     timerFontSizeLabel:Show(true)
-    
+
+    local timerCfg = selectedCanvasCfg() or {}
     local timerFontSize = helpers.createEdit('timerFontSize', timerFontSizeLabel,
-                                          tostring(settings[currentUnitType] and settings[currentUnitType].timerFontSize or 16), 200, 0)
-    if timerFontSize then 
-        timerFontSize:SetMaxTextLength(4) 
+                                          tostring(timerCfg.timerFontSize or 16), 200, 0)
+    if timerFontSize then
+        timerFontSize:SetMaxTextLength(4)
         timerFontSize:SetWidth(50) -- Increase input field width
         timerFontSize:Show(true)
     end
     settingsControls.timerFontSize = timerFontSize
     bindApplyOnEnter(timerFontSize)
-    
+
     -- Timer text color
     local timerTextColorLabel = helpers.createLabel('timerTextColorLabel', timerFontSizeLabel,
                                                  'Text color:', 0, 25, 15)
     timerTextColorLabel:SetWidth(150) -- Set label width
     timerTextColorLabel:Show(true)
-    
-    -- Get timer text color from settings for selected unit type
-    local unitSettings = settings[currentUnitType] or {}
-    local textColor = unitSettings.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
-    
-    local timerTextColor = helpers.createColorPickButton('timerTextColor', timerTextColorLabel, 
+
+    -- Цвета берём из выбранного канваса
+    local textColor = timerCfg.timerTextColor or {r = 1, g = 1, b = 1, a = 1}
+
+    local timerTextColor = helpers.createColorPickButton('timerTextColor', timerTextColorLabel,
                                                       textColor, 200, 0)
-    
+
     -- Configure color picker handler to save selected color
     if timerTextColor and timerTextColor.colorBG then
         timerTextColor:Show(true)
         function timerTextColor:SelectedProcedure(r, g, b, a)
             self.colorBG:SetColor(r, g, b, a)
-            -- Save color for future use
-            local mainSettings = api.GetSettings("CooldawnBuffTracker")
-            if not mainSettings[currentUnitType] then
-                mainSettings[currentUnitType] = {}
+            -- Сохраняем цвет в выбранный канвас
+            local cfg = selectedCanvasCfg()
+            if cfg then
+                cfg.timerTextColor = {r = r, g = g, b = b, a = a or 1}
             end
-            mainSettings[currentUnitType].timerTextColor = {r = r, g = g, b = b, a = a or 1}
             -- Цвет изменён вручную — деактивируем активный пресет
             deactivateActivePreset()
         end
@@ -2330,18 +2730,17 @@ local function buildTimerSection(lockButton)
     labelColorLabel:SetWidth(150)
     labelColorLabel:Show(true)
 
-    local labelColorValue = unitSettings.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
+    local labelColorValue = timerCfg.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
     local labelTextColor = helpers.createColorPickButton('labelTextColor', labelColorLabel,
                                                       labelColorValue, 200, 0)
     if labelTextColor and labelTextColor.colorBG then
         labelTextColor:Show(true)
         function labelTextColor:SelectedProcedure(r, g, b, a)
             self.colorBG:SetColor(r, g, b, a)
-            local mainSettings = api.GetSettings("CooldawnBuffTracker")
-            if not mainSettings[currentUnitType] then
-                mainSettings[currentUnitType] = {}
+            local cfg = selectedCanvasCfg()
+            if cfg then
+                cfg.labelTextColor = {r = r, g = g, b = b, a = a or 1}
             end
-            mainSettings[currentUnitType].labelTextColor = {r = r, g = g, b = b, a = a or 1}
             deactivateActivePreset()
         end
     end
@@ -2372,7 +2771,7 @@ end
 
 local function initSettingsPage()
     settings = helpers.getSettings()
-    
+
     -- Кастомное окно (как у BetterBars): пустое окно + тёмный ninepart-фон +
     -- собственная шапка с заголовком, крестиком и перетаскиванием.
     settingsWindow = api.Interface:CreateEmptyWindow("CooldawnBuffTrackerSettings")
@@ -2444,12 +2843,13 @@ local function initSettingsPage()
         bodyBg:AddAnchor("TOPLEFT", body, 0, 0)
         bodyBg:AddAnchor("BOTTOMRIGHT", body, 0, 0)
     end
-    
+
     settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
     settingsWindow:SetHandler("OnCloseByEsc", settingsWindowClose)
     function settingsWindow:OnClose() settingsWindowClose() end
-    
+
     buildUnitTypeSelector()
+    buildCanvasSelector()
     local buffsListContainer, trackedBuffsGroupLabel = buildTrackedBuffsSection()
     local newBuffIdLabel = buildNewBuffInput(buffsListContainer)
     local customBuffsListContainer = buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
@@ -2462,19 +2862,19 @@ local function initSettingsPage()
     -- Force update list one more time
     updateTrackedBuffsList()
     updateCustomBuffsList()
-    
+
     -- Force show all critical elements
     settingsControls.buffsListContainer:Show(true)
     settingsControls.trackedBuffsListHeader:Show(true)
 
     settingsControls.customBuffsListContainer:Show(true)
     settingsControls.customBuffsListHeader:Show(true)
-    
+
     -- Явно показываем все ключевые элементы интерфейса
     if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
     if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
     if settingsControls.addBuffButton then settingsControls.addBuffButton:Show(true) end
-    
+
     if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
     if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
     if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
@@ -2483,14 +2883,14 @@ local function initSettingsPage()
     if settingsControls.gridColumns then settingsControls.gridColumns:Show(true) end
     if settingsControls.gridRows then settingsControls.gridRows:Show(true) end
     if settingsControls.maxIcons then settingsControls.maxIcons:Show(true) end
-    
+
     if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
     if settingsControls.posX then settingsControls.posX:Show(true) end
     if settingsControls.posY then settingsControls.posY:Show(true) end
-    
+
     if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
     if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-    
+
     if settingsControls.errorPanel then
         settingsControls.errorPanel:Show(false)
     end
@@ -2504,6 +2904,20 @@ local function initSettingsPage()
 end
 
 local function Unload()
+    -- Попапы/диалоги канвасов
+    if canvasPopup then
+        pcall(function() CbtWindow.Destroy(canvasPopup) end)
+        canvasPopup = nil
+    end
+    if renameWindow then
+        pcall(function() CbtWindow.Destroy(renameWindow) end)
+        renameWindow = nil
+    end
+    if deleteWindow then
+        pcall(function() CbtWindow.Destroy(deleteWindow) end)
+        deleteWindow = nil
+    end
+
     if settingsWindow ~= nil then
         if settingsWindow.header then
             pcall(function() settingsWindow.header:ReleaseHandler("OnDragStop") end)
@@ -2513,7 +2927,7 @@ local function Unload()
         pcall(function() api.Interface:Free(settingsWindow) end)
         settingsWindow = nil
     end
-    
+
     -- Close icon search window if it's open
     pcall(function() iconSearch.Unload() end)
     pcall(function() recordWindow.Unload() end)
@@ -2528,7 +2942,7 @@ local function Unload()
     if F_ETC then
         F_ETC.HidePallet()
     end
-    
+
     -- Close Import/Export window if it's open
     if importExport and importExport.closeImportExportWindow then
         importExport.closeImportExportWindow()
@@ -2545,18 +2959,18 @@ local function openSettingsWindow()
         settingsWindowClose()
         return
     end
-    
+
     -- If window was already initialized, just show it
     if settingsWindow then
         -- Update settings fields for current unit type
         updateSettingsFields()
-        
+
         -- Update tracked buffs list on each window opening
         updateTrackedBuffsList()
 
         -- Update custom buffs list
         updateCustomBuffsList()
-        
+
         -- Hide error panel on each window opening
         if settingsControls.errorPanel then
             settingsControls.errorPanel:Show(false)
@@ -2565,7 +2979,7 @@ local function openSettingsWindow()
         if settingsControls.customBuffErrorPanel then
             settingsControls.customBuffErrorPanel:Show(false)
         end
-        
+
         -- Явно показываем все ключевые элементы интерфейса
         if settingsControls.newBuffIdLabel then settingsControls.newBuffIdLabel:Show(true) end
         if settingsControls.newBuffId then settingsControls.newBuffId:Show(true) end
@@ -2577,30 +2991,30 @@ local function openSettingsWindow()
         if settingsControls.newCustomBuffCooldown then settingsControls.newCustomBuffCooldown:Show(true) end
         if settingsControls.newCustomBuffTimeOfAction then settingsControls.newCustomBuffTimeOfAction:Show(true) end
         if settingsControls.addCustomBuffButton then settingsControls.addCustomBuffButton:Show(true) end
-        
+
         if settingsControls.iconGroupLabel then settingsControls.iconGroupLabel:Show(true) end
         if settingsControls.iconSize then settingsControls.iconSize:Show(true) end
         if settingsControls.iconSpacing then settingsControls.iconSpacing:Show(true) end
-        
+
         if settingsControls.positionLabel then settingsControls.positionLabel:Show(true) end
         if settingsControls.posX then settingsControls.posX:Show(true) end
         if settingsControls.posY then settingsControls.posY:Show(true) end
-        
+
         if settingsControls.timerGroupLabel then settingsControls.timerGroupLabel:Show(true) end
         if settingsControls.timerFontSize then settingsControls.timerFontSize:Show(true) end
-        
+
         settingsWindow:Show(true)
         helpers.setSettingsPageOpened(true)
         return
     end
-    
+
     -- If window wasn't initialized, create it
     initSettingsPage()
-    
+
     if settingsWindow then
         -- Update settings fields for current unit type
         updateSettingsFields()
-        
+
         settingsWindow:Show(true)
         helpers.setSettingsPageOpened(true)
     end
@@ -2611,6 +3025,44 @@ local function updatePositionFields(x, y)
         settingsControls.posX:SetText(tostring(x))
         settingsControls.posY:SetText(tostring(y))
     end
+end
+
+-- true, если канвас (unitType, index) — тот, что сейчас показан в правой колонке.
+local function isSelectedCanvas(unitType, index)
+    if unitType ~= currentUnitType then return false end
+    return selectedCanvasIndex(unitType) == index
+end
+
+-- Перестановка записи внутри ЕЁ канваса: сосед ищется только среди записей
+-- того же canvasOf, иначе Up/Down не двигали бы строку на экране.
+local function moveTrackedWithinCanvas(buffId, direction, unitType)
+    unitType = unitType or currentUnitType
+    if not settings then settings = helpers.getSettings() end
+    local unit = settings and settings[unitType]
+    if not unit or type(unit.trackedBuffs) ~= "table" then return false end
+
+    local list = unit.trackedBuffs
+    local canvasIdx = selectedCanvasIndex(unitType)
+    local pos = nil
+    for i, id in ipairs(list) do
+        if tostring(id) == tostring(buffId) then
+            pos = i
+            break
+        end
+    end
+    if not pos then return false end
+
+    local step = (direction == "up") and -1 or 1
+    local j = pos + step
+    while j >= 1 and j <= #list do
+        if canvasIndexOfId(unit, list[j]) == canvasIdx then
+            list[pos], list[j] = list[j], list[pos]
+            BuffsToTrack.SaveTrackedBuffs(list, unitType)
+            return true
+        end
+        j = j + step
+    end
+    return false
 end
 
 -- Функция для обновления всех списков баффов (используется после импорта)
@@ -2632,6 +3084,8 @@ M.Load = initSettingsPage
 M.Unload = Unload
 M.openSettingsWindow = openSettingsWindow
 M.updatePositionFields = updatePositionFields
+M.isSelectedCanvas = isSelectedCanvas
+M.moveTrackedWithinCanvas = moveTrackedWithinCanvas
 M.openPixelWindow = pixelViewer.openPixelWindow
 M.openImportExportWindow = importExport.openImportExportWindow
 M.refreshAllLists = refreshAllLists

@@ -2,11 +2,38 @@ local api = require("api")
 local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 local helpers = {}
-local CANVAS
-local PLAYER_CANVAS
-local TARGET_CANVAS
-
 local settingsOpened = false
+
+-- Реестр живых канвасов: { playerpet = {widget1, widget2, ...}, ... }.
+-- Заполняется из main.lua (helpers.setCanvasRegistry), чтобы helpers мог
+-- сохранять позицию КАЖДОГО канваса, не зная деталей UI.
+local CANVAS_REGISTRY = nil
+local refreshCallback = nil
+
+function helpers.setCanvasRegistry(registry)
+    CANVAS_REGISTRY = registry
+end
+
+function helpers.getCanvasRegistry()
+    return CANVAS_REGISTRY
+end
+
+-- Колбэк полного обновления панелей после изменения настроек.
+function helpers.setRefreshCallback(fn)
+    refreshCallback = fn
+end
+
+-- Глубокая копия таблицы (используется и для defaults, и для пресетов).
+local function deepCopy(original)
+    if type(original) ~= "table" then
+        return original
+    end
+    local copy = {}
+    for key, value in pairs(original) do
+        copy[key] = deepCopy(value)
+    end
+    return copy
+end
 
 -- Функция-помощник для форматирования ID баффа (без экспоненты)
 function helpers.formatBuffId(buffId)
@@ -19,161 +46,113 @@ end
 
 -- Main functions for working with settings
 function helpers.getSettings(cnv, playerCnv, targetCnv)
-    if cnv ~= nil then CANVAS = cnv end
-    if playerCnv ~= nil then PLAYER_CANVAS = playerCnv end
-    if targetCnv ~= nil then TARGET_CANVAS = targetCnv end
-    
     local settings = api.GetSettings("CooldawnBuffTracker")
 
-    -- Миграция новых полей (presets и т.д.) без перезаписи существующих данных
+    -- Миграция новых полей (canvases, presets и т.д.) без перезаписи данных
     if defaultSettings and defaultSettings.migrate then
         settings = defaultSettings.migrate(settings)
     end
 
-    -- Check and set default settings
-    if not settings.playerpet then
-        settings.playerpet = {}
-        for k, v in pairs(defaultSettings.playerpet) do
-            settings.playerpet[k] = v
+    -- Check and set default settings (глубокая копия: canvases/defaults не должны
+    -- разделять таблицы с модулем defaults)
+    for _, unitType in ipairs(defaultSettings.unitTypes or {"playerpet", "player", "target"}) do
+        if type(settings[unitType]) ~= "table" then
+            settings[unitType] = deepCopy(defaultSettings[unitType])
         end
     end
-    
-    if not settings.player then
-        settings.player = {}
-        for k, v in pairs(defaultSettings.player) do
-            settings.player[k] = v
-        end
-    end
-    
-    if not settings.target then
-        settings.target = {}
-        for k, v in pairs(defaultSettings.target) do
-            settings.target[k] = v
-        end
-    end
-    
+
     return settings
+end
+
+local UNIT_TYPES = {"playerpet", "player", "target"}
+
+-- Сохраняет позицию каждого живого канваса в его собственную запись
+-- canvases[i].posX/posY. Пишем только если виджет реально сдвинут относительно
+-- последней применённой раскладки: иначе введённое в поле значение позиции
+-- было бы затёрто старым смещением до пересборки панели.
+function helpers.saveCanvasPositions(settings)
+    settings = settings or api.GetSettings("CooldawnBuffTracker")
+    if not settings or type(CANVAS_REGISTRY) ~= "table" then return end
+
+    for _, unitType in ipairs(UNIT_TYPES) do
+        local unitSettings = settings[unitType]
+        local widgets = CANVAS_REGISTRY[unitType]
+        if unitSettings and type(unitSettings.canvases) == "table" and type(widgets) == "table" then
+            for i, canvas in ipairs(widgets) do
+                local cfg = unitSettings.canvases[i]
+                if canvas and cfg then
+                    -- Пишем только для уже отрисованного и видимого канваса:
+                    -- у скрытого/ещё не разложенного виджета смещение не является
+                    -- позицией, которую выбрал пользователь.
+                    local visible = true
+                    if canvas.IsVisible then
+                        local okVis, vis = pcall(function() return canvas:IsVisible() end)
+                        if okVis then visible = vis and true or false end
+                    end
+                    if visible and canvas.layoutSig ~= nil then
+                        local ok, x, y = pcall(function()
+                            local fx, fy
+                            if canvas.GetEffectiveOffset then
+                                fx, fy = canvas:GetEffectiveOffset()
+                            end
+                            if fx == nil or fy == nil then
+                                fx, fy = canvas:GetOffset()
+                            end
+                            return fx, fy
+                        end)
+                        if ok and type(x) == "number" and type(y) == "number" then
+                            local appliedX = canvas.appliedPosX
+                            local appliedY = canvas.appliedPosY
+                            local moved = (appliedX == nil) or (appliedY == nil)
+                                or (math.abs(x - appliedX) > 0.5) or (math.abs(y - appliedY) > 0.5)
+                            -- (0,0) — типичный «пустой» ответ виджета, который ещё не
+                            -- разложен; настоящий перенос в 0,0 уже сохранён OnDragStop.
+                            local sane = (x ~= 0) or (y ~= 0)
+                            if moved and sane and (cfg.posX ~= x or cfg.posY ~= y) then
+                                cfg.posX = x
+                                cfg.posY = y
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 function helpers.updateSettings(newSettings)
     local settings = newSettings or api.GetSettings("CooldawnBuffTracker")
-    local currentPosX, currentPosY, playerPosX, playerPosY, targetPosX, targetPosY
-    
-    -- Save current mount canvas position, if it exists
-    if CANVAS then
-        currentPosX, currentPosY = (CANVAS.GetEffectiveOffset and CANVAS:GetEffectiveOffset()) or CANVAS:GetOffset()
-        if currentPosX and currentPosY then
-            -- Update position in settings only if position has changed
-            if settings.playerpet.posX ~= currentPosX or settings.playerpet.posY ~= currentPosY then
-                settings.playerpet.posX = currentPosX
-                settings.playerpet.posY = currentPosY
-            end
-        end
-    end
-    
-    -- Save current player canvas position, if it exists
-    if PLAYER_CANVAS then
-        playerPosX, playerPosY = (PLAYER_CANVAS.GetEffectiveOffset and PLAYER_CANVAS:GetEffectiveOffset()) or PLAYER_CANVAS:GetOffset()
-        if playerPosX and playerPosY then
-            -- Update position in settings only if position has changed
-            if settings.player.posX ~= playerPosX or settings.player.posY ~= playerPosY then
-                settings.player.posX = playerPosX
-                settings.player.posY = playerPosY
-            end
-        end
-    end
-    
-    -- Save current target canvas position, if it exists
-    if TARGET_CANVAS then
-        targetPosX, targetPosY = (TARGET_CANVAS.GetEffectiveOffset and TARGET_CANVAS:GetEffectiveOffset()) or TARGET_CANVAS:GetOffset()
-        if targetPosX and targetPosY then
-            -- Update position in settings only if position has changed
-            if settings.target and (settings.target.posX ~= targetPosX or settings.target.posY ~= targetPosY) then
-                settings.target.posX = targetPosX
-                settings.target.posY = targetPosY
-            end
-        end
-    end
-    
+    if not settings then return api.GetSettings("CooldawnBuffTracker") end
+
+    helpers.saveCanvasPositions(settings)
+
     -- Ensure changes are saved in settings
     api.SaveSettings()
-    
-    -- Explicit UI update via handler
-    if CANVAS and CANVAS.OnSettingsSaved then
-        CANVAS.OnSettingsSaved()
-        
-        -- Restore position after update
-        if currentPosX and currentPosY then
-            CANVAS:RemoveAllAnchors()
-            CANVAS:AddAnchor("TOPLEFT", "UIParent", currentPosX, currentPosY)
-        end
+
+    -- Явное обновление панелей: пересоздаёт канвасы под текущее число канвасов
+    -- и перерисовывает иконки (раньше здесь был мёртвый canvas.OnSettingsSaved).
+    if refreshCallback then
+        pcall(refreshCallback)
     end
-    
-    -- Explicit UI update for player via handler
-    if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
-        PLAYER_CANVAS.OnSettingsSaved()
-        
-        -- Restore position after update
-        if playerPosX and playerPosY then
-            PLAYER_CANVAS:RemoveAllAnchors()
-            PLAYER_CANVAS:AddAnchor("TOPLEFT", "UIParent", playerPosX, playerPosY)
-        end
-    end
-    
-    -- Explicit UI update for target via handler
-    if TARGET_CANVAS and TARGET_CANVAS.OnSettingsSaved then
-        TARGET_CANVAS.OnSettingsSaved()
-        
-        -- Restore position after update
-        if targetPosX and targetPosY then
-            TARGET_CANVAS:RemoveAllAnchors()
-            TARGET_CANVAS:AddAnchor("TOPLEFT", "UIParent", targetPosX, targetPosY)
-        end
-    end
-    
-    settings = helpers.getSettings()
-    return settings
+
+    return api.GetSettings("CooldawnBuffTracker")
 end
 
 function helpers.resetSettingsToDefault()
     local settings = api.GetSettings("CooldawnBuffTracker")
-    
-    -- Copy all default settings for playerpet
-    settings.playerpet = {}
-    for k, v in pairs(defaultSettings.playerpet) do
-        settings.playerpet[k] = v
+
+    -- Глубокая копия дефолтов: у каждого юнита свой canvases/canvasOf
+    for _, unitType in ipairs(UNIT_TYPES) do
+        settings[unitType] = deepCopy(defaultSettings[unitType])
     end
-    
-    -- Copy all default settings for player
-    settings.player = {}
-    for k, v in pairs(defaultSettings.player) do
-        settings.player[k] = v
-    end
-    
-    -- Copy all default settings for target
-    settings.target = {}
-    for k, v in pairs(defaultSettings.target) do
-        settings.target[k] = v
-    end
-    
+
     -- Save settings
     api.SaveSettings()
-    
-    -- Full UI update for mount
-    if CANVAS and CANVAS.OnSettingsSaved then
-        CANVAS.OnSettingsSaved()
+
+    if refreshCallback then
+        pcall(refreshCallback)
     end
-    
-    -- Full UI update for player
-    if PLAYER_CANVAS and PLAYER_CANVAS.OnSettingsSaved then
-        PLAYER_CANVAS.OnSettingsSaved()
-    end
-    
-    -- Full UI update for target
-    if TARGET_CANVAS and TARGET_CANVAS.OnSettingsSaved then
-        TARGET_CANVAS.OnSettingsSaved()
-    end
-    
+
     return settings
 end
 
@@ -412,10 +391,18 @@ function helpers.loadPreset(presetName)
     for _, unitType in ipairs(PRESET_UNIT_TYPES) do
         if preset[unitType] then
             local cloned = helpers.cloneTable(preset[unitType])
+            -- Пресет старого формата (плоские posX/iconSize/...): конвертируем в
+            -- canvases[1] ДО добавления defaults, иначе раскладка потеряется.
+            if defaultSettings and defaultSettings.normalizeUnit then
+                defaultSettings.normalizeUnit(cloned, unitType)
+            end
             -- Добавляем недостающие поля из defaults, не затирая существующие
             if defaultSettings and defaultSettings[unitType] then
                 for k, v in pairs(defaultSettings[unitType]) do
-                    if cloned[k] == nil then cloned[k] = v end
+                    if k ~= "canvases" and cloned[k] == nil then cloned[k] = v end
+                end
+                if type(cloned.canvases) ~= "table" or #cloned.canvases == 0 then
+                    cloned.canvases = helpers.cloneTable(defaultSettings[unitType].canvases)
                 end
             end
             settings[unitType] = cloned

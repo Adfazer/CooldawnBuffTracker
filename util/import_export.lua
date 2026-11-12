@@ -1,6 +1,7 @@
 -- Модуль для Import/Export конфигурации баффов
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
+local defaultSettings = require("CooldawnBuffTracker/default_settings")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
 
 -- Переменная для хранения ссылки на окно
@@ -273,19 +274,36 @@ end
 
 -- Экспорт конфигурации в JSON строку
 -- Собирает таблицу текущей конфигурации (общая часть для текстового и файлового экспорта)
+-- 1.20: каждый юнит отдаёт canvases + canvasOf + selectedCanvas; trackedBuffs
+-- остаётся и на верхнем уровне — старые версии аддона читают только его.
 local function buildConfigTable()
     local settings = api.GetSettings("CooldawnBuffTracker")
     if not settings then
         api.Log:Err("[CBT] Failed to get settings for export")
         return nil
     end
-    return {
-        customBuffs = settings.customBuffs or {},
-        trackedBuffs = {
-            playerpet = settings.playerpet and settings.playerpet.trackedBuffs or {},
-            player = settings.player and settings.player.trackedBuffs or {},
-            target = settings.target and settings.target.trackedBuffs or {}
+
+    local unitTypes = {"playerpet", "player", "target"}
+    local units = {}
+    local tracked = {}
+    for _, unitType in ipairs(unitTypes) do
+        local unit = settings[unitType] or {}
+        tracked[unitType] = unit.trackedBuffs or {}
+        units[unitType] = {
+            canvases = unit.canvases or {},
+            canvasOf = unit.canvasOf or {},
+            selectedCanvas = unit.selectedCanvas or 1,
+            trackedBuffs = unit.trackedBuffs or {},
+            mirror = unit.mirror or {},
+            enabled = unit.enabled ~= false,
         }
+    end
+
+    return {
+        version = 2,
+        customBuffs = settings.customBuffs or {},
+        trackedBuffs = tracked,
+        units = units,
     }
 end
 
@@ -417,16 +435,49 @@ local function importConfiguration(configString, errorMsgLabel)
     
     -- Обновляем только нужные поля (сохраняем в постоянное хранилище)
     settings.customBuffs = config.customBuffs
-    
-    if not settings.playerpet then settings.playerpet = {} end
-    settings.playerpet.trackedBuffs = config.trackedBuffs.playerpet
-    
-    if not settings.player then settings.player = {} end
-    settings.player.trackedBuffs = config.trackedBuffs.player
-    
-    if not settings.target then settings.target = {} end
-    settings.target.trackedBuffs = config.trackedBuffs.target
-    
+
+    -- 1.20: units[unitType] несёт canvases/canvasOf/selectedCanvas/mirror.
+    -- Старый конфиг (только trackedBuffs) мигрирует в канвас 1.
+    local importUnits = config.units
+    for _, unitType in ipairs(unitTypes) do
+        local unit = settings[unitType]
+        if type(unit) ~= "table" then unit = {} end
+
+        local src = nil
+        if type(importUnits) == "table" then src = importUnits[unitType] end
+
+        if type(src) == "table" and type(src.canvases) == "table" and #src.canvases > 0 then
+            unit.canvases = defaultSettings.cloneValue(src.canvases)
+            unit.canvasOf = defaultSettings.cloneValue(type(src.canvasOf) == "table" and src.canvasOf or {})
+            unit.selectedCanvas = tonumber(src.selectedCanvas) or 1
+            unit.mirror = defaultSettings.cloneValue(type(src.mirror) == "table" and src.mirror or {})
+            if src.enabled ~= nil then unit.enabled = src.enabled ~= false end
+            unit.trackedBuffs = type(src.trackedBuffs) == "table" and src.trackedBuffs or config.trackedBuffs[unitType]
+        else
+            -- Плоский (старый) конфиг: все записи на первый канвас.
+            unit.trackedBuffs = config.trackedBuffs[unitType]
+            unit.canvasOf = {}
+            unit.selectedCanvas = 1
+            if type(src) == "table" then
+                -- Плоские posX/iconSize/... конвертируем в canvases[1], чтобы
+                -- раскладка из файла не потерялась.
+                if defaultSettings.normalizeUnit then
+                    defaultSettings.normalizeUnit(src, unitType)
+                end
+                if type(src.canvases) == "table" and #src.canvases > 0 then
+                    unit.canvases = defaultSettings.cloneValue(src.canvases)
+                end
+            end
+        end
+
+        settings[unitType] = unit
+    end
+
+    -- Нормализуем модель: валидные индексы canvasOf, недостающие поля канвасов.
+    if defaultSettings and defaultSettings.migrate then
+        settings = defaultSettings.migrate(settings)
+    end
+
     -- Сохраняем в постоянное хранилище через api.SaveSettings()
     api.SaveSettings()
     

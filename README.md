@@ -30,6 +30,10 @@ settings storage and all `require` paths.
 ### Core
 - **Multi-unit tracking** — player, pet/mount and target at the same time, each
   with its own panel and settings.
+- **Multiple canvases per unit** — every unit type can show several independent
+  panels at once. Each canvas has its own layout, position and tracked entries;
+  the **Canvas** selector above the tracked list adds, renames, deletes and
+  switches them. Existing configurations migrate into a canvas named "Main".
 - **Custom buff system** — track any buff by its numeric ID, even if it is not
   in the default list.
 - **Real-time timers** — remaining buff duration and cooldown, shown on the icon.
@@ -118,6 +122,25 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.20.0
+
+- **Multiple canvases per unit.** Mount, Player and Target can each own several
+  independent panels. The new **Canvas** row above the tracked list switches the
+  current canvas and offers `Add`, `Rename` and `Delete` (delete asks for
+  confirmation and removes the canvas together with its tracked entries).
+- The whole right column — icon size/spacing, grid (columns/rows/max/row spacing),
+  Position X/Y and Lock, timer font/colour, label font/offset/colour — now belongs
+  to the **selected canvas** of the selected unit; switching the canvas refills
+  every field with that canvas's values.
+- Tracked entries are filtered per canvas, in their original order. Every row has
+  an **Mv** button that moves the entry to another canvas of the same unit.
+- One aura scan per unit is kept: canvases only draw their own subsets, so adding
+  canvases costs no extra API polling.
+- Existing settings migrate automatically: the old flat layout becomes the first
+  canvas named "Main"; tracked lists and mirror flags are kept untouched.
+- Presets and Import/Export now store canvases, per-entry canvas assignment and
+  the selected canvas per unit; old preset/config files still load into canvas 1.
 
 ### 1.19.0
 
@@ -706,7 +729,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.19.0
+**Current Version:** 1.20.0
 
 ## Credits
 

@@ -11,9 +11,7 @@ local cachedPlayerBuffs = {}
 local cachedBuffStatus = {}
 
 -- Target tracking variables
-local targetBuffCanvas = nil
 local targetBuffData = {}
-local isTargetCanvasInitialized = false
 local currentTargetId = nil
 local lastTargetCleanupTime = 0
 local targetCleanupInterval = 60 -- Check every 60 seconds
@@ -35,18 +33,18 @@ local targetActiveBuffs = {}
 local function getTrackedBuffsFromSettings(unitType)
   local settings = api.GetSettings("CooldawnBuffTracker") or {}
   local trackedBuffs = {}
-  
+
   if settings[unitType] and settings[unitType].trackedBuffs then
     trackedBuffs = settings[unitType].trackedBuffs
   end
-  
+
   return trackedBuffs
 end
 
 -- Replacement for BuffsToTrack if module not loaded
 if not BuffsToTrack then
   BuffsToTrack = {
-    ShouldTrackBuff = function(id, unitType) 
+    ShouldTrackBuff = function(id, unitType)
       local trackedBuffs = getTrackedBuffsFromSettings(unitType)
       for _, buffId in ipairs(trackedBuffs) do
         if buffId == id then
@@ -55,7 +53,7 @@ if not BuffsToTrack then
       end
       return false
     end,
-    GetAllTrackedBuffIds = function(unitType) 
+    GetAllTrackedBuffIds = function(unitType)
       return getTrackedBuffsFromSettings(unitType)
     end
   }
@@ -76,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.19.0"
+  version = "1.20.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -88,14 +86,19 @@ end
 
 local buffData = {}
 local playerBuffData = {}
-local buffCanvas = nil
-local playerBuffCanvas = nil
+-- Модель 1.20: N канвасов на каждый тип юнита. unitCanvases[unitType][i] —
+-- живой виджет i-го канваса; раскладка лежит в settings[unitType].canvases[i].
+local unitCanvases = { playerpet = {}, player = {}, target = {} }
+local UNIT_TYPES = { "playerpet", "player", "target" }
+local CANVAS_BASE_ID = {
+  playerpet = "MountBuffCanvas",
+  player = "PlayerBuffCanvas",
+  target = "TargetBuffCanvas"
+}
 local updateTimer = 0
 local refreshUITimer = 0
 local updateInterval = 50
 local refreshUIInterval = 50
-local isCanvasInitialized = false
-local isPlayerCanvasInitialized = false
 local iconSize = 40
 local iconSpacing = 5
 local defaultPositionX = 330
@@ -240,7 +243,7 @@ end
 local function initBuffData()
   -- Инициализируем данные для всех типов юнитов
   local unitTypes = {"playerpet", "player", "target"}
-  
+
   for _, unitType in ipairs(unitTypes) do
     local buffDataTable
     if unitType == "target" then
@@ -251,13 +254,13 @@ local function initBuffData()
       buffDataTable = buffData
     end
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
-    
+
     -- Создаем таблицу для проверки существующих баффов
     local trackedBuffsMap = {}
     for _, buffId in ipairs(trackedBuffIds) do
       trackedBuffsMap[buffId] = true
     end
-    
+
     -- Удаляем баффы, которые больше не отслеживаются
     for buffId in pairs(buffDataTable) do
       if not trackedBuffsMap[buffId] then
@@ -266,7 +269,7 @@ local function initBuffData()
         safeLog("[CBT] " .. unitType .. " buff removed from tracking: " .. tostring(buffId))
       end
     end
-    
+
     -- Добавляем новые баффы
     for _, buffId in ipairs(trackedBuffIds) do
       if not buffDataTable[buffId] then
@@ -302,7 +305,7 @@ local function initBuffData()
           buffCooldown = tonumber(ov.cooldown) or 0
           buffTimeOfAction = tonumber(ov.timeOfAction) or 0
         end
-        
+
         buffDataTable[buffId] = {
           name = buffName,
           icon = buffIcon,
@@ -311,7 +314,7 @@ local function initBuffData()
           fixedTime = nil,
           status = "ready"
         }
-        
+
         safeLog("[CBT] " .. unitType .. " buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
       end
     end
@@ -323,7 +326,7 @@ end
 
 local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime, anchorTime)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
-  
+
   local buffDataTable
   if unitType == "target" then
     buffDataTable = targetBuffData
@@ -332,7 +335,7 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   else
     buffDataTable = buffData
   end
-  
+
   -- If buff doesn't exist in table, create it first (for tracked buffs)
   if not buffDataTable[buffId] then
     local customCfg = findCustomBuff(buffId) or findCustomBuffByName(BuffList.GetBuffName(buffId))
@@ -366,7 +369,7 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       buffCooldown = tonumber(ov.cooldown) or 0
       buffTimeOfAction = tonumber(ov.timeOfAction) or 0
     end
-    
+
     buffDataTable[buffId] = {
       name = buffName,
       icon = buffIcon,
@@ -376,15 +379,15 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       status = "ready"
     }
   end
-  
+
   local buff = buffDataTable[buffId]
   local oldStatus = buff.status
-  
+
   buff.status = status
-  
+
   local timeOfAction = tonumber(buff.timeOfAction) or 0
   local cooldown = tonumber(buff.cooldown) or 0
-  
+
   if status == "active" then
     if anchorTime then
       -- Явный якорь: начало каста навыка (SPELLCAST_START), а не момент ауры
@@ -430,7 +433,7 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
     buff.activeUntil = currentTime
     buff.readyAt = currentTime + cooldown
   end
-  
+
   buff.statusChangeTime = currentTime
 
   -- Диагностика таймингов (Debug: ON): видно, от какого момента считается КД
@@ -444,17 +447,17 @@ end
 
 local function checkBuffStatus(buff, currentTime)
   if not buff or not buff.fixedTime then return "ready" end
-  
+
   local fixedTime = tonumber(buff.fixedTime) or 0
   local timeOfAction = tonumber(buff.timeOfAction) or 0
   local cooldown = tonumber(buff.cooldown) or 0
   currentTime = tonumber(currentTime) or 0
-  
+
   -- activeUntil может быть обрезан при досрочном снятии баффа (диспел/смерть);
   -- readyAt — момент готовности способности (старт баффа + кулдаун).
   local activeUntil = tonumber(buff.activeUntil) or (fixedTime + timeOfAction)
   local readyAt = tonumber(buff.readyAt) or (fixedTime + cooldown)
-  
+
   if currentTime < activeUntil - 0.05 then
     return "active"
   elseif currentTime < readyAt - 0.05 then
@@ -758,13 +761,13 @@ end
 
 local function createChildWidgetSafe(parent, widgetType, name, index)
   if not parent then return nil end
-  
+
   local widget = api.Interface:CreateWidget(widgetType, name, parent)
-  
+
   if not widget then
     widget = parent:CreateChildWidget(widgetType, name, index or 0, true)
   end
-  
+
   return widget
 end
 
@@ -799,15 +802,15 @@ end
 -- =====================================================================
 local MAX_GRID_ICONS = 40
 
-local function getGridColumns(unitSettings)
-  local cols = math.floor(tonumber(unitSettings and unitSettings.gridColumns) or 10)
+local function getGridColumns(cfg)
+  local cols = math.floor(tonumber(cfg and cfg.gridColumns) or 10)
   if cols < 1 then cols = 1 end
   if cols > MAX_GRID_ICONS then cols = MAX_GRID_ICONS end
   return cols
 end
 
-local function getGridRows(unitSettings)
-  local rows = math.floor(tonumber(unitSettings and unitSettings.gridRows) or 1)
+local function getGridRows(cfg)
+  local rows = math.floor(tonumber(cfg and cfg.gridRows) or 1)
   if rows < 1 then rows = 1 end
   if rows > MAX_GRID_ICONS then rows = MAX_GRID_ICONS end
   return rows
@@ -815,10 +818,10 @@ end
 
 -- Сколько иконок реально показываем: не больше ёмкости сетки (cols*rows),
 -- не больше глобального предела и не меньше 1.
-local function getMaxIcons(unitSettings)
-  local capacity = getGridColumns(unitSettings) * getGridRows(unitSettings)
+local function getMaxIcons(cfg)
+  local capacity = getGridColumns(cfg) * getGridRows(cfg)
   if capacity > MAX_GRID_ICONS then capacity = MAX_GRID_ICONS end
-  local maxIcons = tonumber(unitSettings and unitSettings.maxIcons)
+  local maxIcons = tonumber(cfg and cfg.maxIcons)
   if not maxIcons then
     maxIcons = capacity
   else
@@ -830,81 +833,89 @@ local function getMaxIcons(unitSettings)
 end
 
 -- Позиция иконки по индексу (1-based): слева направо, сверху вниз.
-local function calculateIconPosition(index, unitSettings)
-  local cols = getGridColumns(unitSettings)
-  local size = tonumber(unitSettings and unitSettings.iconSize) or 40
-  local spacing = tonumber(unitSettings and unitSettings.iconSpacing) or 5
+local function calculateIconPosition(index, cfg)
+  local cols = getGridColumns(cfg)
+  local size = tonumber(cfg and cfg.iconSize) or 40
+  local spacing = tonumber(cfg and cfg.iconSpacing) or 5
   -- вертикальный отступ между строками — отдельная настройка (с откатом на iconSpacing)
-  local rowSpacing = tonumber(unitSettings and unitSettings.gridRowSpacing) or spacing
+  local rowSpacing = tonumber(cfg and cfg.gridRowSpacing) or spacing
   local col = (index - 1) % cols
   local row = math.floor((index - 1) / cols)
   return col * (size + spacing), row * (size + rowSpacing)
 end
 
 -- Якорим иконку в ячейку сетки относительно левого-верхнего угла канваса.
-local function anchorIconInGrid(icon, parent, index, unitSettings)
+local function anchorIconInGrid(icon, parent, index, cfg)
   if not icon then return end
-  local x, y = calculateIconPosition(index, unitSettings)
+  local x, y = calculateIconPosition(index, cfg)
   icon:RemoveAllAnchors()
   icon:AddAnchor("TOPLEFT", parent, x, y)
 end
 
 -- Function to create buff icon
-local function addBuffIcon(parent, index, unitType)
+-- cfg — раскладка КОНКРЕТНОГО канваса (settings[unitType].canvases[canvasIndex]);
+-- canvasIndex входит в id виджетов: id в движке глобальные, а иконки у каждого
+-- канваса свои.
+local function addBuffIcon(parent, index, unitType, canvasIndex, canvasCfg)
   unitType = unitType or "playerpet" -- Use mount by default
-  
-  local unitSettings = settings[unitType] or settings.playerpet
-  
-  local icon = createTrackedIconButton("buffIcon_" .. tostring(unitType) .. "_" .. index, parent)
+  canvasIndex = canvasIndex or 1
+
+  local us = canvasCfg
+  if not us then
+    us = (settings[unitType] and settings[unitType].canvases and settings[unitType].canvases[canvasIndex]) or {}
+  end
+  local uid = tostring(unitType) .. "_" .. tostring(canvasIndex) .. "_" .. tostring(index)
+
+  local icon = createTrackedIconButton("buffIcon_" .. uid, parent)
   if not icon then return nil end
-  
-  icon:SetExtent(unitSettings.iconSize, unitSettings.iconSize)
+
+  icon:SetExtent(us.iconSize, us.iconSize)
 
   -- Этап 4: позиция иконки в сетке (слева направо, сверху вниз)
-  anchorIconInGrid(icon, parent, index, unitSettings)
-  
+  anchorIconInGrid(icon, parent, index, us)
+
   -- Create a color overlay for the icon (will show status)
   local statusOverlay = icon:CreateColorDrawable(0, 0, 0, 0, "overlay")
   statusOverlay:AddAnchor("TOPLEFT", icon, 0, 0)
   statusOverlay:AddAnchor("BOTTOMRIGHT", icon, 0, 0)
   icon.statusOverlay = statusOverlay
-  
+
   -- Create a border around the icon
   local borderSize = 2
-  
+
   -- Top border
   local topBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
   topBorder:AddAnchor("TOPLEFT", icon, -borderSize, -borderSize)
   topBorder:AddAnchor("TOPRIGHT", icon, borderSize, -borderSize)
   topBorder:SetHeight(borderSize)
   icon.topBorder = topBorder
-  
+
   -- Bottom border
   local bottomBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
   bottomBorder:AddAnchor("BOTTOMLEFT", icon, -borderSize, borderSize)
   bottomBorder:AddAnchor("BOTTOMRIGHT", icon, borderSize, borderSize)
   bottomBorder:SetHeight(borderSize)
   icon.bottomBorder = bottomBorder
-  
+
   -- Left border
   local leftBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
   leftBorder:AddAnchor("TOPLEFT", icon, -borderSize, -borderSize)
   leftBorder:AddAnchor("BOTTOMLEFT", icon, -borderSize, borderSize)
   leftBorder:SetWidth(borderSize)
   icon.leftBorder = leftBorder
-  
+
   -- Right border
   local rightBorder = icon:CreateColorDrawable(1, 1, 1, 0, "overlay")
   rightBorder:AddAnchor("TOPRIGHT", icon, borderSize, -borderSize)
   rightBorder:AddAnchor("BOTTOMRIGHT", icon, borderSize, borderSize)
   rightBorder:SetWidth(borderSize)
   icon.rightBorder = rightBorder
-  
+
   -- Save creation parameters for diagnostics
-  icon.createdWithSize = unitSettings.iconSize
-  icon.createdWithSpacing = unitSettings.iconSpacing
+  icon.createdWithSize = us.iconSize
+  icon.createdWithSpacing = us.iconSpacing
   icon.iconIndex = index
-  
+
   -- Create background for icon
   local slotStyle = {
       path = TEXTURE_PATH.HUD,
@@ -913,83 +924,96 @@ local function addBuffIcon(parent, index, unitType)
       color = {1, 1, 1, 1}
   }
   F_SLOT.ApplySlotSkin(icon, icon.back, slotStyle)
-  
+
   icon:Show(false)
-  
+
   -- Create label for name
-  local nameLabel = createChildWidgetSafe(icon, "label", "nameLabel_" .. index)
+  local nameLabel = createChildWidgetSafe(icon, "label", "nameLabel_" .. uid)
   if nameLabel then
-    nameLabel:SetExtent(unitSettings.iconSize * 2, unitSettings.iconSize/2)
-    nameLabel:AddAnchor("CENTER", icon, unitSettings.labelX, unitSettings.labelY)
-    nameLabel.style:SetFontSize(unitSettings.labelFontSize or 14)
+    nameLabel:SetExtent(us.iconSize * 2, us.iconSize/2)
+    nameLabel:AddAnchor("CENTER", icon, us.labelX, us.labelY)
+    nameLabel.style:SetFontSize(us.labelFontSize or 14)
     nameLabel.style:SetAlign(ALIGN.CENTER)
     nameLabel.style:SetShadow(true)
-    
+
     -- Set color from settings
-    if unitSettings.labelTextColor then
+    if us.labelTextColor then
       nameLabel.style:SetColor(
-        unitSettings.labelTextColor.r or 1, 
-        unitSettings.labelTextColor.g or 1, 
-        unitSettings.labelTextColor.b or 1, 
+        us.labelTextColor.r or 1,
+        us.labelTextColor.g or 1,
+        us.labelTextColor.b or 1,
         1
       )
     else
       nameLabel.style:SetColor(1, 1, 1, 1)
     end
-    
+
     nameLabel:SetText("")
     nameLabel:Show(false)
   end
-  
+
   -- Create semi-transparent background for timer (no image, only color)
-  local timerBg = createChildWidgetSafe(icon, "window", "timerBg_" .. index)
+  local timerBg = createChildWidgetSafe(icon, "window", "timerBg_" .. uid)
   if timerBg then
     -- Create semi-transparent color background, not an image
     local bg = timerBg:CreateColorDrawable(0, 0, 0, 0.5, "background")
-    timerBg:SetExtent(unitSettings.iconSize, unitSettings.iconSize/2)
+    timerBg:SetExtent(us.iconSize, us.iconSize/2)
     timerBg:AddAnchor("BOTTOM", icon, 0, 0)
     timerBg:Show(false)
   end
-  
+
   -- Create label for timer
-  local timerLabel = createChildWidgetSafe(icon, "label", "timerLabel_" .. index)
-  timerLabel:SetExtent(unitSettings.iconSize, unitSettings.iconSize/2)
-  timerLabel:AddAnchor("CENTER", icon, unitSettings.timerX, unitSettings.timerY)
-  timerLabel.style:SetFontSize(unitSettings.timerFontSize or 16)
+  local timerLabel = createChildWidgetSafe(icon, "label", "timerLabel_" .. uid)
+  timerLabel:SetExtent(us.iconSize, us.iconSize/2)
+  timerLabel:AddAnchor("CENTER", icon, us.timerX, us.timerY)
+  timerLabel.style:SetFontSize(us.timerFontSize or 16)
   timerLabel.style:SetAlign(ALIGN.CENTER)
   timerLabel.style:SetShadow(true)
-  
+
   -- Set color from settings
-  if unitSettings.timerTextColor then
+  if us.timerTextColor then
     timerLabel.style:SetColor(
-      unitSettings.timerTextColor.r or 1, 
-      unitSettings.timerTextColor.g or 1, 
-      unitSettings.timerTextColor.b or 1, 
+      us.timerTextColor.r or 1,
+      us.timerTextColor.g or 1,
+      us.timerTextColor.b or 1,
       1
     )
   else
     timerLabel.style:SetColor(1, 1, 1, 1)
   end
-  
+
   timerLabel:SetText("")
   timerLabel:Show(false)
-  
+
   icon.nameLabel = nameLabel
   icon.timerLabel = timerLabel
   icon.timerBg = timerBg
-  
+
   return icon
 end
 
--- Общий конструктор панели: одинаков для mount/player/target,
--- отличается только id окна и ключом настроек (unitType).
-local function createPanelCanvas(windowId, unitType)
+-- Раскладка канваса, читается ЗАНОВО на каждое событие: пресет/импорт могут
+-- заменить таблицу настроек целиком, и захваченный при создании upvalue станет
+-- «оторванной» копией.
+local function canvasCfgOf(unitType, canvasIndex)
+  local unitSettings = settings and settings[unitType]
+  if not unitSettings or type(unitSettings.canvases) ~= "table" then return nil end
+  return unitSettings.canvases[canvasIndex]
+end
+
+-- Общий конструктор панели: одинаков для mount/player/target и для всех
+-- канвасов юнита; отличается id окна, типом юнита и индексом канваса.
+local function createPanelCanvas(windowId, unitType, canvasIndex)
+  canvasIndex = canvasIndex or 1
+  local unitSettings = settings[unitType]
+  local us = unitSettings and unitSettings.canvases and unitSettings.canvases[canvasIndex]
+  if not us then return nil end
+
   local canvas = api.Interface:CreateEmptyWindow(windowId)
   if not canvas then
     return nil
   end
 
-  local us = settings[unitType] or settings.playerpet
   -- HUD-панели держим на слое game: они выше мира, но НИЖЕ любых окон
   pcall(function() canvas:SetUILayer("game") end)
   canvas:SetExtent(us.iconSize * 3, us.iconSize * 1.5)
@@ -1015,15 +1039,23 @@ local function createPanelCanvas(windowId, unitType)
 
   canvas:Show(false)
 
-  -- Store unit type for later use
+  -- Store unit type / canvas index for later use
   canvas.unitType = unitType
+  canvas.canvasIndex = canvasIndex
 
   canvas.buffIcons = {}
-  local initialIcons = #BuffsToTrack.GetAllTrackedBuffIds(unitType)
+  -- Пул иконок этого канваса: только записи, назначенные на него.
+  local initialIcons = 0
+  local map = unitSettings.canvasOf or {}
+  local allIds = BuffsToTrack.GetAllTrackedBuffIds(unitType) or {}
+  for _, buffId in ipairs(allIds) do
+    local idx = tonumber(map[tostring(buffId)]) or 1
+    if idx == canvasIndex then initialIcons = initialIcons + 1 end
+  end
   if initialIcons < 1 then initialIcons = 1 end
   if initialIcons > MAX_GRID_ICONS then initialIcons = MAX_GRID_ICONS end
   for i = 1, initialIcons do
-    canvas.buffIcons[i] = addBuffIcon(canvas, i, unitType)
+    canvas.buffIcons[i] = addBuffIcon(canvas, i, unitType, canvasIndex, us)
 
     -- Ensure that the icon has the correct position based on settings
     if canvas.buffIcons[i] then
@@ -1039,9 +1071,8 @@ local function createPanelCanvas(windowId, unitType)
   canvas.isDragging = false
 
   canvas.OnDragStart = function(self, arg)
-    if settings[unitType].lockPositioning then
-      return
-    end
+    local cfg = canvasCfgOf(unitType, canvasIndex) or us
+    if cfg.lockPositioning then return end
 
     self.isDragging = true
     if self.bg then
@@ -1054,7 +1085,8 @@ local function createPanelCanvas(windowId, unitType)
   end
 
   canvas.OnDragStop = function(self)
-    if settings[unitType].lockPositioning then
+    local cfg = canvasCfgOf(unitType, canvasIndex) or us
+    if cfg.lockPositioning then
       return
     end
 
@@ -1063,11 +1095,19 @@ local function createPanelCanvas(windowId, unitType)
       self.bg:SetColor(0, 0, 0, 0.4)
     end
 
-    local x, y = self:GetOffset()
-    settings[unitType].posX = x
-    settings[unitType].posY = y
+    local x, y = self:GetEffectiveOffset()
+    if x == nil or y == nil then
+      x, y = self:GetOffset()
+    end
+    if type(x) == "number" and type(y) == "number" then
+      cfg.posX = x
+      cfg.posY = y
+      self.appliedPosX = x
+      self.appliedPosY = y
+    end
 
-    if settingsPage and settingsPage.updatePositionFields then
+    if settingsPage and settingsPage.updatePositionFields
+        and settingsPage.isSelectedCanvas and settingsPage.isSelectedCanvas(unitType, canvasIndex) then
       settingsPage.updatePositionFields(x, y)
     end
 
@@ -1087,44 +1127,35 @@ local function createPanelCanvas(windowId, unitType)
   end
 
   if canvas.EnableDrag ~= nil then
-    canvas:EnableDrag(not settings[unitType].lockPositioning)
+    canvas:EnableDrag(not us.lockPositioning)
   end
 
+  canvas.appliedPosX = us.posX
+  canvas.appliedPosY = us.posY
+
   return canvas
-end
-
-local function createBuffCanvas()
-  return createPanelCanvas("MountBuffCanvas", "playerpet")
-end
-
-local function createPlayerBuffCanvas()
-  return createPanelCanvas("PlayerBuffCanvas", "player")
-end
-
-local function createTargetBuffCanvas()
-  return createPanelCanvas("TargetBuffCanvas", "target")
 end
 
 -- Function to cleanup old target cache entries
 local function cleanupTargetCache()
   local currentTime = getCurrentTime()
   local cacheTimeout = settings.target and settings.target.cacheTimeout or 300 -- Default 5 minutes
-  
+
   local keysToRemove = {}
-  
+
   for targetId, cacheEntry in pairs(targetCache) do
     if currentTime - cacheEntry.lastSeen > cacheTimeout then
       table.insert(keysToRemove, targetId)
     end
   end
-  
+
   for _, targetId in ipairs(keysToRemove) do
     targetCache[targetId] = nil
     if settings.debugBuffId then
       safeLog("[CBT] Target cache cleaned: " .. tostring(targetId))
     end
   end
-  
+
   -- Очищаем историю баффов для удаленных целей
   for targetId, _ in pairs(keysToRemove) do
     targetActiveBuffs[targetId] = nil
@@ -1141,13 +1172,13 @@ end
 local function hasTrackedBuffs(unitType)
   -- First check the setting that completely disables tracking
   local settings = api.GetSettings("CooldawnBuffTracker") or {}
-  
+
   if unitType == "player" then
     -- Check settings for player
     if not settings.player or settings.player.enabled == false then
       return false
     end
-    
+
     -- Check if there are buffs in the list
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
     return #trackedBuffIds > 0
@@ -1156,7 +1187,7 @@ local function hasTrackedBuffs(unitType)
     if not settings.playerpet or settings.playerpet.enabled == false then
       return false
     end
-    
+
     -- Check if there are buffs in the list
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
     return #trackedBuffIds > 0
@@ -1165,7 +1196,7 @@ local function hasTrackedBuffs(unitType)
     if not settings.target or settings.target.enabled == false then
       return false
     end
-    
+
     -- Check if there are buffs in the list
     local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds("target")
     return #trackedBuffIds > 0
@@ -1174,184 +1205,128 @@ local function hasTrackedBuffs(unitType)
     local trackedMountBuffIds = BuffsToTrack.GetAllTrackedBuffIds("playerpet")
     local trackedPlayerBuffIds = BuffsToTrack.GetAllTrackedBuffIds("player")
     local trackedTargetBuffIds = BuffsToTrack.GetAllTrackedBuffIds("target")
-    
+
     local hasMountBuffs = settings.playerpet and settings.playerpet.enabled ~= false and #trackedMountBuffIds > 0
     local hasPlayerBuffs = settings.player and settings.player.enabled ~= false and #trackedPlayerBuffIds > 0
     local hasTargetBuffs = settings.target and settings.target.enabled ~= false and #trackedTargetBuffIds > 0
-    
+
     return hasMountBuffs or hasPlayerBuffs or hasTargetBuffs
   end
 end
 
 -- Достраивает пул иконок панели до нужного числа (не больше MAX_GRID_ICONS).
 -- Иконки создаются по мере надобности, а не 40 на каждую панель сразу.
-local function ensureIconPool(canvas, unitType, needed)
-  if not canvas or not needed then return end
+-- Достраивает пул иконок панели до нужного числа (не больше MAX_GRID_ICONS).
+-- Иконки создаются по мере надобности, а не 40 на каждый канвас сразу.
+local function ensureIconPool(canvas, unitType, canvasIndex, cfg, needed)
+  if not canvas or not needed or not cfg then return end
   if needed > MAX_GRID_ICONS then needed = MAX_GRID_ICONS end
   local have = #canvas.buffIcons
   if needed <= have then return end
-  local us = settings[unitType] or settings.playerpet
   for i = have + 1, needed do
-    local icon = addBuffIcon(canvas, i, unitType)
+    local icon = addBuffIcon(canvas, i, unitType, canvasIndex, cfg)
     if not icon then break end
     icon:RemoveAllAnchors()
-    icon:SetExtent(us.iconSize, us.iconSize)
-    anchorIconInGrid(icon, canvas, i, us)
+    icon:SetExtent(cfg.iconSize, cfg.iconSize)
+    anchorIconInGrid(icon, canvas, i, cfg)
     canvas.buffIcons[i] = icon
   end
 end
 
-local function updateBuffIcons(unitType)
-  unitType = unitType or "playerpet"  -- По умолчанию используем mount
-  
-  local canvas, isCanvasInit, buffDataTable
-  
-  if unitType == "target" then
-    canvas = targetBuffCanvas
-    isCanvasInit = isTargetCanvasInitialized
-    -- Use cached display data if no current target, otherwise use live data
-    local currentTarget = getCurrentTargetId()
-    if not currentTarget and lastDisplayedTargetId then
-      -- No target but we have cached data - use it
-      buffDataTable = cachedTargetDisplayData
-      
-      -- Record the time when target was lost (if not already recorded)
-      if not lastTargetLostTime then
-        lastTargetLostTime = getCurrentTime()
-      end
-    else
-      buffDataTable = targetBuffData
-      -- Reset lost time since we have a target
-      if currentTarget then
-        lastTargetLostTime = nil
-      end
-    end
-  elseif unitType == "player" then
-    canvas = playerBuffCanvas
-    isCanvasInit = isPlayerCanvasInitialized
-    buffDataTable = playerBuffData
-  else
-    canvas = buffCanvas
-    isCanvasInit = isCanvasInitialized
-    buffDataTable = buffData
+-- Индекс канваса, которому принадлежит запись юнита (по умолчанию — первый).
+local function canvasIndexFor(unitSettings, buffId)
+  local map = unitSettings and unitSettings.canvasOf
+  local idx = map and tonumber(map[tostring(buffId)])
+  if not idx then return 1 end
+  idx = math.floor(idx)
+  if idx < 1 then idx = 1 end
+  return idx
+end
+
+-- =====================================================================
+-- Жизненный цикл канвасов: создание/удаление под текущий список
+-- settings[unitType].canvases.
+-- =====================================================================
+
+local function destroyCanvasWidget(canvas)
+  if not canvas then return end
+  pcall(function() canvas:StopMovingOrSizing() end)
+  pcall(function() canvas:ReleaseHandler("OnDragStart") end)
+  pcall(function() canvas:ReleaseHandler("OnDragStop") end)
+  pcall(function() canvas:Show(false) end)
+  pcall(function() api.Interface:Free(canvas) end)
+end
+
+local function destroyUnitCanvases(unitType)
+  local list = unitCanvases[unitType]
+  if not list then return end
+  for i = #list, 1, -1 do
+    destroyCanvasWidget(list[i])
+    list[i] = nil
   end
-  
-  if not canvas or not isCanvasInit then return end
-  
-  -- Проверяем, есть ли баффы для отслеживания
-  local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
-  if #trackedBuffIds == 0 then
-    canvas:Show(false)
-    return
-  end
-  
-  -- Создаем упорядоченный список баффов согласно порядку добавления
-  local activeBuffs = {}
-  for i, buffId in ipairs(trackedBuffIds) do
-    if buffDataTable[buffId] then
-      table.insert(activeBuffs, {id = buffId, buff = buffDataTable[buffId], order = i})
+end
+
+local function hideUnitCanvases(unitType)
+  local list = unitCanvases[unitType]
+  if not list then return end
+  for _, canvas in ipairs(list) do
+    if canvas and canvas.Show then
+      -- не дёргаем Show(false) каждый кадр, если панель уже скрыта
+      local visible = true
+      if canvas.IsVisible then
+        local okVis, vis = pcall(function() return canvas:IsVisible() end)
+        if okVis then visible = vis and true or false end
+      end
+      if visible then canvas:Show(false) end
     end
   end
-  
-  -- Для target: показываем баффы, которые когда-либо были активны на текущей цели
-  if unitType == "target" then
-    -- Проверяем, есть ли у нас текущая цель
-    local currentTargetId = getCurrentTargetId()
-    
-    if not currentTargetId then
-      -- Нет цели - используем кэшированные данные (обработка ниже)
-      if lastDisplayedTargetId and lastTargetLostTime and targetActiveBuffs[lastDisplayedTargetId] then
-        -- Используем историю для последней цели
-        local historyBuffs = targetActiveBuffs[lastDisplayedTargetId]
-        local historyActiveBuffs = {}
-        for _, buffInfo in ipairs(activeBuffs) do
-          if historyBuffs[buffInfo.id] then
-            table.insert(historyActiveBuffs, buffInfo)
-          end
-        end
-        
-        if #historyActiveBuffs == 0 then
-          canvas:Show(false)
-          return
-        end
-        
-        activeBuffs = historyActiveBuffs
-      else
-        canvas:Show(false)
-        return
-      end
-    else
-      -- Есть цель - фильтруем по истории для этой цели
-      if not targetActiveBuffs[currentTargetId] then
-        targetActiveBuffs[currentTargetId] = {}
-      end
-      
-      local historyBuffs = targetActiveBuffs[currentTargetId]
-      local historyActiveBuffs = {}
-      
-      for _, buffInfo in ipairs(activeBuffs) do
-        if historyBuffs[buffInfo.id] then
-          table.insert(historyActiveBuffs, buffInfo)
-        end
-      end
-      
-      if #historyActiveBuffs == 0 then
-        canvas:Show(false)
-        return
-      end
-      
-      activeBuffs = historyActiveBuffs
+end
+
+local function hideAllCanvases()
+  for _, unitType in ipairs(UNIT_TYPES) do
+    hideUnitCanvases(unitType)
+  end
+end
+
+-- Приводит набор виджетов к числу канвасов в настройках: создаёт недостающие,
+-- освобождает лишние. Возвращает true, если что-то создано.
+local function ensureUnitCanvases(unitType)
+  local unitSettings = settings and settings[unitType]
+  if not unitSettings or type(unitSettings.canvases) ~= "table" then return false end
+  local list = unitCanvases[unitType]
+  if not list then
+    list = {}
+    unitCanvases[unitType] = list
+  end
+
+  local wanted = #unitSettings.canvases
+  -- Лишние канвасы (после удаления) освобождаем.
+  for i = #list, wanted + 1, -1 do
+    destroyCanvasWidget(list[i])
+    list[i] = nil
+  end
+
+  local created = false
+  local baseId = CANVAS_BASE_ID[unitType] or (unitType .. "BuffCanvas")
+  for i = 1, wanted do
+    if not list[i] then
+      local windowId = baseId
+      if i > 1 then windowId = baseId .. tostring(i) end
+      list[i] = createPanelCanvas(windowId, unitType, i)
+      if list[i] then created = true end
     end
   end
-  
-  -- Если нет баффов для отслеживания, скрываем canvas
-  -- Exception for target: check if we have cached data within timeout
-  if #activeBuffs == 0 then
-    if unitType == "target" and lastDisplayedTargetId and lastTargetLostTime then
-      local currentTime = getCurrentTime()
-      local cacheTimeout = settings.target and settings.target.cacheTimeout or 300
-      if currentTime - lastTargetLostTime < cacheTimeout then
-        -- Don't hide, we're showing cached data
-        -- But if cached data is also empty, hide
-        local hasCachedBuffs = false
-        for _ in pairs(cachedTargetDisplayData) do
-          hasCachedBuffs = true
-          break
-        end
-        if not hasCachedBuffs then
-          canvas:Show(false)
-          return
-        end
-        -- Use cached data for display
-        activeBuffs = {}
-        for i, buffId in ipairs(trackedBuffIds) do
-          if cachedTargetDisplayData[buffId] then
-            table.insert(activeBuffs, {id = buffId, buff = cachedTargetDisplayData[buffId], order = i})
-          end
-        end
-        if #activeBuffs == 0 then
-          canvas:Show(false)
-          return
-        end
-      else
-        -- Timeout expired
-        canvas:Show(false)
-        lastDisplayedTargetId = nil
-        lastTargetLostTime = nil
-        cachedTargetDisplayData = {}
-        return
-      end
-    else
-      canvas:Show(false)
-      return
-    end
-  end
-  
+  return created
+end
+
+-- Рисует один канвас. activeBuffs — список записей ИМЕННО этого канваса.
+local function renderCanvas(canvas, unitType, us, activeBuffs)
+  if not canvas or not us then return end
+
   -- Обновляем все иконки и скрываем неиспользуемые
   -- Число одновременно показанных иконок ограничено настройкой maxIcons
-  local us = settings[unitType]
   local maxShown = math.min(#activeBuffs, getMaxIcons(us))
-  ensureIconPool(canvas, unitType, maxShown)
+  ensureIconPool(canvas, unitType, canvas.canvasIndex or 1, us, maxShown)
 
   -- Подпись раскладки: геометрия + набор/иконки/имена показанных баффов.
   -- Пока подпись не меняется, виджеты не пересобираются — обновляются только
@@ -1381,7 +1356,7 @@ local function updateBuffIcons(unitType)
         local buffInfo = activeBuffs[i]
         local buffId = buffInfo.id
         local buff = buffInfo.buff
-        
+
         if relayout then
           -- Обновляем размер иконки согласно текущим настройкам
           icon:SetExtent(us.iconSize, us.iconSize)
@@ -1430,7 +1405,7 @@ local function updateBuffIcons(unitType)
             icon.nameLabel:Show(false)
           end
         end
-        
+
         -- Определяем текущий статус баффа
         local currentStatus = buff.status
         if buff.fixedTime then
@@ -1444,13 +1419,13 @@ local function updateBuffIcons(unitType)
           if icon.statusOverlay then
             icon.statusOverlay:SetColor(1, 1, 1, 0) -- Полностью прозрачный
           end
-          
+
           -- Невидимая граница для состояния готовности
           if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
           if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
           if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
           if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
-          
+
           -- Также восстанавливаем нормальный белый цвет иконки
           if icon.SetColor then
             icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
@@ -1460,14 +1435,14 @@ local function updateBuffIcons(unitType)
           if icon.statusOverlay then
             icon.statusOverlay:SetColor(0, 1, 0, 0.3) -- Полупрозрачный зеленый
           end
-          
+
           -- Яркая зеленая граница для активного состояния
           local borderColor = {0, 1, 0, 0.8} -- Яркий зеленый
           if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          
+
           -- Также устанавливаем зеленый цвет для иконки
           if icon.SetColor then
             icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
@@ -1477,14 +1452,14 @@ local function updateBuffIcons(unitType)
           if icon.statusOverlay then
             icon.statusOverlay:SetColor(1, 0, 0, 0.3) -- Полупрозрачный красный
           end
-          
+
           -- Яркая красная граница для состояния кулдауна
           local borderColor = {1, 0, 0, 0.8} -- Яркий красный
           if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
           if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          
+
           -- Также устанавливаем красный цвет для иконки
           if icon.SetColor then
             icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
@@ -1496,7 +1471,7 @@ local function updateBuffIcons(unitType)
         -- Таймер: текст меняется не чаще 10 раз/с — SetText только по изменению
         if icon.timerLabel and us.showTimer then
           local timerText = ""
-          
+
           if currentStatus == "active" and buff.activeUntil and buff.activeUntil ~= math.huge then
             local remainingActive = buff.activeUntil - currentTime
             if remainingActive > 0 then
@@ -1508,7 +1483,7 @@ local function updateBuffIcons(unitType)
               timerText = formatTimerSeconds(remainingCooldown)
             end
           end
-          
+
           if relayout then
             -- Шрифт/позиция/цвет таймера — только при пересборке раскладки
             icon.timerLabel.style:SetFontSize(us.timerFontSize or 16)
@@ -1553,7 +1528,7 @@ local function updateBuffIcons(unitType)
       end
     end
   end
-  
+
   if relayout then
     -- Обновляем размер canvas под фактическую сетку
     local cols = getGridColumns(us)
@@ -1577,6 +1552,8 @@ local function updateBuffIcons(unitType)
     if canvas.isDragging ~= true then
       canvas:RemoveAllAnchors()
       canvas:AddAnchor("TOPLEFT", "UIParent", us.posX, us.posY)
+      canvas.appliedPosX = us.posX
+      canvas.appliedPosY = us.posY
       if canvas.EnableDrag ~= nil then
         canvas:EnableDrag(not us.lockPositioning)
       end
@@ -1591,32 +1568,213 @@ local function updateBuffIcons(unitType)
   canvas:Show(true)
 end
 
+local function updateBuffIcons(unitType)
+  unitType = unitType or "playerpet"  -- По умолчанию используем mount
+
+  local unitSettings = settings and settings[unitType]
+  local canvasesForUnit = unitCanvases[unitType] or {}
+  if not unitSettings or #canvasesForUnit == 0 then return end
+
+  -- Данные юнита: одно сканирование аур на юнит, канвасы лишь делят записи.
+  local buffDataTable
+
+  if unitType == "target" then
+    -- Use cached display data if no current target, otherwise use live data
+    local currentTarget = getCurrentTargetId()
+    if not currentTarget and lastDisplayedTargetId then
+      -- No target but we have cached data - use it
+      buffDataTable = cachedTargetDisplayData
+
+      -- Record the time when target was lost (if not already recorded)
+      if not lastTargetLostTime then
+        lastTargetLostTime = getCurrentTime()
+      end
+    else
+      buffDataTable = targetBuffData
+      -- Reset lost time since we have a target
+      if currentTarget then
+        lastTargetLostTime = nil
+      end
+    end
+  elseif unitType == "player" then
+    buffDataTable = playerBuffData
+  else
+    buffDataTable = buffData
+  end
+
+  -- Проверяем, есть ли баффы для отслеживания
+  local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
+  if #trackedBuffIds == 0 then
+    hideUnitCanvases(unitType)
+    return
+  end
+
+  -- Создаем упорядоченный список баффов согласно порядку добавления
+  local activeBuffs = {}
+  for i, buffId in ipairs(trackedBuffIds) do
+    if buffDataTable[buffId] then
+      table.insert(activeBuffs, {id = buffId, buff = buffDataTable[buffId], order = i})
+    end
+  end
+
+  -- Для target: показываем баффы, которые когда-либо были активны на текущей цели
+  if unitType == "target" then
+    -- Проверяем, есть ли у нас текущая цель
+    local currentTargetId = getCurrentTargetId()
+
+    if not currentTargetId then
+      -- Нет цели - используем кэшированные данные (обработка ниже)
+      if lastDisplayedTargetId and lastTargetLostTime and targetActiveBuffs[lastDisplayedTargetId] then
+        -- Используем историю для последней цели
+        local historyBuffs = targetActiveBuffs[lastDisplayedTargetId]
+        local historyActiveBuffs = {}
+        for _, buffInfo in ipairs(activeBuffs) do
+          if historyBuffs[buffInfo.id] then
+            table.insert(historyActiveBuffs, buffInfo)
+          end
+        end
+
+        if #historyActiveBuffs == 0 then
+          hideUnitCanvases(unitType)
+          return
+        end
+
+        activeBuffs = historyActiveBuffs
+      else
+        hideUnitCanvases(unitType)
+        return
+      end
+    else
+      -- Есть цель - фильтруем по истории для этой цели
+      if not targetActiveBuffs[currentTargetId] then
+        targetActiveBuffs[currentTargetId] = {}
+      end
+
+      local historyBuffs = targetActiveBuffs[currentTargetId]
+      local historyActiveBuffs = {}
+
+      for _, buffInfo in ipairs(activeBuffs) do
+        if historyBuffs[buffInfo.id] then
+          table.insert(historyActiveBuffs, buffInfo)
+        end
+      end
+
+      if #historyActiveBuffs == 0 then
+        hideUnitCanvases(unitType)
+        return
+      end
+
+      activeBuffs = historyActiveBuffs
+    end
+  end
+
+  -- Если нет баффов для отслеживания, скрываем все канвасы
+  -- Exception for target: check if we have cached data within timeout
+  if #activeBuffs == 0 then
+    if unitType == "target" and lastDisplayedTargetId and lastTargetLostTime then
+      local currentTime = getCurrentTime()
+      local cacheTimeout = settings.target and settings.target.cacheTimeout or 300
+      if currentTime - lastTargetLostTime < cacheTimeout then
+        -- Don't hide, we're showing cached data
+        -- But if cached data is also empty, hide
+        local hasCachedBuffs = false
+        for _ in pairs(cachedTargetDisplayData) do
+          hasCachedBuffs = true
+          break
+        end
+        if not hasCachedBuffs then
+          hideUnitCanvases(unitType)
+          return
+        end
+        -- Use cached data for display
+        activeBuffs = {}
+        for i, buffId in ipairs(trackedBuffIds) do
+          if cachedTargetDisplayData[buffId] then
+            table.insert(activeBuffs, {id = buffId, buff = cachedTargetDisplayData[buffId], order = i})
+          end
+        end
+        if #activeBuffs == 0 then
+          hideUnitCanvases(unitType)
+          return
+        end
+      else
+        -- Timeout expired
+        hideUnitCanvases(unitType)
+        lastDisplayedTargetId = nil
+        lastTargetLostTime = nil
+        cachedTargetDisplayData = {}
+        return
+      end
+    else
+      hideUnitCanvases(unitType)
+      return
+    end
+  end
+
+  -- Рисуем каждый канвас своим подмножеством записей (canvasOf).
+  for idx = 1, #canvasesForUnit do
+    local canvas = canvasesForUnit[idx]
+    local cfg = unitSettings.canvases and unitSettings.canvases[idx]
+    if canvas and cfg then
+      local canvasBuffs = {}
+      for _, buffInfo in ipairs(activeBuffs) do
+        if canvasIndexFor(unitSettings, buffInfo.id) == idx then
+          canvasBuffs[#canvasBuffs + 1] = buffInfo
+        end
+      end
+      if #canvasBuffs == 0 then
+        canvas:Show(false)
+      else
+        renderCanvas(canvas, unitType, cfg, canvasBuffs)
+      end
+    end
+  end
+end
+
+-- Создаёт/удаляет канвасы под настройки и перерисовывает иконки.
+local function syncUnitCanvases(unitType)
+  if not (settings and settings[unitType]) then return end
+  if not hasTrackedBuffs(unitType) then
+    hideUnitCanvases(unitType)
+    return
+  end
+  ensureUnitCanvases(unitType)
+  updateBuffIcons(unitType)
+end
+
+-- Полная пересборка панелей (после сохранения настроек/пресета/импорта).
+local function refreshAllCanvases()
+  if not live then return end
+  for _, unitType in ipairs(UNIT_TYPES) do
+    pcall(syncUnitCanvases, unitType)
+  end
+end
+
 local function checkBuffs(unitType)
   unitType = unitType or "playerpet"  -- По умолчанию работаем с маунтом
-  
+
   -- Определяем, какие переменные использовать в зависимости от типа юнита
   local unitSettings = settings[unitType]
-  local buffDataTable, canvas, isCanvasInit
-  
+  local buffDataTable
+  local hasCanvases = #(unitCanvases[unitType] or {}) > 0
+
   if unitType == "target" then
     -- Special handling for target with caching logic
     local newTargetId = getCurrentTargetId()
     local currentTime = getCurrentTime()
     local cacheTimeout = settings.target and settings.target.cacheTimeout or 300
-    
+
     -- If no target
     if not newTargetId then
       -- Check if we have cached data and timeout hasn't expired
       if lastDisplayedTargetId and lastTargetLostTime then
         local timeSinceLost = currentTime - lastTargetLostTime
-        
+
         if timeSinceLost < cacheTimeout then
           -- Continue showing cached data, don't hide canvas
           -- Use cached display data for rendering
           buffDataTable = cachedTargetDisplayData
-          canvas = targetBuffCanvas
-          isCanvasInit = isTargetCanvasInitialized
-          
+
           -- Update timers based on cached fixedTime values
           for buffId, buffInfo in pairs(cachedTargetDisplayData) do
             if buffInfo.fixedTime then
@@ -1626,9 +1784,9 @@ local function checkBuffs(unitType)
               end
             end
           end
-          
+
           -- Continue to updateBuffIcons with cached data
-          if isCanvasInit and canvas then
+          if hasCanvases then
             updateBuffIcons("target")
           end
           return
@@ -1637,20 +1795,16 @@ local function checkBuffs(unitType)
           lastDisplayedTargetId = nil
           lastTargetLostTime = nil
           cachedTargetDisplayData = {}
-          if targetBuffCanvas then
-            targetBuffCanvas:Show(false)
-          end
+          hideUnitCanvases("target")
           return
         end
       else
         -- No cached data, hide canvas
-        if targetBuffCanvas then
-          targetBuffCanvas:Show(false)
-        end
+        hideUnitCanvases("target")
         return
       end
     end
-    
+
     -- We have a target
     -- Check if target changed
     if newTargetId ~= currentTargetId then
@@ -1672,10 +1826,10 @@ local function checkBuffs(unitType)
           }
         end
       end
-      
+
       -- Clear current target data
       targetBuffData = {}
-      
+
       -- Switch to new target
       currentTargetId = newTargetId
       lastDisplayedTargetId = newTargetId
@@ -1684,7 +1838,7 @@ local function checkBuffs(unitType)
 
       -- Учим имя цели: по нему потом сопоставляем удары из боевого лога
       learnUnitName(newTargetId)
-      
+
       -- Initialize or restore cache entry for new target
       if not targetCache[newTargetId] then
         targetCache[newTargetId] = {
@@ -1719,12 +1873,12 @@ local function checkBuffs(unitType)
       lastDisplayedTargetId = newTargetId
       lastTargetLostTime = nil
     end
-    
+
     -- Update lastSeen for current target
     if targetCache[currentTargetId] then
       targetCache[currentTargetId].lastSeen = currentTime
     end
-    
+
     -- Update cached display data with current targetBuffData
     cachedTargetDisplayData = {}
     for buffId, buffInfo in pairs(targetBuffData) do
@@ -1740,39 +1894,29 @@ local function checkBuffs(unitType)
         status = buffInfo.status
       }
     end
-    
+
     buffDataTable = targetBuffData
-    canvas = targetBuffCanvas
-    isCanvasInit = isTargetCanvasInitialized
   elseif unitType == "player" then
     buffDataTable = playerBuffData
-    canvas = playerBuffCanvas
-    isCanvasInit = isPlayerCanvasInitialized
   else
     buffDataTable = buffData
-    canvas = buffCanvas
-    isCanvasInit = isCanvasInitialized
   end
-  
-  -- Скрываем окно, если аддон отключен в настройках
+
+  -- Скрываем панели, если тип юнита отключен в настройках
   if not unitSettings.enabled then
-    if canvas then
-      canvas:Show(false)
-    end
+    hideUnitCanvases(unitType)
     return
   end
-  
+
   -- Проверяем, есть ли баффы для отслеживания
   local trackedBuffIds = BuffsToTrack.GetAllTrackedBuffIds(unitType)
-  
-  -- Если список отслеживаемых баффов пуст, скрываем канвас
+
+  -- Если список отслеживаемых баффов пуст, скрываем канвасы
   if #trackedBuffIds == 0 then
-    if canvas then
-      canvas:Show(false)
-    end
+    hideUnitCanvases(unitType)
     return
   end
-  
+
   local activeBuffsOnUnit = {}
   local hasChanges = false
   local currentBuffsOnUnit = {}
@@ -2073,24 +2217,11 @@ local function checkBuffs(unitType)
       hasBuffs = true
       break
   end
-  
+
   if hasBuffs and unitSettings.enabled then
-    local canvasJustCreated = false
-    
-    if unitType == "player" and not isPlayerCanvasInitialized then
-      playerBuffCanvas = createPlayerBuffCanvas()
-      isPlayerCanvasInitialized = true
-      canvasJustCreated = true
-    elseif unitType == "playerpet" and not isCanvasInitialized then
-      buffCanvas = createBuffCanvas()
-      isCanvasInitialized = true
-      canvasJustCreated = true
-    elseif unitType == "target" and not isTargetCanvasInitialized then
-      targetBuffCanvas = createTargetBuffCanvas()
-      isTargetCanvasInitialized = true
-      canvasJustCreated = true
-    end
-    
+    -- Канвасы создаём по числу записей в настройках (и освобождаем лишние).
+    local canvasJustCreated = ensureUnitCanvases(unitType)
+
     -- For target, update cache and display data after processing
     if unitType == "target" and currentTargetId then
       -- Update cache with current buff states
@@ -2111,7 +2242,7 @@ local function checkBuffs(unitType)
           }
         end
       end
-      
+
       -- Update cached display data
       cachedTargetDisplayData = {}
       for buffId, buffInfo in pairs(targetBuffData) do
@@ -2128,7 +2259,7 @@ local function checkBuffs(unitType)
         }
       end
     end
-    
+
     -- Update icons if there were changes or if canvas was just created
     if hasChanges or canvasJustCreated then
       updateBuffIcons(unitType)
@@ -2615,9 +2746,7 @@ local function OnUpdate(dt)
   processBuffIconScan()
   -- Мастер-выключатель из списка аддонов (ESC-меню), поле settings.enabled
   if settings and settings.enabled == false then
-    if buffCanvas and buffCanvas:IsVisible() then buffCanvas:Show(false) end
-    if playerBuffCanvas and playerBuffCanvas:IsVisible() then playerBuffCanvas:Show(false) end
-    if targetBuffCanvas and targetBuffCanvas:IsVisible() then targetBuffCanvas:Show(false) end
+    hideAllCanvases()
     return
   end
   -- Мана маунта: сэмплим чаще, чем баффы (100 мс), чтобы не терять мелкие траты
@@ -2635,32 +2764,28 @@ local function OnUpdate(dt)
     checkBuffs("target")     -- Проверяем баффы target
     updateTimer = 0
   end
-  
+
   refreshUITimer = refreshUITimer + dt
   if refreshUITimer >= refreshUIInterval then
-    if isCanvasInitialized then
-      updateBuffIcons("playerpet")
+    for _, unitType in ipairs(UNIT_TYPES) do
+      if #(unitCanvases[unitType] or {}) > 0 then
+        updateBuffIcons(unitType)
+      end
     end
-    if isPlayerCanvasInitialized then
-      updateBuffIcons("player")
-    end
-    if isTargetCanvasInitialized then
-      updateBuffIcons("target")
-    end
-    
+
     -- Обновляем отладчик баффов, если он существует
     if BuffDebugger and BuffDebugger.Update then
       BuffDebugger.Update({
-        playerCanvas = playerBuffCanvas,
-        mountCanvas = buffCanvas,
-        targetCanvas = targetBuffCanvas,
+        playerCanvas = unitCanvases.player[1],
+        mountCanvas = unitCanvases.playerpet[1],
+        targetCanvas = unitCanvases.target[1],
         currentTime = getCurrentTime()
       })
     end
-    
+
     refreshUITimer = 0
   end
-  
+
   -- Target cache cleanup timer
   targetCacheCleanupTimer = targetCacheCleanupTimer + dt
   if targetCacheCleanupTimer >= targetCleanupInterval * 1000 then -- Convert to milliseconds
@@ -2671,51 +2796,29 @@ end
 
 -- Определяем функции инициализации интерфейса
 local function initializeUI()
-  -- Проверяем необходимость отображения каждого из канвасов
-  -- Note: target canvas should NOT be created at initialization - only when target exists
-  local unitTypes = {"playerpet", "player"}  -- Removed "target" from initialization
-  
+  -- Проверяем необходимость отображения панелей каждого юнита.
+  -- Note: target canvases should NOT be created at initialization - only when target exists
+  local unitTypes = {"playerpet", "player"}
+
   for _, unitType in ipairs(unitTypes) do
     local shouldShowUI = hasTrackedBuffs(unitType)
     safeLog("[CBT] UI initialization for " .. unitType .. ": " .. (shouldShowUI and "show" or "hide"))
-    
+
     if shouldShowUI then
-      local canvasCreator
-      if unitType == "player" then
-        canvasCreator = createPlayerBuffCanvas
+      local created = ensureUnitCanvases(unitType)
+      if created or #(unitCanvases[unitType] or {}) > 0 then
+        updateBuffIcons(unitType)
       else
-        canvasCreator = createBuffCanvas
-      end
-      
-      local result = canvasCreator()
-      if result then
-        if unitType == "player" then
-          playerBuffCanvas = result
-          isPlayerCanvasInitialized = true
-          updateBuffIcons("player")
-        else
-          buffCanvas = result
-          isCanvasInitialized = true
-          updateBuffIcons("playerpet")
-        end
-      else
-        safeLog("[CBT] Error creating canvas for " .. unitType)
-        
-        -- Повторная попытка создания канваса с задержкой
+        safeLog("[CBT] Error creating canvases for " .. unitType)
+
+        -- Повторная попытка создания канвасов с задержкой
         api:DoIn(1000, function()
-          local retryResult = canvasCreator()
-          if retryResult then
-            if unitType == "player" then
-              playerBuffCanvas = retryResult
-              isPlayerCanvasInitialized = true
-              updateBuffIcons("player")
-            else
-              buffCanvas = retryResult
-              isCanvasInitialized = true
-              updateBuffIcons("playerpet")
-            end
+          if not live then return end
+          local retryCreated = ensureUnitCanvases(unitType)
+          if retryCreated or #(unitCanvases[unitType] or {}) > 0 then
+            updateBuffIcons(unitType)
           else
-            safeLog("[CBT] Repeated error creating canvas for " .. unitType)
+            safeLog("[CBT] Repeated error creating canvases for " .. unitType)
           end
         end)
       end
@@ -2743,40 +2846,48 @@ local function onCombatMessage(event, ...)
 end
 
 local function OnLoad()
-  -- Загружаем настройки
+  -- Загружаем настройки (миграция плоских полей в canvases уже внутри)
   if helpers then
-    settings = helpers.getSettings(buffCanvas, playerBuffCanvas, targetBuffCanvas)
+    settings = helpers.getSettings()
   else
     safeLog("[CBT] Helpers module not loaded, using basic settings")
     settings = {
       playerpet = {
-        posX = defaultPositionX,
-        posY = defaultPositionY,
-        iconSize = iconSize,
-        iconSpacing = iconSpacing,
-        enabled = true,
-        lockPositioning = false
+        canvases = { { name = "Main", posX = defaultPositionX, posY = defaultPositionY,
+          iconSize = iconSize, iconSpacing = iconSpacing, gridColumns = 10, gridRows = 1,
+          maxIcons = 10, gridRowSpacing = 5, enabled = true, lockPositioning = false } },
+        canvasOf = {}, selectedCanvas = 1, trackedBuffs = {}, mirror = {}, enabled = true
       },
       player = {
-        posX = defaultPositionX,
-        posY = defaultPositionY + 70,  -- Slightly lower than mount
-        iconSize = iconSize,
-        iconSpacing = iconSpacing,
-        enabled = true,
-        lockPositioning = false
+        canvases = { { name = "Main", posX = defaultPositionX, posY = defaultPositionY + 70,
+          iconSize = iconSize, iconSpacing = iconSpacing, gridColumns = 10, gridRows = 1,
+          maxIcons = 10, gridRowSpacing = 5, lockPositioning = false } },
+        canvasOf = {}, selectedCanvas = 1, trackedBuffs = {}, mirror = {}, enabled = true
+      },
+      target = {
+        canvases = { { name = "Main", posX = defaultPositionX, posY = defaultPositionY + 140,
+          iconSize = iconSize, iconSpacing = iconSpacing, gridColumns = 10, gridRows = 1,
+          maxIcons = 10, gridRowSpacing = 5, lockPositioning = false } },
+        canvasOf = {}, selectedCanvas = 1, trackedBuffs = {}, mirror = {}, enabled = true
       }
     }
   end
-  
+
+  -- helpers сохраняет позиции канвасов и пересобирает панели по этим хукам
+  if helpers then
+    if helpers.setCanvasRegistry then helpers.setCanvasRegistry(unitCanvases) end
+    if helpers.setRefreshCallback then helpers.setRefreshCallback(refreshAllCanvases) end
+  end
+
   -- Инициализация модуля отладки баффов
   if BuffDebugger and BuffDebugger.Initialize then
     BuffDebugger.Initialize({
-      playerCanvas = playerBuffCanvas,
-      mountCanvas = buffCanvas,
+      playerCanvas = unitCanvases.player[1],
+      mountCanvas = unitCanvases.playerpet[1],
       settings = settings
     })
   end
-  
+
   -- Инициализируем данные баффов
   initBuffData()
 
@@ -2854,132 +2965,21 @@ local function OnLoad()
   end)
 
   safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
-  
-  -- Проверяем корректность настроек и мигрируем в новую структуру при необходимости
-  if not settings.playerpet then
-    
-    -- Создаем структуру для playerpet
-    settings.playerpet = {
-      posX = settings.posX or defaultPositionX,
-      posY = settings.posY or defaultPositionY,
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = settings.enabled ~= false, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = settings.trackedBuffs or {}
-    }
-    
-    -- Создаем структуру для player
-    settings.player = {
-      posX = settings.posX or defaultPositionX,
-      posY = (settings.posY or defaultPositionY) + 70, -- Slightly below the mount
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = true, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = {}
-    }
-    
-    -- Создаем структуру для target
-    settings.target = {
-      posX = settings.posX or defaultPositionX,
-      posY = (settings.posY or defaultPositionY) + 140, -- Below the player
-      iconSize = settings.iconSize or iconSize,
-      iconSpacing = settings.iconSpacing or 5,
-      lockPositioning = settings.lockPositioning or false,
-      enabled = true, -- Enabled by default
-      timerTextColor = settings.timerTextColor or {r = 1, g = 1, b = 1, a = 1},
-      labelTextColor = settings.labelTextColor or {r = 1, g = 1, b = 1, a = 1},
-      showLabel = settings.showLabel or false,
-      labelFontSize = settings.labelFontSize or 14,
-      labelX = settings.labelX or 0,
-      labelY = settings.labelY or -30,
-      showTimer = settings.showTimer ~= false, -- Enabled by default
-      timerFontSize = settings.timerFontSize or 16,
-      timerX = settings.timerX or 0,
-      timerY = settings.timerY or 0,
-      trackedBuffs = {},
-      cacheTimeout = 300 -- 5 minutes in seconds
-    }
-    
-    -- Удаляем старые ключи
-    settings.posX = nil
-    settings.posY = nil
-    settings.iconSize = nil
-    settings.iconSpacing = nil
-    settings.lockPositioning = nil
-    settings.enabled = nil
-    settings.timerTextColor = nil
-    settings.labelTextColor = nil
-    settings.showLabel = nil
-    settings.labelFontSize = nil
-    settings.labelX = nil
-    settings.labelY = nil
-    settings.showTimer = nil
-    settings.timerFontSize = nil
-    settings.timerX = nil
-    settings.timerY = nil
-    settings.trackedBuffs = nil
-    
-    -- Сохраняем обновленные настройки
-    if helpers and helpers.updateSettings then
-      helpers.updateSettings(settings)
-    else
-      api.SaveSettings()
-    end
-    
-    safeLog("[CBT] Settings migrated to new structure with separation for playerpet and player")
-  end
-  
-  -- Проверяем корректность настроек
-  if settings.iconSize == nil then
-    safeLog("[CBT] Missing iconSize key in settings, setting default value")
-    settings.iconSize = iconSize
-  end
-  
-  if settings.iconSpacing == nil then
-    safeLog("[CBT] Missing iconSpacing key in settings, setting default value")
-    settings.iconSpacing = 5
-  end
-  
-  if settings.posX == nil then
-    safeLog("[CBT] Missing posX key in settings, setting default value")
-    settings.posX = defaultPositionX
-  end
-  
-  if settings.posY == nil then
-    safeLog("[CBT] Missing posY key in settings, setting default value")
-    settings.posY = defaultPositionY
-  end
-  
+
+  -- Модель канвасов уже нормализована helpers.getSettings()/default_settings.migrate():
+  -- плоские поля юнитов переехали в canvases[1] ("Main"), ничего не потеряно.
+  safeLog("[CBT] Canvas model ready: playerpet=" .. tostring(#(settings.playerpet.canvases or {}))
+    .. " player=" .. tostring(#(settings.player.canvases or {}))
+    .. " target=" .. tostring(#(settings.target.canvases or {})))
+
   -- Инициализируем страницу настроек, если модуль загружен
   if settingsPage and settingsPage.Load then
     settingsPage.Load()
   end
-  
+
   -- Инициализируем UI
   initializeUI()
-  
+
   live = true
   api.On("UPDATE", OnUpdate)
 
@@ -3003,85 +3003,24 @@ local function OnLoad()
     pcall(function() combatEventWnd:RegisterEvent("COMBAT_MSG") end)
     pcall(function() combatEventWnd:RegisterEvent("SPELLCAST_START") end)
   end
-  
-  -- Создаем ассоциацию с обработчиком обновления настроек
+
+  -- Полное обновление панелей после изменения настроек (вызывается из helpers)
   CooldawnBuffTracker.OnSettingsSaved = function()
-    -- Полностью пересоздаем UI при изменении настроек
-    if helpers then
-      settings = helpers.getSettings(buffCanvas, playerBuffCanvas, targetBuffCanvas)
+    settings = helpers and helpers.getSettings() or settings
+    if BuffDebugger and BuffDebugger.Shutdown then
+      BuffDebugger.Shutdown({
+        playerCanvas = unitCanvases.player[1],
+        mountCanvas = unitCanvases.playerpet[1]
+      })
     end
-    
-    -- Обновляем модуль отладки баффов после изменения настроек
-    if BuffDebugger then
-      -- Сначала отключаем
-      if BuffDebugger.Shutdown then
-        BuffDebugger.Shutdown({
-          playerCanvas = playerBuffCanvas,
-          mountCanvas = buffCanvas
-        })
-      end
-      -- Затем инициализируем заново с новыми настройками
-      if BuffDebugger.Initialize then
-        BuffDebugger.Initialize({
-          playerCanvas = playerBuffCanvas,
-          mountCanvas = buffCanvas,
-          settings = settings
-        })
-      end
+    if BuffDebugger and BuffDebugger.Initialize then
+      BuffDebugger.Initialize({
+        playerCanvas = unitCanvases.player[1],
+        mountCanvas = unitCanvases.playerpet[1],
+        settings = settings
+      })
     end
-    
-    -- Проверяем необходимость отображения каждого из канвасов
-    local unitTypes = {"playerpet", "player", "target"}
-    
-    for _, unitType in ipairs(unitTypes) do
-      local shouldShowUI = hasTrackedBuffs(unitType)
-      local canvas, isCanvasInit
-      
-      if unitType == "target" then
-        canvas = targetBuffCanvas
-        isCanvasInit = isTargetCanvasInitialized
-      elseif unitType == "player" then
-        canvas = playerBuffCanvas
-        isCanvasInit = isPlayerCanvasInitialized
-      else
-        canvas = buffCanvas
-        isCanvasInit = isCanvasInitialized
-      end
-      
-      -- Если баффов для отслеживания нет, скрываем канвас
-      if not shouldShowUI and canvas then
-        canvas:Show(false)
-      elseif shouldShowUI then
-        -- Если баффы существуют, но канвас не создан, создаем его
-        if not isCanvasInit then
-          local canvasCreator
-          if unitType == "target" then
-            canvasCreator = createTargetBuffCanvas
-          elseif unitType == "player" then
-            canvasCreator = createPlayerBuffCanvas
-          else
-            canvasCreator = createBuffCanvas
-          end
-          
-          local result = canvasCreator()
-          if result then
-            if unitType == "target" then
-              targetBuffCanvas = result
-              isTargetCanvasInitialized = true
-            elseif unitType == "player" then
-              playerBuffCanvas = result
-              isPlayerCanvasInitialized = true
-            else
-              buffCanvas = result
-              isCanvasInitialized = true 
-            end
-          end
-        end
-        
-        -- Обновляем иконки
-        updateBuffIcons(unitType)
-      end
-    end
+    refreshAllCanvases()
   end
 end
 
@@ -3093,12 +3032,13 @@ local function OnUnload()
   manaLastSpendTime = 0
   manaTimer = 0
 
-  -- Сохраняем позиции канвасов ДО их освобождения (иначе GetOffset на мёртвых виджетах)
-  if helpers and helpers.updateSettings then
-    pcall(function() helpers.updateSettings() end)
+  -- Сохраняем позиции КАЖДОГО канваса ДО их освобождения
+  -- (иначе GetOffset на мёртвых виджетах отдаст мусор)
+  if helpers and helpers.saveCanvasPositions then
+    pcall(function() helpers.saveCanvasPositions(settings) end)
   end
+  pcall(function() api.SaveSettings() end)
 
-  
   -- Отключаем приёмник боевого лога
   if combatEventWnd then
     pcall(function() combatEventWnd:UnregisterEvent("COMBAT_MSG") end)
@@ -3107,62 +3047,32 @@ local function OnUnload()
     pcall(function() api.Interface:Free(combatEventWnd) end)
     combatEventWnd = nil
   end
-  
+
   -- Отключаем модуль отладки баффов
   if BuffDebugger and BuffDebugger.Shutdown then
     BuffDebugger.Shutdown({
-      playerCanvas = playerBuffCanvas,
-      mountCanvas = buffCanvas,
-      targetCanvas = targetBuffCanvas
+      playerCanvas = unitCanvases.player[1],
+      mountCanvas = unitCanvases.playerpet[1],
+      targetCanvas = unitCanvases.target[1]
     })
   end
-  
+
   -- Очищаем данные
   buffData = {}
   playerBuffData = {}
   targetBuffData = {}
   targetCache = {}
-  isCanvasInitialized = false
-  isPlayerCanvasInitialized = false
-  isTargetCanvasInitialized = false
-  
-  -- Очищаем канвасы
-  local unitTypes = {"playerpet", "player", "target"}
-  for _, unitType in ipairs(unitTypes) do
-    local canvas
-    if unitType == "target" then
-      canvas = targetBuffCanvas
-    elseif unitType == "player" then
-      canvas = playerBuffCanvas
-    else
-      canvas = buffCanvas
-    end
-    
-    if canvas then
-      canvas:Show(false)
-      if canvas.ReleaseHandler then
-        canvas:ReleaseHandler("OnDragStart")
-        canvas:ReleaseHandler("OnDragStop")
-      end
-      -- Free не обязателен для логики, но снимает часть обработчиков
-      pcall(function() api.Interface:Free(canvas) end)
-    end
-    
-    -- Обнуляем переменные канвасов
-    if unitType == "target" then
-      targetBuffCanvas = nil
-    elseif unitType == "player" then
-      playerBuffCanvas = nil
-    else
-      buffCanvas = nil
-    end
+
+  -- Очищаем все канвасы всех юнитов
+  for _, unitType in ipairs(UNIT_TYPES) do
+    destroyUnitCanvases(unitType)
   end
-  
+
   -- Выгружаем страницу настроек, если модуль загружен
   if settingsPage and settingsPage.Unload then
     settingsPage.Unload()
   end
-  
+
 end
 
 -- Handler for opening settings window
@@ -3172,13 +3082,11 @@ local function OnSettingToggle()
   end
   if settings then
     if settings.enabled == false then
-      if buffCanvas then buffCanvas:Show(false) end
-      if playerBuffCanvas then playerBuffCanvas:Show(false) end
-      if targetBuffCanvas then targetBuffCanvas:Show(false) end
+      hideAllCanvases()
     else
-      pcall(function() checkBuffs("playerpet") end)
-      pcall(function() checkBuffs("player") end)
-      pcall(function() checkBuffs("target") end)
+      for _, unitType in ipairs(UNIT_TYPES) do
+        pcall(function() checkBuffs(unitType) end)
+      end
     end
   end
 end
@@ -3192,79 +3100,30 @@ CooldawnBuffTracker.OnSettingToggle = OnSettingToggle
 api.On("ADDON_CBT_BUFFS_CHANGED", function()
   if not live then return end
   safeLog("[CBT] Received buff list update event")
-  
+
   -- Обновляем данные баффов (включая удаление ненужных)
   local oldMountBuffsCount = 0
   for _ in pairs(buffData) do oldMountBuffsCount = oldMountBuffsCount + 1 end
-  
+
   local oldPlayerBuffsCount = 0
   for _ in pairs(playerBuffData) do oldPlayerBuffsCount = oldPlayerBuffsCount + 1 end
-  
+
   -- Инициализируем данные баффов
   initBuffData()
-  
+
   -- Считаем новое количество баффов
   local newMountBuffsCount = 0
   for _ in pairs(buffData) do newMountBuffsCount = newMountBuffsCount + 1 end
-  
+
   local newPlayerBuffsCount = 0
   for _ in pairs(playerBuffData) do newPlayerBuffsCount = newPlayerBuffsCount + 1 end
-  
+
   safeLog("[CBT] Mount buff list updated: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
   safeLog("[CBT] Player buff list updated: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
-  
-  -- Проверяем необходимость отображения каждого из канвасов
-  local unitTypes = {"playerpet", "player", "target"}
-  
-  for _, unitType in ipairs(unitTypes) do
-    local shouldShowUI = hasTrackedBuffs(unitType)
-    local canvas, isCanvasInit
-    
-    if unitType == "target" then
-      canvas = targetBuffCanvas
-      isCanvasInit = isTargetCanvasInitialized
-    elseif unitType == "player" then
-      canvas = playerBuffCanvas
-      isCanvasInit = isPlayerCanvasInitialized
-    else
-      canvas = buffCanvas
-      isCanvasInit = isCanvasInitialized
-    end
-    
-    -- Если баффов для отслеживания нет, скрываем канвас
-    if not shouldShowUI and canvas then
-      canvas:Show(false)
-    elseif shouldShowUI then
-      -- Если баффы существуют, но канвас не создан, создаем его
-      if not isCanvasInit then
-        local canvasCreator
-        if unitType == "target" then
-          canvasCreator = createTargetBuffCanvas
-        elseif unitType == "player" then
-          canvasCreator = createPlayerBuffCanvas
-        else
-          canvasCreator = createBuffCanvas
-        end
-        
-        local result = canvasCreator()
-        if result then
-          if unitType == "target" then
-            targetBuffCanvas = result
-            isTargetCanvasInitialized = true
-          elseif unitType == "player" then
-            playerBuffCanvas = result
-            isPlayerCanvasInitialized = true
-          else
-            buffCanvas = result
-            isCanvasInitialized = true 
-          end
-        end
-      end
-      
-      -- Обновляем иконки
-      updateBuffIcons(unitType)
-    end
-  end
+
+  -- Пересобираем канвасы всех юнитов: набор записей и их привязка к канвасам
+  -- могли измениться (добавление/удаление/перенос/пресет/импорт).
+  refreshAllCanvases()
 end)
 
 -- Handler for event when buffs list becomes empty
