@@ -123,6 +123,17 @@ mount and target.
 
 ## Changelog
 
+### 1.20.2
+
+- Debug: continuous target aura log instead of the manual Dump button. While Debug is on,
+  the addon polls the target's buffs/debuffs every 100 ms and prints every appearance,
+  removal and stack change as `[CBT] + / ~ / - <kind> id= name= stack= time=`. Short
+  (sub-second) buffs are captured. Target class and skillsets are printed on target change.
+
+### 1.20.1
+
+- Debug: target dump button (replaced in 1.20.2 by continuous logging).
+
 ### 1.20.0
 
 - **Multiple canvases per unit.** Mount, Player and Target can each own several
@@ -729,7 +740,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.20.0
+**Current Version:** 1.20.2
 
 ## Credits
 

@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.20.1"
+  version = "1.20.2"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -116,7 +116,6 @@ local settings = {}
 local live = false
 -- Окно-приёмник боевого лога (для триггера по имени навыка)
 local combatEventWnd = nil
-local dumpTargetDebug   -- forward: используется в OnLoad, определён ниже
 -- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
 local mirrorTargetByBuff = {}
 
@@ -2545,7 +2544,6 @@ if settingsPage then
   settingsPage.getActiveBuffs = getActiveBuffs
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
-  settingsPage.dumpTargetDebug = dumpTargetDebug
   settingsPage.findIconByName = findIconByName
 end
 
@@ -2743,52 +2741,83 @@ local function pollMountMana(dtSec)
   manaPrev = mana
 end
 
--- Debug: дамп таргета — класс/ветки и все баффы/дебаффы с id и именами
-dumpTargetDebug = function()
+-- Debug: непрерывная запись аур таргета (100 мс). Ловит короткие баффы.
+local debugAuraState = {}
+local debugAuraTarget = nil
+local debugAuraTimer = 0
+local debugAuraNames = {}
+
+local function debugAuraName(buffId)
+  local nm = debugAuraNames[buffId]
+  if nm ~= nil then return nm end
+  nm = BuffList.GetBuffName(buffId)
+  if not nm or nm == "" then
+    local ok, tip = pcall(api.Ability.GetBuffTooltip, api.Ability, buffId, 1)
+    if ok and type(tip) == "table" then nm = tip.name end
+  end
+  nm = tostring(nm or "")
+  debugAuraNames[buffId] = nm
+  return nm
+end
+
+local function logTargetClass()
   local id = api.Unit:GetUnitId("target")
   safeLog("[CBT] target id=" .. tostring(id) .. " name=" .. tostring(api.Unit:UnitName("target")))
   safeLog("[CBT] UnitClass=" .. tostring(api.Unit:UnitClass("target"))
     .. " GetUnitClassName=" .. tostring(api.Ability:GetUnitClassName("target")))
-  if id then
-    local ok, info = pcall(api.Unit.GetUnitInfoById, api.Unit, id)
-    if ok and type(info) == "table" then
-      local cls = info.class
-      if type(cls) == "table" then
-        local parts = {}
-        for k, v in pairs(cls) do
-          local nm = ""
-          local ok2, n2 = pcall(api.Ability.GetSkillsetNameById, api.Ability, v)
-          if ok2 then nm = tostring(n2) end
-          parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) .. "(" .. nm .. ")"
-        end
-        safeLog("[CBT] class: " .. table.concat(parts, " "))
-      else
-        safeLog("[CBT] class: " .. tostring(cls))
-      end
-    else
-      safeLog("[CBT] GetUnitInfoById failed")
+  if not id then return end
+  local ok, info = pcall(api.Unit.GetUnitInfoById, api.Unit, id)
+  if ok and type(info) == "table" and type(info.class) == "table" then
+    local parts = {}
+    for k, v in pairs(info.class) do
+      local nm = ""
+      local ok2, n2 = pcall(api.Ability.GetSkillsetNameById, api.Ability, v)
+      if ok2 then nm = tostring(n2) end
+      parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) .. "(" .. nm .. ")"
     end
+    safeLog("[CBT] class: " .. table.concat(parts, " "))
   end
+end
 
-  local function dumpAuras(kind, countFn, getFn)
+local function watchTargetAuras()
+  local id = api.Unit:GetUnitId("target")
+  if tostring(id) ~= tostring(debugAuraTarget) then
+    debugAuraTarget = id
+    debugAuraState = {}
+    logTargetClass()
+  end
+  if not id then return end
+
+  local now = {}
+  local function scan(kind, countFn, getFn)
     local n = countFn("target") or 0
     for i = 1, n do
       local b = getFn("target", i)
       if b and b.buff_id then
-        local nm = BuffList.GetBuffName(b.buff_id)
-        if not nm or nm == "" then
-          local ok, tip = pcall(api.Ability.GetBuffTooltip, api.Ability, b.buff_id, 1)
-          if ok and type(tip) == "table" then nm = tip.name end
+        local key = tostring(b.buff_id)
+        now[key] = { stack = tonumber(b.stack) or 0, kind = kind }
+        local prev = debugAuraState[key]
+        if not prev then
+          safeLog(string.format("[CBT] + %s id=%s name=%s stack=%s time=%s",
+            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
+        elseif prev.stack ~= now[key].stack then
+          safeLog(string.format("[CBT] ~ %s id=%s name=%s stack=%s time=%s",
+            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
         end
-        safeLog(string.format("[CBT] %s %d id=%s name=%s stack=%s time=%s",
-          kind, i, tostring(b.buff_id), tostring(nm), tostring(b.stack), tostring(b.timeLeft)))
       end
     end
   end
-  pcall(dumpAuras, "buff", function(u) return api.Unit:UnitBuffCount(u) end,
+  pcall(scan, "buff", function(u) return api.Unit:UnitBuffCount(u) end,
     function(u, i) return api.Unit:UnitBuff(u, i) end)
-  pcall(dumpAuras, "debuff", function(u) return api.Unit:UnitDeBuffCount(u) end,
+  pcall(scan, "debuff", function(u) return api.Unit:UnitDeBuffCount(u) end,
     function(u, i) return api.Unit:UnitDeBuff(u, i) end)
+
+  for key, prev in pairs(debugAuraState) do
+    if not now[key] then
+      safeLog(string.format("[CBT] - %s id=%s name=%s", prev.kind, key, debugAuraName(tonumber(key) or key)))
+    end
+  end
+  debugAuraState = now
 end
 
 local function OnUpdate(dt)
@@ -2805,6 +2834,18 @@ local function OnUpdate(dt)
     local step = manaTimer / 1000
     manaTimer = 0
     pollMountMana(step)
+  end
+
+  if settings and settings.debugBuffId then
+    debugAuraTimer = debugAuraTimer + dt
+    if debugAuraTimer >= 100 then
+      debugAuraTimer = 0
+      watchTargetAuras()
+    end
+  else
+    debugAuraState = {}
+    debugAuraTarget = nil
+    debugAuraTimer = 0
   end
 
   updateTimer = updateTimer + dt
