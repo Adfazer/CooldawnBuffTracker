@@ -317,36 +317,46 @@ local function addTrackedBuff()
     -- Always update list on any interaction
     updateTrackedBuffsList()
     
-    local buffId = settingsControls.newBuffId:GetText()
+    local buffId = settingsControls.newBuffId:GetText() or ""
+    buffId = buffId:gsub("^%s+", ""):gsub("%s+$", "")
     
-    if not buffId then
-        -- Show error if buff ID is not a number
+    if buffId == "" then
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: Buff ID must be a number")
+            settingsControls.addBuffError:SetText("Error: enter a buff ID or the skill name")
             settingsControls.errorPanel:Show(true)
         end
         return
     end
     
-    -- Проверяем, есть ли баф с таким ID в списке кастомных бафов
-    local isInCustomBuffs = false
+    -- Ищем сначала по ID, затем по отображаемому имени и по имени навыка (spellName)
+    local resolvedId = nil
     if settings and settings.customBuffs then
         for _, buffInfo in ipairs(settings.customBuffs) do
             if buffInfo.id == buffId then
-                isInCustomBuffs = true
+                resolvedId = buffInfo.id
                 break
+            end
+        end
+        if not resolvedId then
+            for _, buffInfo in ipairs(settings.customBuffs) do
+                if buffInfo.name == buffId or buffInfo.spellName == buffId then
+                    resolvedId = buffInfo.id
+                    break
+                end
             end
         end
     end
     
-    if not isInCustomBuffs then
+    if not resolvedId then
         -- Показываем ошибку, если баф не найден в списке кастомных бафов
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: Buff ID " .. buffId .. " not found in custom buffs list")
+            settingsControls.addBuffError:SetText("Error: '" .. buffId .. "' not found - add it as a custom buff first")
             settingsControls.errorPanel:Show(true)
         end
         return
     end
+    
+    buffId = resolvedId
     
     -- Try to add buff for selected unit type
     if BuffsToTrack.AddTrackedBuff(buffId, currentUnitType) then
@@ -440,12 +450,27 @@ end
 
 -- Добавляет пользовательский бафф
 local function addCustomBuff()
-    local id = settingsControls.newCustomBuffId:GetText()
-    local name = settingsControls.newCustomBuffName:GetText()
+    local id = settingsControls.newCustomBuffId:GetText() or ""
+    local name = settingsControls.newCustomBuffName:GetText() or ""
     local cooldown = tonumber(settingsControls.newCustomBuffCooldown:GetText())
     local timeOfAction = tonumber(settingsControls.newCustomBuffTimeOfAction:GetText())
 
-    if not id or not name or not cooldown or not timeOfAction then
+    -- Имя навыка из боевого лога (можно задать, даже если id ещё неизвестен)
+    local spellName = ""
+    if settingsControls.newCustomBuffSpell then
+        spellName = settingsControls.newCustomBuffSpell:GetText() or ""
+        spellName = spellName:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+
+    id = id:gsub("^%s+", ""):gsub("%s+$", "")
+    name = name:gsub("^%s+", ""):gsub("%s+$", "")
+
+    -- id не обязателен: если его нет, ключом станет имя навыка
+    if id == "" and spellName ~= "" then
+        id = spellName
+    end
+
+    if id == "" or name == "" or not cooldown or not timeOfAction then
         if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
             settingsControls.addCustomBuffError:SetText("Error: All fields must be filled correctly")
             settingsControls.customBuffErrorPanel:Show(true)
@@ -486,11 +511,6 @@ local function addCustomBuff()
     }
 
     -- Необязательное имя навыка из боевого лога: по нему бафф перезапускается
-    local spellName = ""
-    if settingsControls.newCustomBuffSpell then
-        spellName = settingsControls.newCustomBuffSpell:GetText() or ""
-        spellName = spellName:gsub("^%s+", ""):gsub("%s+$", "")
-    end
     if spellName ~= "" then
         newBuff.spellName = spellName
     end
@@ -1009,7 +1029,7 @@ local function buildNewBuffInput(buffsListContainer)
     
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 52, 0)
     if newBuffId then 
-        newBuffId:SetMaxTextLength(10) 
+        newBuffId:SetMaxTextLength(32) 
         newBuffId:SetWidth(80)
         newBuffId:Show(true)
     end

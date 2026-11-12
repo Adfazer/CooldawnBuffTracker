@@ -102,6 +102,38 @@ function defaultSettings.migrate(settings)
         end
     end
 
+    -- 1.7.3: кастомные баффы, добавленные без ID (пустая строка), получают ключ
+    -- из spellName или name; пустые ключи в списках трекинга заменяются им же.
+    local emptyIdReplacement = nil
+    if type(settings.customBuffs) == "table" then
+        for _, cb in ipairs(settings.customBuffs) do
+            if type(cb) == "table" and (cb.id == nil or cb.id == "") then
+                local newId = nil
+                if type(cb.spellName) == "string" and cb.spellName ~= "" then
+                    newId = cb.spellName
+                elseif type(cb.name) == "string" and cb.name ~= "" then
+                    newId = cb.name
+                end
+                if newId then
+                    cb.id = newId
+                    emptyIdReplacement = newId
+                end
+            end
+        end
+    end
+    if emptyIdReplacement then
+        for _, unitType in ipairs({"playerpet", "player", "target"}) do
+            local list = settings[unitType] and settings[unitType].trackedBuffs
+            if type(list) == "table" then
+                for i, id in ipairs(list) do
+                    if id == "" then
+                        list[i] = emptyIdReplacement
+                    end
+                end
+            end
+        end
+    end
+
     return settings
 end
 

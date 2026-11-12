@@ -67,6 +67,11 @@ settings storage and all `require` paths.
   when you first target him (if the cooldown has not expired). Your own casts
   restart your player/mount panels. Useful for instant skills with no cast bar
   and no trackable aura.
+- **Icon** — for a spell trigger the skill icon is learned automatically from the
+  game the first time the spell is seen in the combat log (by its spell id); if
+  the id is unknown you can leave the ID field empty and the spell name becomes
+  the key. The tracked-buff ID field also accepts the buff name or the spell
+  name instead of the numeric id.
 - Each entry has **Add** (start tracking it for the currently selected unit type)
   and **Remove** buttons.
 - Long lists are paginated; all custom buffs are saved automatically.
@@ -111,6 +116,23 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.7.3
+
+- The buff-ID field now accepts the custom buff name or the spell name as well
+  as the numeric id, and its length limit is 32 characters.
+- Custom buffs added with an empty ID are migrated: their key becomes the spell
+  name (or the display name), including entries already sitting in the tracked
+  lists.
+
+### 1.7.2
+
+- No skill id needed: leave the ID field empty and the spell name becomes the key.
+- Skill icons are learned automatically: on the first matched combat-log event
+  the addon asks the game for the skill icon by its spell id
+  (`api.Skill:GetSkillTooltip`) and saves the path in the custom buff.
+- A custom buff may now carry an explicit `iconFile` path, which takes priority
+  over the built-in icon table.
 
 ### 1.7.1
 
@@ -176,7 +198,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.1
+**Current Version:** 1.7.3
 
 ## Credits
 

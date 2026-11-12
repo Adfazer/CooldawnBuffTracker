@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.1"
+  version = "1.7.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -406,8 +406,33 @@ local function triggerSelfBuff(buffId, now)
   end
 end
 
+-- Выучить иконку навыка по spellId из боевого лога (api.Skill:GetSkillTooltip).
+-- Вызывается один раз на кастомный бафф; путь сохраняется в настройках (iconFile).
+local function learnSkillIcon(cb, spellId)
+  if not cb or not spellId then return end
+  if cb.iconFile and cb.iconFile ~= "" then return end
+  local ok, info = pcall(function() return api.Skill:GetSkillTooltip(spellId) end)
+  if not ok or type(info) ~= "table" or not info.path or info.path == "" then
+    return
+  end
+  cb.iconFile = info.path
+  -- обновить живые записи и кэш целей, чтобы иконка сменилась сразу
+  local tables = { buffData, playerBuffData, targetBuffData }
+  for _, tbl in pairs(tables) do
+    local entry = tbl[cb.id]
+    if entry then entry.icon = info.path end
+  end
+  for _, cache in pairs(targetCache) do
+    if cache.buffStates and cache.buffStates[cb.id] then
+      cache.buffStates[cb.id].icon = info.path
+    end
+  end
+  pcall(function() api.SaveSettings() end)
+  safeLog("[CBT] icon learned for spell " .. tostring(spellId) .. ": " .. tostring(info.path))
+end
+
 -- Имя навыка из лога -> запуск/обновление таймера у виновника
-local function triggerSpell(spellName, sourceName)
+local function triggerSpell(spellName, sourceName, spellId)
   if not spellName or spellName == "" then return end
   local s = api.GetSettings("CooldawnBuffTracker") or {}
   local custom = s.customBuffs or {}
@@ -425,6 +450,7 @@ local function triggerSpell(spellName, sourceName)
   for _, cb in ipairs(custom) do
     local trigger = cb.spellName
     if trigger and trigger ~= "" and trigger == needle and cb.id then
+      learnSkillIcon(cb, spellId)
       if srcKey and myNameExact and srcKey == myNameExact then
         triggerSelfBuff(cb.id, now)
       elseif srcKey then
@@ -1818,7 +1844,7 @@ local function onCombatMessage(event, ...)
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
   if parsed.spellName then
-    triggerSpell(parsed.spellName, args[3])
+    triggerSpell(parsed.spellName, args[3], parsed.spellId)
   end
 end
 

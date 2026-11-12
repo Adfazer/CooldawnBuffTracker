@@ -12758,6 +12758,12 @@ function BuffList.GetBuffIcon(buffId)
     if buffId == nil then
         return DEFAULT_BUFF_ICON
     end
+    -- Явно заданная иконка кастомного баффа (например, выученная из тултипа навыка
+    -- по spellId из боевого лога) имеет приоритет над всем остальным.
+    local info = BuffList.GetBuffInfo(buffId)
+    if info and info.iconFile and info.iconFile ~= "" then
+        return info.iconFile
+    end
     local key = tostring(buffId)
     local cached = iconPathCache[key]
     if cached then
