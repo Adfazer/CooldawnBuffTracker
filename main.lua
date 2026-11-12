@@ -9,16 +9,6 @@ local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
 local cachedBuffStatus = {}
--- Был ли уже хотя бы один опрос юнита: на самом первом опросе (загрузка/смена цели)
--- баффы могли висеть давно, поэтому старт оцениваем по остатку; дальше любое новое
--- появление ауры считаем свежим применением и якорим на текущий момент.
-local unitPollSeen = { playerpet = false, player = false, target = false }
-
--- Начало последнего каста игрока (SPELLCAST_START) — истинный момент запуска КД.
--- Аура появляется в конце каста, поэтому якорить кулдаун по ней нельзя.
-local lastCastStart = nil
-local lastCastSpell = nil
-local castWatchWin = nil
 
 -- Target tracking variables
 local targetBuffCanvas = nil
@@ -86,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.13.3"
+  version = "1.13.4"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -664,11 +654,9 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         sourceId = unitIdByName[srcKey]
       end
 
-      -- DoT-тики и повторные удары тем же навыком приходят в лог многократно.
-      -- Пока аура реально висит (present), окно глушения = длительность баффа,
-      -- иначе — кулдаун. Иначе тик через 24 c заново запускал бы отсчёт КД.
-      local cdNum = tonumber(cb.cooldown) or 0
-      local blockWindow = cdNum
+      -- DoT-тики одного и того же навыка приходят в лог многократно. Пока идёт
+      -- активная фаза записи, повторные события игнорируем; после неё триггер
+      -- снова разрешён (перезапуск по ауре отработает обычным опросом).
       local entry = nil
       if isSelf then
         entry = playerBuffData[cb.id] or buffData[cb.id]
@@ -680,13 +668,14 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
           entry = targetCache[sourceId].buffStates[cb.id]
         end
       end
-      if entry and entry.present then
-        local toa = tonumber(entry.timeOfAction) or tonumber(cb.timeOfAction) or 0
-        if toa > blockWindow then blockWindow = toa end
+      local blockWindow = 0
+      if entry and entry.fixedTime then
+        local actLeft = (tonumber(entry.activeUntil) or 0) - now
+        if actLeft > 0.5 then blockWindow = actLeft + 0.5 end
       end
 
       local blocked = false
-      if blockWindow > 1 then
+      if blockWindow > 0.5 then
         local tkey = tostring(srcKey or "self") .. "|" .. tostring(cb.id)
         local last = lastTriggerTimes[tkey]
         if last and (now - last) < (blockWindow - 0.5) then
@@ -1658,8 +1647,6 @@ local function checkBuffs(unitType)
       lastDisplayedTargetId = newTargetId
       lastTargetLostTime = nil  -- Reset lost time since we have a target now
 
-      -- Первый опрос новой цели: её баффы могли висеть давно — оцениваем по остатку
-      unitPollSeen["target"] = false
 
       -- Учим имя цели: по нему потом сопоставляем удары из боевого лога
       learnUnitName(newTargetId)
@@ -1787,24 +1774,16 @@ local function checkBuffs(unitType)
         -- настройка, и трогать её нельзя — иначе зелёная подсветка не кончится.
         local toaMs = (tonumber(entry and entry.timeOfAction) or 0) * 1000
         local now = getCurrentTime()
-        -- Свежее применение: остаток почти равен настроенной длительности (±1.5 c)
-        local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
-        local anchorNow = unitPollSeen[unitType] or freshCast
-        -- Если недавно был каст игрока — якорим старт на нём (CD идёт с нажатия)
-        local castAnchor = nil
-        if unitType ~= "target" and lastCastStart and (now - lastCastStart) > 0.15
-          and (now - lastCastStart) < 6 then
-          castAnchor = lastCastStart
-        end
+        -- player/mount — старт от первого появления ауры (как в 1.5.0);
+        -- target — оценка по серверному остатку (аура могла висеть до таргета).
+        local anchorNow = (unitType ~= "target")
         -- Запись уже запущена боевым логом (каст был раньше появления ауры) —
         -- не сдвигаем старт на момент ауры, иначе КД уезжает вперёд.
         local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
           and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
         if (isNewBuff or refreshed) and not triggeredAnchor then
-          if castAnchor then
-            setBuffStatus(buff.buff_id, "active", now, unitType, nil, castAnchor)
-          elseif anchorNow then
+          if anchorNow then
             -- Якорь — момент обнаружения: кулдаун после диспела отсчитывается от
             -- применения, а не от настроенной длительности
             setBuffStatus(buff.buff_id, "active", now, unitType, nil)
@@ -1862,20 +1841,12 @@ local function checkBuffs(unitType)
             and (remaining > prevRemaining + 1000)
           local toaMs = (tonumber(entry and entry.timeOfAction) or 0) * 1000
           local now = getCurrentTime()
-          local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
-          local anchorNow = unitPollSeen[unitType] or freshCast
-          local castAnchor = nil
-          if unitType ~= "target" and lastCastStart and (now - lastCastStart) > 0.15
-            and (now - lastCastStart) < 6 then
-            castAnchor = lastCastStart
-          end
+          local anchorNow = (unitType ~= "target")
           local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
             and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
           if (isNewDebuff or refreshed) and not triggeredAnchor then
-            if castAnchor then
-              setBuffStatus(debuff.buff_id, "active", now, unitType, nil, castAnchor)
-            elseif anchorNow then
+            if anchorNow then
               -- Якорь — момент обнаружения (кулдаун от применения, не от длительности)
               setBuffStatus(debuff.buff_id, "active", now, unitType, nil)
             else
@@ -1973,8 +1944,6 @@ local function checkBuffs(unitType)
     end
   end
 
-  -- Первый опрос юнита завершён: дальше новые появления аур считаем свежими
-  unitPollSeen[unitType] = true
 
   -- Показываем окно только если есть отслеживаемые баффы и если отслеживание разрешено в настройках
   local hasBuffs = false
@@ -2488,27 +2457,6 @@ local function OnLoad()
     end
   end
 
-  -- Наблюдатель за кастами: начало каста — истинный старт кулдауна навыка
-  castWatchWin = api.Interface:CreateEmptyWindow("cbtCastWatch")
-  if castWatchWin then
-    castWatchWin:SetExtent(1, 1)
-    castWatchWin:Show(false)
-    castWatchWin:RegisterEvent("SPELLCAST_START")
-    castWatchWin:RegisterEvent("SPELLCAST_STOP")
-    castWatchWin:RegisterEvent("SPELLCAST_SUCCEEDED")
-    castWatchWin:SetHandler("OnEvent", function(self, event, ...)
-      local a1, a2, a3 = ...
-      if event == "SPELLCAST_START" then
-        lastCastStart = getCurrentTime()
-        lastCastSpell = tostring(a1 or a2 or "?")
-      end
-      if settings and settings.debugBuffId then
-        safeLog("[CBT] " .. tostring(event) .. " a1=" .. tostring(a1)
-          .. " a2=" .. tostring(a2) .. " a3=" .. tostring(a3))
-      end
-    end)
-  end
-
   -- Расширенное ESC-меню (аддон ESCMenu): своя строка настроек
   local function openFromEscMenu()
     if settingsPage and settingsPage.openSettingsWindow then
@@ -2792,11 +2740,6 @@ local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
 
-  if castWatchWin then
-    pcall(function() castWatchWin:Show(false) end)
-    pcall(function() api.Interface:Free(castWatchWin) end)
-    castWatchWin = nil
-  end
   
   -- Отключаем приёмник боевого лога
   if combatEventWnd then

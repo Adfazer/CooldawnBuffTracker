@@ -119,6 +119,18 @@ mount and target.
 
 ## Changelog
 
+### 1.13.4
+
+- Reverted the speculative cooldown-anchor experiments (`unitPollSeen`,
+  `SPELLCAST_START` anchor): the real cause of the drift was a passive cooldown
+  reduction the user had not accounted for. Anchoring is back to the long-standing
+  rule — player/mount start at the first sighting of the aura, target estimates
+  from the server remainder.
+- Kept every real fix: custom buff CD/D/name/icon taken from the custom entry (no
+  more 30/3 defaults), name-based matching, the green phase runs the full duration
+  (no clamp when CD < D), target triggers honour custom CD/D, and the trigger
+  debounce now only suppresses repeats during an active phase (DoT ticks).
+
 ### 1.13.3
 
 - The cooldown start now anchors to the last `SPELLCAST_START` when a new aura
@@ -423,7 +435,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.13.3
+**Current Version:** 1.13.4
 
 ## Credits
 
