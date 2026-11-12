@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.12.0"
+  version = "1.12.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -139,6 +139,41 @@ local function colorSignature(c)
   return tostring(c.r) .. "," .. tostring(c.g) .. "," .. tostring(c.b) .. "," .. tostring(c.a)
 end
 
+-- Настройки пользовательского баффа по id (id может быть числом или строкой)
+local function findCustomBuff(buffId)
+  local s = settings or api.GetSettings("CooldawnBuffTracker") or {}
+  local custom = s.customBuffs or {}
+  local key = tostring(buffId)
+  for _, cb in ipairs(custom) do
+    if cb and cb.id ~= nil and tostring(cb.id) == key then
+      return cb
+    end
+  end
+  return nil
+end
+
+-- Переносит CD/D/имя/иконку из customBuffs в уже созданные записи панелей
+local function applyCustomBuffOverrides()
+  if not settings or type(settings.customBuffs) ~= "table" then return end
+  local count = 0
+  for _ in ipairs(settings.customBuffs) do count = count + 1 end
+  if count == 0 then return end
+  local tables = { buffData, playerBuffData, targetBuffData }
+  for _, tbl in pairs(tables) do
+    for id, entry in pairs(tbl) do
+      local cb = findCustomBuff(id)
+      if cb then
+        local cd = tonumber(cb.cooldown)
+        if cd ~= nil and cd >= 0 then entry.cooldown = cd end
+        local toa = tonumber(cb.timeOfAction)
+        if toa ~= nil and toa >= 0 then entry.timeOfAction = toa end
+        if cb.name and cb.name ~= "" then entry.name = cb.name end
+        if cb.iconFile and cb.iconFile ~= "" then entry.icon = cb.iconFile end
+      end
+    end
+  end
+end
+
 local function initBuffData()
   -- Инициализируем данные для всех типов юнитов
   local unitTypes = {"playerpet", "player", "target"}
@@ -172,19 +207,31 @@ local function initBuffData()
     -- Добавляем новые баффы
     for _, buffId in ipairs(trackedBuffIds) do
       if not buffDataTable[buffId] then
-        local buffName = BuffList.GetBuffName(buffId)
-        local buffIcon = BuffList.GetBuffIcon(buffId)
-        local buffCooldown = BuffList.GetBuffCooldown(buffId)
-        local buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
+        local customCfg = findCustomBuff(buffId)
+        local buffName, buffIcon, buffCooldown, buffTimeOfAction
+        if customCfg then
+          -- У кастомного баффа CD/D берём из его настроек (0 — допустимый CD)
+          buffName = (customCfg.name and customCfg.name ~= "" and customCfg.name)
+            or BuffList.GetBuffName(buffId)
+          buffIcon = (customCfg.iconFile and customCfg.iconFile ~= "" and customCfg.iconFile)
+            or BuffList.GetBuffIcon(buffId)
+          buffCooldown = tonumber(customCfg.cooldown) or 0
+          buffTimeOfAction = tonumber(customCfg.timeOfAction) or 0
+        else
+          buffName = BuffList.GetBuffName(buffId)
+          buffIcon = BuffList.GetBuffIcon(buffId)
+          buffCooldown = BuffList.GetBuffCooldown(buffId)
+          buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
 
-        if not buffCooldown or tonumber(buffCooldown) <= 0 then
-          buffCooldown = 30
-        end
+          if not buffCooldown or tonumber(buffCooldown) <= 0 then
+            buffCooldown = 30
+          end
 
-        local toaNum = tonumber(buffTimeOfAction)
-        -- 0 — допустимое значение (мгновенный бафф), дефолт только при мусоре/отрицательном
-        if toaNum == nil or toaNum < 0 then
-          buffTimeOfAction = 3
+          local toaNum = tonumber(buffTimeOfAction)
+          -- 0 — допустимое значение (мгновенный бафф), дефолт только при мусоре/отрицательном
+          if toaNum == nil or toaNum < 0 then
+            buffTimeOfAction = 3
+          end
         end
         
         buffDataTable[buffId] = {
@@ -200,6 +247,9 @@ local function initBuffData()
       end
     end
   end
+
+  -- Применяем CD/D/иконки кастомных баффов к уже существующим записям
+  applyCustomBuffOverrides()
 end
 
 local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime)
@@ -216,19 +266,30 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   
   -- If buff doesn't exist in table, create it first (for tracked buffs)
   if not buffDataTable[buffId] then
-    local buffName = BuffList.GetBuffName(buffId)
-    local buffIcon = BuffList.GetBuffIcon(buffId)
-    local buffCooldown = BuffList.GetBuffCooldown(buffId)
-    local buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
-    
-    if not buffCooldown or tonumber(buffCooldown) <= 0 then
-      buffCooldown = 30
-    end
-    
-    local toaNum = tonumber(buffTimeOfAction)
-    -- 0 — допустимое значение (мгновенный бафф), дефолт только при мусоре/отрицательном
-    if toaNum == nil or toaNum < 0 then
-      buffTimeOfAction = 3
+    local customCfg = findCustomBuff(buffId)
+    local buffName, buffIcon, buffCooldown, buffTimeOfAction
+    if customCfg then
+      buffName = (customCfg.name and customCfg.name ~= "" and customCfg.name)
+        or BuffList.GetBuffName(buffId)
+      buffIcon = (customCfg.iconFile and customCfg.iconFile ~= "" and customCfg.iconFile)
+        or BuffList.GetBuffIcon(buffId)
+      buffCooldown = tonumber(customCfg.cooldown) or 0
+      buffTimeOfAction = tonumber(customCfg.timeOfAction) or 0
+    else
+      buffName = BuffList.GetBuffName(buffId)
+      buffIcon = BuffList.GetBuffIcon(buffId)
+      buffCooldown = BuffList.GetBuffCooldown(buffId)
+      buffTimeOfAction = BuffList.GetBuffTimeOfAction(buffId)
+
+      if not buffCooldown or tonumber(buffCooldown) <= 0 then
+        buffCooldown = 30
+      end
+
+      local toaNum = tonumber(buffTimeOfAction)
+      -- 0 — допустимое значение (мгновенный бафф), дефолт только при мусоре/отрицательном
+      if toaNum == nil or toaNum < 0 then
+        buffTimeOfAction = 3
+      end
     end
     
     buffDataTable[buffId] = {
@@ -278,12 +339,9 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       buff.permanent = false
     end
     buff.readyAt = buff.fixedTime + cooldown
-    -- Если длительность больше кулдауна, активная фаза не должна пережить готовность
-    -- (иначе зелёный висит, а красного кулдауна не видно вовсе).
-    if buff.activeUntil and buff.readyAt and buff.activeUntil ~= math.huge
-      and buff.activeUntil > buff.readyAt then
-      buff.activeUntil = buff.readyAt
-    end
+    -- Активная фаза (зелёный) всегда равна длительности баффа. Если кулдаун
+    -- короче длительности (например CD=0), красной фазы просто нет — зелёный
+    -- держится всю длительность, затем сразу ready.
     buff.missingCount = 0
   elseif status == "cooldown" and not buff.fixedTime then
     -- Если бафф переходит в состояние кулдауна, но fixedTime не установлено,

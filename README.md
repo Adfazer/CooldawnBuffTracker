@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.12.1
+
+- Fixed custom buffs ignoring their own CD/D: panel entries were created from the
+  built-in buff table (cooldown defaulted to 30 s), so a custom buff with CD=0 and
+  D=10 glowed green for 10 s and then showed a bogus 20 s cooldown. The entry now
+  takes CD/D/name/icon from the custom buff, and existing entries are refreshed on
+  load and on every buff-list change.
+- The active (green) phase is no longer clamped to the cooldown: when CD ≤ D the
+  icon stays green for the whole duration and then goes ready — no phantom red
+  phase (CD=0 now works as expected).
+
 ### 1.12.0
 
 - All remaining addon windows now use the same custom dark shell
@@ -346,7 +357,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.12.0
+**Current Version:** 1.12.1
 
 ## Credits
 
