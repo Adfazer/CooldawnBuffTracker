@@ -3,6 +3,7 @@
 -- выбор иконки отдаётся наружу через setPicker.
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
+local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
 
 local M = {}
 
@@ -137,65 +138,10 @@ local function refresh()
 end
 
 local function buildWindow()
-    win = api.Interface:CreateEmptyWindow("cbtIconSearch")
+    win = CbtWindow.Create("cbtIconSearch", "Icon search", 560, 520, function()
+        if win then win:Show(false) end
+    end)
     if not win then return end
-    win:SetExtent(560, 520)
-    win:SetUILayer("dialog")
-    pcall(function() win:SetCloseOnEscape(true) end)
-    pcall(function() win:EnableHidingIsRemove(false) end)
-    win:AddAnchor("CENTER", "UIParent", 0, 0)
-    win:SetHandler("OnCloseByEsc", function() win:Show(false) end)
-
-    local winBg = win:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
-    winBg:SetTextureInfo("bg_quest")
-    winBg:SetInset(6, 6, 6, 6)
-    winBg:SetColor(0.045, 0.048, 0.055, 0.98)
-    winBg:AddAnchor("TOPLEFT", win, 0, 0)
-    winBg:AddAnchor("BOTTOMRIGHT", win, 0, 0)
-
-    local header = win:CreateChildWidget("emptywidget", "cbtIconSearchHeader", 0, true)
-    header:SetExtent(560, 30)
-    header:AddAnchor("TOPLEFT", win, 0, 0)
-    header:AddAnchor("TOPRIGHT", win, 0, 0)
-    header:Clickable(true)
-    local headerBg = header:CreateColorDrawable(0.015, 0.015, 0.020, 0.96, "background")
-    headerBg:AddAnchor("TOPLEFT", header, 0, 0)
-    headerBg:AddAnchor("BOTTOMRIGHT", header, 0, 0)
-
-    local titleLabel = header:CreateChildWidget("label", "cbtIconSearchTitle", 0, true)
-    titleLabel:SetExtent(300, 22)
-    titleLabel:AddAnchor("LEFT", header, 12, 0)
-    titleLabel.style:SetFontSize(18)
-    titleLabel.style:SetAlign(ALIGN.LEFT)
-    titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
-    titleLabel:SetText("Icon search")
-
-    local closeBtn = header:CreateChildWidget("button", "cbtIconSearchCloseBtn", 0, true)
-    closeBtn:SetExtent(20, 20)
-    closeBtn:AddAnchor("RIGHT", header, -8, 0)
-    api.Interface:ApplyButtonSkin(closeBtn, BUTTON_BASIC.WINDOW_SMALL_CLOSE)
-    closeBtn:SetHandler("OnClick", function() win:Show(false) end)
-
-    header:EnableDrag(true)
-    header:SetHandler("OnDragStart", function()
-        win:StartMoving()
-        pcall(function() api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0) end)
-    end)
-    header:SetHandler("OnDragStop", function()
-        win:StopMovingOrSizing()
-        pcall(function() api.Cursor:ClearCursor() end)
-    end)
-    win.header = header
-
-    local bg = win:CreateChildWidget("emptywidget", "cbtIconSearchBody", 0, false)
-    if bg then
-        bg:SetExtent(552, 482)
-        bg:AddAnchor("TOPLEFT", win, 4, 34)
-        bg:Show(true)
-        local plate = bg:CreateColorDrawable(COLORS.bg[1], COLORS.bg[2], COLORS.bg[3], COLORS.bg[4], "background")
-        plate:AddAnchor("TOPLEFT", bg, 0, 0)
-        plate:AddAnchor("BOTTOMRIGHT", bg, 0, 0)
-    end
 
     editBox = helpers.createEdit("cbtIconSearchEdit", win, "", 20, 44)
     editBox:SetExtent(380, 24)

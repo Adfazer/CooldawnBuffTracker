@@ -10,7 +10,7 @@ local presetWindow = nil
 local presetControls = {}
 local presetListWidgets = {}
 local presetListPage = 1
-local presetsPerPage = 5
+local presetsPerPage = 7
 
 -- Предварительное объявление локальных функций (Lua 5.1 требует порядка)
 local openPresetWindow, closePresetWindow
@@ -32,7 +32,7 @@ local function refreshSettingsPage()
 end
 
 -- Показать / скрыть панель ошибок
-function showError(message)
+showError = function(message)
     if presetControls.errorLabel then
         presetControls.errorLabel:SetText(tostring(message or ""))
     end
@@ -41,14 +41,14 @@ function showError(message)
     end
 end
 
-function hideError()
+hideError = function()
     if presetControls.errorPanel then
         presetControls.errorPanel:Show(false)
     end
 end
 
 -- Обновить надпись об активном пресете
-function updateActivePresetLabel()
+updateActivePresetLabel = function()
     if not presetControls.activeLabel then return end
     local active = helpers.getActivePresetName()
     if active and active ~= "" then
@@ -126,7 +126,7 @@ end
 
 -- ----- Построение списка пресетов -----
 
-function updatePresetList()
+updatePresetList = function()
     -- Очищаем ранее созданные элементы списка
     for _, widget in ipairs(presetListWidgets) do
         if widget then
@@ -206,7 +206,7 @@ end
 
 -- ----- Создание окна -----
 
-function createPresetWindowUI()
+createPresetWindowUI = function()
     presetWindow = CbtWindow.Create("CooldawnBuffTrackerPresets", "Presets", 520, 470, closePresetWindow)
     if not presetWindow then return end
 
@@ -313,13 +313,13 @@ function createPresetWindowUI()
     errorBorder:AddAnchor("TOPLEFT", errorPanel, -1, -1)
     errorBorder:AddAnchor("BOTTOMRIGHT", errorPanel, 1, 1)
 
-    local errorBg = errorPanel:CreateColorDrawable(0.98, 0.85, 0.85, 0.9, "background")
+    local errorBg = errorPanel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     errorBg:AddAnchor("TOPLEFT", errorPanel, 0, 0)
     errorBg:AddAnchor("BOTTOMRIGHT", errorPanel, 0, 0)
 
     local errorLabel = helpers.createLabel('cbtPresetErrorLabel', errorPanel, '', 5, 5, 14)
     errorLabel:SetExtent(480, 20)
-    errorLabel.style:SetColor(1, 0, 0, 1)
+    errorLabel.style:SetColor(0.95, 0.45, 0.45, 1)
     errorLabel:Show(true)
     presetControls.errorLabel = errorLabel
     presetControls.errorPanel = errorPanel
@@ -329,7 +329,7 @@ end
 
 -- ----- Публичные функции -----
 
-function openPresetWindow()
+openPresetWindow = function()
     -- Поведение-переключатель: если окно открыто — закрываем
     if presetWindow and presetWindow:IsVisible() then
         closePresetWindow()
@@ -346,7 +346,7 @@ function openPresetWindow()
     presetWindow:Show(true)
 end
 
-function closePresetWindow()
+closePresetWindow = function()
     if presetWindow then
         presetWindow:Show(false)
     end

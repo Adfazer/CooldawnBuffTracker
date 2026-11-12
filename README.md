@@ -119,6 +119,28 @@ mount and target.
 
 ## Changelog
 
+### 1.16.6
+
+Skill audit fixes (aac-addon-dev):
+- Icon search window now uses the shared `CbtWindow` shell, so dragging works
+  (`RegisterForDrag("LeftButton")` + `OnDragEnd`) and there is no fourth shell copy.
+- Custom entries row: CD / D / Add / Remove / Edit no longer overlap; the ID error
+  panel sits below the field instead of over it; autocomplete is capped at 4 rows
+  so it cannot spill outside the window.
+- «Unit:» label width fixed; decorative labels are now click-through; buttons are
+  created as clipped children where possible.
+- OnUnload saves canvas positions BEFORE freeing widgets; canvas offsets read
+  `GetEffectiveOffset` first.
+- `settings.enabled` master switch now applies both ways (OnSettingToggle shows or
+  hides the panels).
+- Removed the dead `ADDON_CBT_BUFFS_EMPTY` subscription; the combat-log receiver is
+  hidden and click-through; record/CD-D windows tear down through `CbtWindow.Destroy`.
+- Presets module: exported functions now bind to the forward locals (the Presets
+  button works again), 7 rows per page, dark error panel.
+- Import/Export: dead colour line removed, dark error panel.
+- Added `CooldawnBuffTracker.yaml` manifest.
+- Name label updates are change-driven (no per-tick SetText/SetColor).
+
 ### 1.16.5
 
 - Add form: button renamed «Add entry»; the left input label is «ID/name:» and the
@@ -539,7 +561,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.5
+**Current Version:** 1.16.6
 
 ## Credits
 

@@ -277,8 +277,7 @@ end
 
 function M.Unload()
     if win then
-        pcall(function() win:Show(false) end)
-        pcall(function() api.Interface:Free(win) end)
+        pcall(function() CbtWindow.Destroy(win) end)
         win = nil
     end
     rows = {}

@@ -807,7 +807,7 @@ local function openCddDialog(buffId)
     end
 
     if cddWindow then
-        pcall(function() api.Interface:Free(cddWindow) end)
+        pcall(function() CbtWindow.Destroy(cddWindow) end)
         cddWindow = nil
     end
     local wnd = CbtWindow.Create("cbtCddWindow", "Cooldown / Duration", 360, 210, function()
@@ -880,7 +880,7 @@ local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
                                            'Unit:', 20, 44, 16)
-    unitTypeLabel:SetWidth(250)
+    unitTypeLabel:SetWidth(45)
     unitTypeLabel:Show(true)
     
     -- Mount settings button
@@ -1318,7 +1318,7 @@ local function buildNewBuffInput(buffsListContainer)
                 seen[idv] = true
                 matches[#matches + 1] = { value = cb.id, text = (nm ~= "" and nm or idv) .. "  [" .. idv .. "]" }
             end
-            if #matches >= 6 then break end
+            if #matches >= 4 then break end
         end
         if #matches < 6 and M.searchIcons then
             local ok, list = pcall(M.searchIcons, q, 12)
@@ -1329,12 +1329,12 @@ local function buildNewBuffInput(buffsListContainer)
                         seen[idv] = true
                         matches[#matches + 1] = { value = idv, text = tostring(e.name or idv) .. "  [" .. idv .. "]" }
                     end
-                    if #matches >= 6 then break end
+                    if #matches >= 4 then break end
                 end
             end
         end
         if #matches == 0 then hideAc(); return end
-        for i = 1, 6 do
+        for i = 1, 4 do
             local item = matches[i]
             local row = acRows[i]
             if item then
@@ -1346,7 +1346,7 @@ local function buildNewBuffInput(buffsListContainer)
                 row:Show(false)
             end
         end
-        acPanel:SetExtent(300, math.max(1, #matches) * 22)
+        acPanel:SetExtent(300, math.min(#matches, 4) * 22)
         acPanel:Show(true)
     end
 
@@ -1361,7 +1361,7 @@ local function buildNewBuffInput(buffsListContainer)
     local errorPanel = api.Interface:CreateWidget('window', 'errorPanel', settingsWindow)
     errorPanel:SetExtent(320, 25)
     errorPanel:RemoveAllAnchors()
-    errorPanel:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 250, -22)
+    errorPanel:AddAnchor("TOPLEFT", newBuffIdLabel, "BOTTOMLEFT", 0, -26)
     
     -- Frame for error panel for better highlighting
     local errorPanelBorder = errorPanel:CreateNinePartDrawable("ui/chat_option.dds", "artwork")
@@ -1371,14 +1371,14 @@ local function buildNewBuffInput(buffsListContainer)
     errorPanelBorder:AddAnchor("BOTTOMRIGHT", errorPanel, 1, 1)
     
     -- Background for error panel - make more visible
-    local errorPanelBg = errorPanel:CreateColorDrawable(0.98, 0.85, 0.85, 0.9, "background")
+    local errorPanelBg = errorPanel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     errorPanelBg:AddAnchor("TOPLEFT", errorPanel, 0, 0)
     errorPanelBg:AddAnchor("BOTTOMRIGHT", errorPanel, 0, 0)
 
     -- Error message in panel
     local addBuffError = helpers.createLabel('addBuffError', errorPanel, '', 5, 5, 14)
     addBuffError:SetExtent(560, 20) -- Increase error message width
-    addBuffError.style:SetColor(1, 0, 0, 1) -- Red color for error message
+    addBuffError.style:SetColor(0.95, 0.45, 0.45, 1) -- Red color for error message
     addBuffError:Show(true)
     settingsControls.addBuffError = addBuffError
     
@@ -1514,24 +1514,24 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
             local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 66, 0, 12)
-            buffNameLabel:SetExtent(103, 20)
+            buffNameLabel:SetExtent(94, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown
-            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 172, 0, 13)
-            buffCooldownLabel:SetExtent(50,20)
+            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 164, 0, 12)
+            buffCooldownLabel:SetExtent(38, 20)
             buffCooldownLabel:Show(true)
 
             -- timeOfAction
-            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 211, 0, 13)
-            buffTimeOfActionLabel:SetExtent(50, 20)
+            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 205, 0, 12)
+            buffTimeOfActionLabel:SetExtent(38, 20)
             buffTimeOfActionLabel:Show(true)
 
             -- Remove button
             -- Add-to-tracking button: сразу добавляет этот бафф в отслеживание
             -- для выбранного типа юнита (Mount/Player/Target)
-            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 250, 0)
-            addToTrackButton:SetExtent(40, 20)
+            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 247, 0)
+            addToTrackButton:SetExtent(36, 20)
             addToTrackButton:Show(true)
             addToTrackButton:SetHandler("OnClick", function()
                 -- ВАЖНО: передаём buffData.id КАК ЕСТЬ (без tonumber). ID кастом-баффов
@@ -1544,11 +1544,11 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 end
             end)
 
-            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 292, 0)
-            removeButton:SetExtent(50, 20)
+            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 287, 0)
+            removeButton:SetExtent(46, 20)
 
             -- Edit: правит CD/D этой кастомной записи; обновляет и Buff list
-            local editCustomButton = helpers.createButton('editCustomBuffButton_' .. i, buffRow, 'Edit', 344, 0)
+            local editCustomButton = helpers.createButton('editCustomBuffButton_' .. i, buffRow, 'Edit', 337, 0)
             editCustomButton:SetExtent(42, 20)
             editCustomButton:Show(true)
             editCustomButton:SetHandler("OnClick", function()
@@ -1833,14 +1833,14 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     customErrorPanelBorder:AddAnchor("BOTTOMRIGHT", customBuffErrorPanel, 1, 1)
 
     -- Фон для панели ошибок
-    local customErrorPanelBg = customBuffErrorPanel:CreateColorDrawable(0.98, 0.85, 0.85, 0.9, "background")
+    local customErrorPanelBg = customBuffErrorPanel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     customErrorPanelBg:AddAnchor("TOPLEFT", customBuffErrorPanel, 0, 0)
     customErrorPanelBg:AddAnchor("BOTTOMRIGHT", customBuffErrorPanel, 0, 0)
 
     -- Текст ошибки
     local addCustomBuffError = helpers.createLabel('addCustomBuffError', customBuffErrorPanel, '', 5, 5, 14)
     addCustomBuffError:SetExtent(560, 20)
-    addCustomBuffError.style:SetColor(1, 0, 0, 1)
+    addCustomBuffError.style:SetColor(0.95, 0.45, 0.45, 1)
     addCustomBuffError:Show(true)
     settingsControls.addCustomBuffError = addCustomBuffError
     return customBuffErrorPanel
@@ -2338,7 +2338,7 @@ local function Unload()
     pcall(function() iconSearch.Unload() end)
     pcall(function() recordWindow.Unload() end)
     if cddWindow then
-        pcall(function() api.Interface:Free(cddWindow) end)
+        pcall(function() CbtWindow.Destroy(cddWindow) end)
         cddWindow = nil
     end
 

@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.16.5"
+  version = "1.16.6"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1406,11 +1406,20 @@ local function updateBuffIcons(unitType)
             icon.nameLabel:RemoveAllAnchors()
             icon.nameLabel:AddAnchor("CENTER", icon, us.labelX or 0, us.labelY or -30)
 
-            -- Обновляем цвет текста метки из настроек
+            -- Обновляем цвет текста метки из настроек (только при изменении)
             local labelTextColor = us.labelTextColor or {r = 1, g = 1, b = 1, a = 1}
-            icon.nameLabel.style:SetColor(labelTextColor.r, labelTextColor.g, labelTextColor.b, labelTextColor.a)
+            local colorKey = tostring(labelTextColor.r) .. "," .. tostring(labelTextColor.g)
+                .. "," .. tostring(labelTextColor.b) .. "," .. tostring(labelTextColor.a)
+            if icon._nameColorKey ~= colorKey then
+                icon.nameLabel.style:SetColor(labelTextColor.r, labelTextColor.g, labelTextColor.b, labelTextColor.a)
+                icon._nameColorKey = colorKey
+            end
 
-            icon.nameLabel:SetText(buff.name or "")
+            local nameText = buff.name or ""
+            if icon._nameText ~= nameText then
+                icon.nameLabel:SetText(nameText)
+                icon._nameText = nameText
+            end
             icon.nameLabel:Show(true)
           elseif icon.nameLabel then
             icon.nameLabel:Show(false)
@@ -2736,7 +2745,9 @@ local function OnLoad()
   -- Приёмник боевого лога: триггер кастомных баффов по имени навыка
   combatEventWnd = api.Interface:CreateEmptyWindow("CBTCombatEvents")
   if combatEventWnd then
-    combatEventWnd:Show(true)
+    combatEventWnd:Show(false)
+    pcall(function() combatEventWnd:Clickable(false) end)
+    pcall(function() combatEventWnd:EnablePick(false) end)
     combatEventWnd:SetHandler("OnEvent", function(self, event, ...)
       onCombatMessage(event, ...)
     end)
@@ -2828,6 +2839,11 @@ local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
 
+  -- Сохраняем позиции канвасов ДО их освобождения (иначе GetOffset на мёртвых виджетах)
+  if helpers and helpers.updateSettings then
+    pcall(function() helpers.updateSettings() end)
+  end
+
   
   -- Отключаем приёмник боевого лога
   if combatEventWnd then
@@ -2893,16 +2909,23 @@ local function OnUnload()
     settingsPage.Unload()
   end
   
-  -- Сохраняем настройки через вспомогательные функции
-  if helpers and helpers.updateSettings then
-    helpers.updateSettings()
-  end
 end
 
 -- Handler for opening settings window
 local function OnSettingToggle()
   if settingsPage and settingsPage.openSettingsWindow then
     settingsPage.openSettingsWindow()
+  end
+  if settings then
+    if settings.enabled == false then
+      if buffCanvas then buffCanvas:Show(false) end
+      if playerBuffCanvas then playerBuffCanvas:Show(false) end
+      if targetBuffCanvas then targetBuffCanvas:Show(false) end
+    else
+      pcall(function() checkBuffs("playerpet") end)
+      pcall(function() checkBuffs("player") end)
+      pcall(function() checkBuffs("target") end)
+    end
   end
 end
 
@@ -2992,25 +3015,4 @@ end)
 
 -- Handler for event when buffs list becomes empty
 -- (своё событие addon'а)
-api.On("ADDON_CBT_BUFFS_EMPTY", function(unitType)
-  if not live then return end
-  unitType = unitType or "playerpet"
-  
-  safeLog("[CBT] Received empty buff list event for " .. unitType .. " - forcibly hiding canvas")
-  
-  local canvas = unitType == "player" and playerBuffCanvas or buffCanvas
-  local buffDataTable = unitType == "player" and playerBuffData or buffData
-  
-  -- Принудительно скрываем канвас
-  if canvas then
-    canvas:Show(false)
-    safeLog("[CBT] Canvas hidden successfully")
-  end
-  
-  -- Для безопасности сбрасываем данные
-  for buffId in pairs(buffDataTable) do
-    buffDataTable[buffId] = nil
-  end
-end)
-
 return CooldawnBuffTracker

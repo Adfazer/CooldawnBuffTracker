@@ -61,7 +61,7 @@ function helpers.updateSettings(newSettings)
     
     -- Save current mount canvas position, if it exists
     if CANVAS then
-        currentPosX, currentPosY = CANVAS:GetOffset()
+        currentPosX, currentPosY = (CANVAS.GetEffectiveOffset and CANVAS:GetEffectiveOffset()) or CANVAS:GetOffset()
         if currentPosX and currentPosY then
             -- Update position in settings only if position has changed
             if settings.playerpet.posX ~= currentPosX or settings.playerpet.posY ~= currentPosY then
@@ -73,7 +73,7 @@ function helpers.updateSettings(newSettings)
     
     -- Save current player canvas position, if it exists
     if PLAYER_CANVAS then
-        playerPosX, playerPosY = PLAYER_CANVAS:GetOffset()
+        playerPosX, playerPosY = (PLAYER_CANVAS.GetEffectiveOffset and PLAYER_CANVAS:GetEffectiveOffset()) or PLAYER_CANVAS:GetOffset()
         if playerPosX and playerPosY then
             -- Update position in settings only if position has changed
             if settings.player.posX ~= playerPosX or settings.player.posY ~= playerPosY then
@@ -85,7 +85,7 @@ function helpers.updateSettings(newSettings)
     
     -- Save current target canvas position, if it exists
     if TARGET_CANVAS then
-        targetPosX, targetPosY = TARGET_CANVAS:GetOffset()
+        targetPosX, targetPosY = (TARGET_CANVAS.GetEffectiveOffset and TARGET_CANVAS:GetEffectiveOffset()) or TARGET_CANVAS:GetOffset()
         if targetPosX and targetPosY then
             -- Update position in settings only if position has changed
             if settings.target and (settings.target.posX ~= targetPosX or settings.target.posY ~= targetPosY) then
@@ -194,7 +194,8 @@ function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     
     label.style:SetAlign(ALIGN.LEFT)
     label.style:SetFontSize(fontSize or 18)
-    
+    if label.Clickable then label:Clickable(false) end
+
     return label
 end
 
@@ -211,7 +212,13 @@ function helpers.createEdit(id, parent, text, offsetX, offsetY)
 end
 
 function helpers.createButton(id, parent, text, x, y)
-    local button = api.Interface:CreateWidget('button', id, parent)
+    local button
+    if parent and parent.CreateChildWidget then
+        button = parent:CreateChildWidget("button", id, 0, true)
+    end
+    if not button then
+        button = api.Interface:CreateWidget('button', id, parent)
+    end
     button:AddAnchor("TOPLEFT", x, y)
     button:SetExtent(95, 26)
     button:SetText("") -- нативную надпись гасим, рисуем свою (тёмная тема)

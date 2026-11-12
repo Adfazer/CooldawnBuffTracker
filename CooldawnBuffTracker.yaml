@@ -1,0 +1,14 @@
+name: CooldawnBuffTracker
+alias: Cooldown Buff Tracker
+description: Tracks buffs, debuffs and skills with live cooldowns, icons and custom entries.
+author: Adfazer
+repo: Adfazer/CooldawnBuffTracker
+branch: refactor/aac-skill-audit
+tags: ["UI", "Combat", "QoL"]
+keywords:
+  - cooldown
+  - buff
+  - debuff
+  - skill
+  - tracker
+  - timer

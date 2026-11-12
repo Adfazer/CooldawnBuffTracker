@@ -602,7 +602,6 @@ local function openImportExportWindow(onImportSuccess)
     local importFileEdit = W_CTRL.CreateEdit("importFileEdit", importExportWindow)
     importFileEdit:SetExtent(360, 26)
     importFileEdit:AddAnchor("TOPLEFT", fileNameHint, "BOTTOMLEFT", 0, 4)
-    importFileEdit.style:SetColor(0, 0, 0, 1)
     importFileEdit.style:SetAlign(ALIGN.LEFT)
     importFileEdit.style:SetFontSize(12)
     importFileEdit:SetText("")
@@ -630,7 +629,7 @@ local function openImportExportWindow(onImportSuccess)
     errorPanelBorder:AddAnchor("BOTTOMRIGHT", errorPanel, 1, 1)
     
     -- Фон для панели ошибок
-    local errorPanelBg = errorPanel:CreateColorDrawable(0.98, 0.85, 0.85, 0.9, "background")
+    local errorPanelBg = errorPanel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
     errorPanelBg:AddAnchor("TOPLEFT", errorPanel, 0, 0)
     errorPanelBg:AddAnchor("BOTTOMRIGHT", errorPanel, 0, 0)
     
@@ -640,7 +639,7 @@ local function openImportExportWindow(onImportSuccess)
     errorMsg:AddAnchor("TOPLEFT", 5, 5)
     errorMsg:SetExtent(560, 20)
     errorMsg.style:SetFontSize(14)
-    errorMsg.style:SetColor(1, 0, 0, 1)
+    errorMsg.style:SetColor(0.95, 0.45, 0.45, 1)
     errorMsg:Show(true)
     ieWidgets.errorPanel = errorPanel
 
