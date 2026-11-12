@@ -117,6 +117,14 @@ mount and target.
 
 ## Changelog
 
+### 1.7.5
+
+- Skill-icon lookup is now logged under **Debug: ON**: the spell id from the
+  combat log, the path/name the client returned (SkillTooltip, then BuffTooltip
+  as a fallback), or the error. This shows why an icon is missing.
+- The fallback icon is now the neutral buff icon instead of the red
+  "no entry" placeholder.
+
 ### 1.7.4
 
 - Spell-trigger diagnostics under the existing **Debug: ON** toggle: chat now says
@@ -207,7 +215,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.4
+**Current Version:** 1.7.5
 
 ## Credits
 

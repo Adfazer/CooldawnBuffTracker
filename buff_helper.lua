@@ -12751,7 +12751,7 @@ end
 
 -- Кэш путей иконок: id -> полный путь (заполняется один раз за сессию)
 local iconPathCache = {}
-local DEFAULT_BUFF_ICON = "game/ui/icon/icon_skill_buff274.dds"
+local DEFAULT_BUFF_ICON = "game/ui/icon/icon_buff_debuff.dds"
 
 -- Function to get the icon path for a given buff ID
 function BuffList.GetBuffIcon(buffId)

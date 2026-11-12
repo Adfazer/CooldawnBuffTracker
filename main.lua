@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.4"
+  version = "1.7.5"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -418,26 +418,50 @@ end
 -- Выучить иконку навыка по spellId из боевого лога (api.Skill:GetSkillTooltip).
 -- Вызывается один раз на кастомный бафф; путь сохраняется в настройках (iconFile).
 local function learnSkillIcon(cb, spellId)
-  if not cb or not spellId then return end
+  if not cb then return end
   if cb.iconFile and cb.iconFile ~= "" then return end
-  local ok, info = pcall(function() return api.Skill:GetSkillTooltip(spellId) end)
-  if not ok or type(info) ~= "table" or not info.path or info.path == "" then
+  if not spellId then
+    if settings.debugBuffId then
+      safeLog("[CBT] icon: в событии нет spellId для '" .. tostring(cb.id) .. "'")
+    end
     return
   end
-  cb.iconFile = info.path
+  local path, name = nil, nil
+  local ok, info = pcall(function() return api.Skill:GetSkillTooltip(spellId) end)
+  if ok and type(info) == "table" then
+    path = info.path
+    name = info.name
+  end
+  -- запасной путь: у некоторых "навыков" иконка отдаётся тултипом баффа
+  if (not path or path == "") and api.Ability and api.Ability.GetBuffTooltip then
+    local ok2, tip = pcall(function() return api.Ability:GetBuffTooltip(spellId) end)
+    if ok2 and type(tip) == "table" then
+      path = tip.path
+      name = name or tip.name
+    end
+  end
+  if settings.debugBuffId then
+    local errText = ok and "" or (" err=" .. tostring(info))
+    safeLog("[CBT] icon lookup id=" .. tostring(spellId)
+      .. " -> path=" .. tostring(path) .. " name=" .. tostring(name) .. errText)
+  end
+  if not path or path == "" then
+    return
+  end
+  cb.iconFile = info and info.path or path
   -- обновить живые записи и кэш целей, чтобы иконка сменилась сразу
   local tables = { buffData, playerBuffData, targetBuffData }
   for _, tbl in pairs(tables) do
     local entry = tbl[cb.id]
-    if entry then entry.icon = info.path end
+    if entry then entry.icon = path end
   end
   for _, cache in pairs(targetCache) do
     if cache.buffStates and cache.buffStates[cb.id] then
-      cache.buffStates[cb.id].icon = info.path
+      cache.buffStates[cb.id].icon = path
     end
   end
   pcall(function() api.SaveSettings() end)
-  safeLog("[CBT] icon learned for spell " .. tostring(spellId) .. ": " .. tostring(info.path))
+  safeLog("[CBT] icon learned for spell " .. tostring(spellId) .. ": " .. tostring(path))
 end
 
 -- Имя навыка из лога -> запуск/обновление таймера у виновника
