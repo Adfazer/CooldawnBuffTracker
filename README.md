@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.18.9
+
+- «Record (Debug)» moved to the right of the Debug button (same row).
+- The ID/name input is shorter (180 px) and the Add button moved left (250..330), so it no
+  longer runs under the «Add custom entry:» label.
+
 ### 1.18.8
 
 - Tracked column narrowed and aligned with the unit selector: the name now sits right
@@ -695,7 +701,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.8
+**Current Version:** 1.18.9
 
 ## Credits
 

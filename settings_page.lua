@@ -1056,7 +1056,7 @@ local function buildTrackedBuffsSection()
     local recordButton = helpers.createButton('recordButton', trackedBuffsGroupLabel, 'Record (Debug)', 0, 0)
     recordButton:SetExtent(110, 24)
     recordButton:RemoveAllAnchors()
-    recordButton:AddAnchor("TOPLEFT", settingsWindow, 440, 72)
+    recordButton:AddAnchor("TOPLEFT", settingsWindow, 558, 44)
     recordButton:Show(settings and settings.debugBuffId and true or false)
     recordButton:SetHandler("OnClick", function()
         recordWindow.setProviders(
@@ -1377,14 +1377,14 @@ local function buildNewBuffInput(buffsListContainer)
     local newBuffId = helpers.createEdit('newBuffId', newBuffIdLabel, "", 64, 0)
     if newBuffId then 
         newBuffId:SetMaxTextLength(32) 
-        newBuffId:SetWidth(218)
+        newBuffId:SetWidth(180)
         newBuffId:Show(true)
     end
     settingsControls.newBuffId = newBuffId
     
     -- Add buff button
-    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 300, -7)
-    addBuffButton:SetWidth(100)
+    local addBuffButton = helpers.createButton('addBuffButton', newBuffIdLabel, 'Add', 250, -7)
+    addBuffButton:SetWidth(80)
     addBuffButton:Show(true)
     settingsControls.addBuffButton = addBuffButton
     addBuffButton:SetHandler("OnClick", addTrackedBuff)
