@@ -809,7 +809,7 @@ local function addPixelViewerButton()
         local thanksY = settingsControls.gridBottomLabel and 35 or 80
         local pixelViewButton = helpers.createButton('pixelViewButton', settingsWindow, 'Thank you for your hard work!', 0, 0)
         pixelViewButton:RemoveAllAnchors()
-        pixelViewButton:AddAnchor("BOTTOMLEFT", settingsWindow, 400, -18)
+        pixelViewButton:AddAnchor("BOTTOMRIGHT", settingsWindow, -150, -18)
         pixelViewButton:SetExtent(200, 26)
         pixelViewButton:SetHandler("OnClick", function()
             pixelViewer.openPixelWindow()
@@ -1041,7 +1041,7 @@ end
 local function buildTrackedBuffsSection()
     -- FIRST BLOCK - контейнер для размещения элементов (без заголовка)
     local trackedBuffsGroupLabel = helpers.createLabel('trackedBuffsGroupLabel', settingsWindow,
-                                                    '', 20, 84, 20)  -- Удаляем текст "Buff tracker management"
+                                                    '', 34, 84, 20)  -- Удаляем текст "Buff tracker management"
     trackedBuffsGroupLabel:SetWidth(390) -- Increase header width
     trackedBuffsGroupLabel:Show(true)
     
@@ -1073,7 +1073,7 @@ local function buildTrackedBuffsSection()
     
     -- Create container for buffs list and place it directly under header
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
-    buffsListContainer:SetExtent(400, 220) -- Увеличенная высота контейнера для списка (6 элементов)
+    buffsListContainer:SetExtent(334, 220) -- Увеличенная высота контейнера для списка (6 элементов)
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 35)
     buffsListContainer:Show(true)
     buffsListContainer:Clickable(true) -- Включаем кликабельность для обработки колесика мыши
@@ -1098,7 +1098,7 @@ local function buildTrackedBuffsSection()
     
     -- Создаем внутренний контейнер для содержимого, который будет прокручиваться
     local buffsContentContainer = api.Interface:CreateWidget('window', 'buffsContentContainer', buffsListContainer)
-    buffsContentContainer:SetWidth(390) -- Ширина с отступами
+    buffsContentContainer:SetWidth(314) -- Ширина с отступами
     -- Прикрепляем контент к левому верхнему углу с отступами
     buffsContentContainer:RemoveAllAnchors()
     buffsContentContainer:AddAnchor("TOPLEFT", buffsListContainer, 10, 5)
@@ -1171,7 +1171,7 @@ local function buildTrackedBuffsSection()
             
             -- Create row with buff information
             local buffRow = api.Interface:CreateWidget('window', 'trackedBuff_' .. i, container)
-            buffRow:SetExtent(380, 20)
+            buffRow:SetExtent(304, 20)
             buffRow:AddAnchor("TOPLEFT", container, 10, yOffset)
             buffRow:Show(true)
             
@@ -1187,14 +1187,14 @@ local function buildTrackedBuffsSection()
             end
 
             -- Buff name only (ID убран, чтобы не перекрывать имя)
-            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 22, 0, 12)
-            buffNameLabel:SetExtent(168, 20)
+            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 22, 0, 14)
+            buffNameLabel:SetExtent(110, 20)
             buffNameLabel:Show(true)
 
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 192, 0)
-            upButton:SetExtent(28, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 134, 0)
+            upButton:SetExtent(26, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1220,8 +1220,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 222, 0)
-            downButton:SetExtent(36, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 162, 0)
+            downButton:SetExtent(34, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1252,8 +1252,9 @@ local function buildTrackedBuffsSection()
                 local mirrorOn = settings.target and settings.target.mirror and settings.target.mirror[mirrorKey]
                 -- Состояние видно по тексту: Mir ON / Mir OFF (+ цвет)
                 local mirButton = helpers.createButton('mirrorBuffButton_' .. i, buffRow,
-                    mirrorOn and 'Mir ON' or 'Mir OFF', 260, 0)
-                mirButton:SetExtent(56, 20)
+                    mirrorOn and 'Mir ON' or 'Mir OFF', 198, 0)
+                mirButton:SetExtent(48, 20)
+                pcall(function() mirButton.textLabel.style:SetFontSize(11) end)
                 mirButton:Show(true)
                 if mirrorOn then
                     pcall(function() mirButton.textLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
@@ -1275,8 +1276,9 @@ local function buildTrackedBuffsSection()
             end
 
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 318, 0)
-            removeButton:SetExtent(56, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 248, 0)
+            removeButton:SetExtent(54, 20)
+            pcall(function() removeButton.textLabel.style:SetFontSize(11) end)
             removeButton:Show(true)
             
             -- Remove button handler
@@ -1319,7 +1321,7 @@ local function buildTrackedBuffsSection()
     local buffPrevButton = helpers.createButton('buffPrevButton', buffsListContainer, '<', 0, 0)
     buffPrevButton:SetExtent(30, 25)
     buffPrevButton:RemoveAllAnchors()
-    buffPrevButton:AddAnchor("BOTTOMLEFT", buffsListContainer, "BOTTOMLEFT", 10, -5)
+    buffPrevButton:AddAnchor("TOPLEFT", buffsListContainer, "BOTTOMLEFT", 10, 5)
     buffPrevButton:SetHandler("OnClick", function()
         if buffListPage > 1 then
             buffListPage = buffListPage - 1
@@ -1389,6 +1391,7 @@ local function buildNewBuffInput(buffsListContainer)
 
     -- Live search: подсказки по мере ввода (кастомные баффы + база дампа)
     local acPanel = api.Interface:CreateWidget('window', 'buffAcPanel', newBuffIdLabel)
+    pcall(function() acPanel:SetUILayer("dialog") end)
     acPanel:SetExtent(300, 22)
     acPanel:RemoveAllAnchors()
     acPanel:AddAnchor("TOPLEFT", newBuffId, "BOTTOMLEFT", 0, 3)
@@ -1510,17 +1513,17 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     -- CUSTOM BUFFS LIST (перемещаем после поля ввода Buff ID)
     local customBuffsListHeader = helpers.createLabel('customBuffsListHeader', trackedBuffsGroupLabel,
                                                     'Custom entries:', 0, 30, 16)
-    customBuffsListHeader:SetWidth(420)
+    customBuffsListHeader:SetWidth(474)
     customBuffsListHeader:Show(true)
     settingsControls.customBuffsListHeader = customBuffsListHeader
     
     -- Явно размещаем заголовок для пользовательских баффов после панели ошибок ввода Buff ID
     customBuffsListHeader:RemoveAllAnchors()
-    customBuffsListHeader:AddAnchor("TOPLEFT", settingsWindow, 430, 94)
+    customBuffsListHeader:AddAnchor("TOPLEFT", settingsWindow, 376, 94)
     
     -- Контейнер для списка пользовательских баффов
     local customBuffsListContainer = api.Interface:CreateWidget('window', 'customBuffsListContainer', customBuffsListHeader)
-    customBuffsListContainer:SetExtent(420, 220)
+    customBuffsListContainer:SetExtent(474, 220)
     customBuffsListContainer:AddAnchor("TOPLEFT", customBuffsListHeader, 0, 35)
     customBuffsListContainer:Show(true)
     customBuffsListContainer:Clickable(true)
@@ -1547,7 +1550,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
 
      -- Внутренний контейнер для прокручиваемого содержимого
      local customBuffsContentContainer = api.Interface:CreateWidget('window', 'customBuffsContentContainer', customBuffsListContainer)
-     customBuffsContentContainer:SetWidth(400)
+     customBuffsContentContainer:SetWidth(454)
      customBuffsContentContainer:RemoveAllAnchors()
      customBuffsContentContainer:AddAnchor("TOPLEFT", customBuffsListContainer, 10, 5)
      customBuffsContentContainer:Show(true)
@@ -1606,7 +1609,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             if not buffData or not buffData.id then break end
 
             local buffRow = api.Interface:CreateWidget('window', 'customBuff_' .. i, container)
-            buffRow:SetExtent(390, 20)
+            buffRow:SetExtent(444, 20)
             buffRow:AddAnchor("TOPLEFT", container, 5, yOffset)
             buffRow:Show(true)
 
@@ -1635,27 +1638,28 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             if showId then
                 local buffIdLabel = helpers.createLabel('customBuffIdLabel_' .. i, buffRow, idText, 22, 0, 12)
                 buffIdLabel:SetExtent(52, 20)
+                pcall(function() buffIdLabel.style:SetFontSize(13) end)
                 buffIdLabel:Show(true)
             end
 
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 78, 0, 12)
-            buffNameLabel:SetExtent(114, 20)
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 78, 0, 14)
+            buffNameLabel:SetExtent(144, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown
-            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 196, 0, 12)
+            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 226, 0, 13)
             buffCooldownLabel:SetExtent(34, 20)
             buffCooldownLabel:Show(true)
 
             -- timeOfAction
-            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 234, 0, 12)
+            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 264, 0, 13)
             buffTimeOfActionLabel:SetExtent(34, 20)
             buffTimeOfActionLabel:Show(true)
 
             -- Remove button
             -- Add-to-tracking button: сразу добавляет этот бафф в отслеживание
             -- для выбранного типа юнита (Mount/Player/Target)
-            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 272, 0)
+            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 302, 0)
             addToTrackButton:SetExtent(30, 20)
             pcall(function() addToTrackButton.textLabel.style:SetFontSize(12) end)
             addToTrackButton:Show(true)
@@ -1670,13 +1674,13 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 end
             end)
 
-            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 308, 0)
+            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 340, 0)
             removeButton:SetExtent(44, 20)
             pcall(function() removeButton.textLabel.style:SetFontSize(12) end)
 
             -- Edit: правит CD/D этой кастомной записи; обновляет и Buff list
-            local editCustomButton = helpers.createButton('editCustomBuffButton_' .. i, buffRow, 'Edit', 358, 0)
-            editCustomButton:SetExtent(32, 20)
+            local editCustomButton = helpers.createButton('editCustomBuffButton_' .. i, buffRow, 'Edit', 390, 0)
+            editCustomButton:SetExtent(40, 20)
             pcall(function() editCustomButton.textLabel.style:SetFontSize(12) end)
             editCustomButton:Show(true)
             editCustomButton:SetHandler("OnClick", function()
@@ -1718,7 +1722,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     local customPrevButton = helpers.createButton('customPrevButton', customBuffsListContainer, '<', 0, 0)
     customPrevButton:SetExtent(30, 25)
     customPrevButton:RemoveAllAnchors()
-    customPrevButton:AddAnchor("BOTTOMLEFT", customBuffsListContainer, "BOTTOMLEFT", 10, -5)
+    customPrevButton:AddAnchor("TOPLEFT", customBuffsListContainer, "BOTTOMLEFT", 10, 5)
     customPrevButton:SetHandler("OnClick", function()
         if customBuffPage > 1 then
             customBuffPage = customBuffPage - 1
@@ -1830,7 +1834,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     settingsControls.importExportButton = importExportButton
     if importExportButton then
         importExportButton:RemoveAllAnchors()
-        importExportButton:AddAnchor("BOTTOMLEFT", settingsWindow, 130, -18)
+        importExportButton:AddAnchor("BOTTOMLEFT", settingsWindow, 20, -18)
         importExportButton:SetExtent(120, 25)
     end
 
@@ -1848,7 +1852,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     settingsControls.presetsButton = presetsButton
     if presetsButton then
         presetsButton:RemoveAllAnchors()
-        presetsButton:AddAnchor("BOTTOMLEFT", settingsWindow, 260, -18)
+        presetsButton:AddAnchor("BOTTOMLEFT", settingsWindow, 150, -18)
         presetsButton:SetExtent(100, 25)
     end
     setPresetsButtonText() -- отразить активный пресет, если есть
@@ -1869,12 +1873,12 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffNameLabel:Show(true)
     
     local newCustomBuffName = helpers.createEdit('newCustomBuffName', newCustomBuffNameLabel, "", 34, 0)
-    newCustomBuffName:SetWidth(110)
+    newCustomBuffName:SetWidth(130)
     newCustomBuffName:Show(true)
     settingsControls.newCustomBuffName = newCustomBuffName
     
     -- Поле Cooldown
-    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 254, 25, 14)
+    local newCustomBuffCooldownLabel = helpers.createLabel('newCustomBuffCooldownLabel', customBuffInputsLabel, 'CD:', 280, 25, 14)
     newCustomBuffCooldownLabel:SetWidth(100)
     newCustomBuffCooldownLabel:Show(true)
     
@@ -1884,7 +1888,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     settingsControls.newCustomBuffCooldown = newCustomBuffCooldown
     
     -- Поле Duration
-    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 336, 25, 14)
+    local newCustomBuffTimeOfActionLabel = helpers.createLabel('newCustomBuffTimeOfActionLabel', customBuffInputsLabel, 'D:', 360, 25, 14)
     newCustomBuffTimeOfActionLabel:SetWidth(100)
     newCustomBuffTimeOfActionLabel:Show(true)
     
@@ -1900,24 +1904,24 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffSpellLabel:Show(true)
 
     local newCustomBuffSpell = helpers.createEdit('newCustomBuffSpell', newCustomBuffSpellLabel, "", 45, 0)
-    newCustomBuffSpell:SetWidth(170)
+    newCustomBuffSpell:SetWidth(200)
     newCustomBuffSpell:Show(true)
     settingsControls.newCustomBuffSpell = newCustomBuffSpell
 
     -- Поле Icon: имя файла иконки (список с превью — cbt_icons.html на шаре)
-    local newCustomBuffIconLabel = helpers.createLabel('newCustomBuffIconLabel', customBuffInputsLabel, 'Icon:', 224, 55, 14)
+    local newCustomBuffIconLabel = helpers.createLabel('newCustomBuffIconLabel', customBuffInputsLabel, 'Icon:', 250, 55, 14)
     newCustomBuffIconLabel:SetWidth(100)
     newCustomBuffIconLabel:Show(true)
 
     local newCustomBuffIcon = helpers.createEdit('newCustomBuffIcon', newCustomBuffIconLabel, "", 38, 0)
-    newCustomBuffIcon:SetWidth(100)
+    newCustomBuffIcon:SetWidth(120)
     newCustomBuffIcon:Show(true)
     settingsControls.newCustomBuffIcon = newCustomBuffIcon
 
     local iconPreview = CreateItemIconButton('cbtIconPreview', newCustomBuffIconLabel)
     if iconPreview then
         iconPreview:SetExtent(28, 28)
-        iconPreview:AddAnchor("TOPLEFT", newCustomBuffIconLabel, 146, -6)
+        iconPreview:AddAnchor("TOPLEFT", newCustomBuffIconLabel, 166, -6)
         iconPreview:Show(true)
         settingsControls.customBuffIconPreview = iconPreview
         F_SLOT.SetIconBackGround(iconPreview, "game/ui/icon/icon_buff_debuff.dds")
@@ -1969,16 +1973,10 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffMountLabel:Show(true)
 
     local newCustomBuffMount = helpers.createEdit('newCustomBuffMount', newCustomBuffMountLabel, "", 56, 0)
-    newCustomBuffMount:SetWidth(200)
+    newCustomBuffMount:SetWidth(240)
     newCustomBuffMount:Show(true)
     settingsControls.newCustomBuffMount = newCustomBuffMount
 
-    local manaSkillHint = helpers.createLabel('cbtManaSkillHint', customBuffInputsLabel,
-        '-> mana skill', 260, 85, 11)
-    manaSkillHint:SetWidth(160)
-    manaSkillHint.style:SetColor(0.55, 0.95, 0.55, 1)
-    manaSkillHint:Show(false)
-    settingsControls.manaSkillHint = manaSkillHint
 
     local function updateManaHint()
         local v = 0

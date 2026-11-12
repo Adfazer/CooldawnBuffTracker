@@ -119,6 +119,20 @@ mount and target.
 
 ## Changelog
 
+### 1.18.8
+
+- Tracked column narrowed and aligned with the unit selector: the name now sits right
+  next to Up (no dead gap), rows end at the Target button's right edge, and the whole
+  block starts on the same x as the unit label.
+- Custom block starts right after it and is much wider: 52 px ID, 144 px name, evenly
+  spaced CD/D/Add/Remove/Edit; ID and name use 13–14 px fonts.
+- Tracked names use a 14 px font too.
+- Pagination buttons are anchored below their lists instead of on top of the last row.
+- Import/Export and Presets moved to the bottom-left corner; the autocomplete popup is
+  raised to the dialog layer so it is never hidden behind them.
+- “Thank you for your hard work!” moved to the bottom-right next to Save, so validation
+  errors are visible.
+
 ### 1.18.7
 
 - Settings layout rebuilt as a tidy grid: tracked and custom lists now share the same top,
@@ -681,7 +695,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.7
+**Current Version:** 1.18.8
 
 ## Credits
 
