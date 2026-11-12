@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.18.6
+
+- Tracked entries show only the buff name (the ID column is gone), so the name no longer
+  overlaps anything; the row and its buttons shifted left.
+- Custom entries keep both ID and name: the ID is hidden when it duplicates the name or
+  Spell, and the Spell suffix is only added when it differs. The name column is wider and
+  the whole custom block moved 20 px left / widened by 20 px.
+- Mana skills no longer carry the `[M]` prefix or the green name colour — uniform look.
+
 ### 1.18.5
 
 - Cooldown/Duration dialog title no longer duplicates identical name / Spell / id: the
@@ -661,7 +670,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.5
+**Current Version:** 1.18.6
 
 ## Credits
 
