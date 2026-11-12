@@ -119,6 +119,17 @@ mount and target.
 
 ## Changelog
 
+### 1.8.5
+
+- The buff dump (21 014 entries, id/name/icon) is now shipped inside the addon as
+  `buff_dump.tbl` and loaded at startup when no fresh dump exists in the Addon
+  root — no scanning needed out of the box.
+- Icon paths from the dump are normalized (`Game\ui\icon\...` → `game/ui/icon/...`)
+  so they render.
+- Custom buffs without an icon get it automatically from the dump by spell name
+  at load (e.g. Sacrifice → icon_skill_buff281.dds); names with "(Rank N)" are
+  also indexed by their base name.
+
 ### 1.8.4
 
 - Skill-tooltip scanning is dropped: the addon API always requests
@@ -271,7 +282,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.4
+**Current Version:** 1.8.5
 
 ## Credits
 

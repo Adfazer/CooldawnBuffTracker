@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.4"
+  version = "1.8.5"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1822,29 +1822,98 @@ local function normalizeSkillName(s)
   return s
 end
 
+local function normalizeTexturePath(p)
+  p = tostring(p or "")
+  p = p:gsub("[\r\n]+$", "")
+  p = p:gsub("^%s+", ""):gsub("%s+$", "")
+  p = p:gsub("\\", "/")
+  p = p:gsub("^Game/", "game/")
+  p = p:gsub("/+$", "")
+  return p
+end
+
+local function addDumpEntry(byName, id, name, path)
+  path = normalizeTexturePath(path)
+  if path == "" then return end
+  local function put(k)
+    if k ~= "" and not byName[k] then
+      byName[k] = { id = tonumber(id), path = path, name = name }
+    end
+  end
+  local key = normalizeSkillName(name)
+  put(key)
+  -- баффы часто названы "X (Rank N)" — индексируем и базовое имя
+  local base = name:gsub("%s*%(%s*[Rr]ank%s*%d+%s*%)%s*$", "")
+  if base ~= name then
+    local bkey = normalizeSkillName(base)
+    if bkey ~= key then put(bkey) end
+  end
+end
+
+local function readDumpFile(path)
+  local ok, data = pcall(api.File.Read, api.File, path)
+  if ok and type(data) == "table" and type(data.dump) == "string" and #data.dump > 0 then
+    return data, path
+  end
+  return nil
+end
+
 local function loadBuffDump()
   if not (api.File and api.File.Read) then return end
-  local ok, data = pcall(api.File.Read, api.File, "buff_dump.tbl")
-  if not ok or type(data) ~= "table" or type(data.dump) ~= "string" then return end
+  -- сначала свежий дамп в корне Addon, иначе вшитый в аддон
+  local data, usedPath = readDumpFile("buff_dump.tbl")
+  if not data then
+    data, usedPath = readDumpFile("CooldawnBuffTracker/buff_dump.tbl")
+  end
+  if not data then return end
   local byName = {}
   local n = 0
   for line in data.dump:gmatch("[^\n]+") do
     local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
     if id and name and path and path ~= "" then
       n = n + 1
-      local key = normalizeSkillName(name)
-      if key ~= "" and not byName[key] then
-        byName[key] = { id = tonumber(id), path = path, name = name }
-      end
+      addDumpEntry(byName, id, name, path)
     end
   end
   if n > 0 then
     buffDump = { byName = byName, count = n }
-    safeLog("[CBT] buff dump: " .. n .. " баффов загружено из buff_dump.tbl")
+    safeLog("[CBT] buff dump: " .. n .. " баффов загружено из " .. tostring(usedPath))
   end
 end
 
+-- Проставляет иконки кастомным баффам по имени из дампа (только там, где иконки нет)
+local function applyDumpToCustomBuffs()
+  if not (buffDump and settings.customBuffs) then return 0 end
+  local changed = 0
+  for _, cb in ipairs(settings.customBuffs) do
+    local key = normalizeSkillName(cb.spellName)
+    if key ~= "" and (not cb.iconFile or cb.iconFile == "") then
+      local e = buffDump.byName[key]
+      if e then
+        cb.iconFile = e.path
+        changed = changed + 1
+        local tables = { buffData, playerBuffData, targetBuffData }
+        for _, tbl in pairs(tables) do
+          local entry = tbl[cb.id]
+          if entry then entry.icon = e.path end
+        end
+        for _, cache in pairs(targetCache) do
+          if cache.buffStates and cache.buffStates[cb.id] then
+            cache.buffStates[cb.id].icon = e.path
+          end
+        end
+        safeLog("[CBT] icon from dump: " .. tostring(cb.spellName) .. " -> " .. e.path)
+      end
+    end
+  end
+  if changed > 0 then
+    pcall(function() api.SaveSettings() end)
+  end
+  return changed
+end
+
 local function applyBuffIcon(nameKey, id, path)
+  path = normalizeTexturePath(path)
   local applied = 0
   for _, cb in ipairs(settings.customBuffs or {}) do
     if normalizeSkillName(cb.spellName) == nameKey then
@@ -1945,10 +2014,7 @@ local function processBuffIconScan()
     for _, line in ipairs(st.entries) do
       local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
       if id and name and path and path ~= "" then
-        local key = normalizeSkillName(name)
-        if key ~= "" and not byName[key] then
-          byName[key] = { id = tonumber(id), path = path, name = name }
-        end
+        addDumpEntry(byName, id, name, path)
       end
     end
     buffDump = { byName = byName, count = #st.entries }
@@ -2146,8 +2212,9 @@ local function OnLoad()
   -- Инициализируем данные баффов
   initBuffData()
 
-  -- Загружаем ранее сохранённый дамп навыков (id -> name -> иконка)
+  -- Загружаем ранее сохранённый дамп баффов (id -> name -> иконка)
   loadBuffDump()
+  applyDumpToCustomBuffs()
 
   safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
   
