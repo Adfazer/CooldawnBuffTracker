@@ -155,6 +155,12 @@ mount and target.
 
 ## Changelog
 
+### 1.21.6
+
+- Vitalism list reduced to the two skills the user tracks: **Abyssal Petrification** and
+  **Mirror Light** (the «Sacrificial Flame»: 90 s buff on an ally, 20 s debuff on an enemy).
+  The other Vitalism skills were removed from the picker.
+
 ### 1.21.5
 
 - Skillset table curated from the wiki noise: 117 trackable skills left.
@@ -851,7 +857,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.5
+**Current Version:** 1.21.6
 
 ## Credits
 
