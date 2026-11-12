@@ -119,6 +119,20 @@ mount and target.
 
 ## Changelog
 
+### 1.17.0
+
+- **Mirror** toggle («Mir») on tracked entries in the Target list. With it on, the
+  addon reads the same-named aura from **player** (remaining time and stacks) and
+  shows it in the Target panel as if the debuff were on the current target;
+  attribution is simply whoever is the target when the aura appears — no combat-log
+  parsing involved.
+- Tracked row rebalanced for the new button (name 110 px, Up/Down/Mir/Remove).
+
+### 1.16.9
+
+- Debug diagnostics: compact `[CBT] msg <event> src= tgt= spell= id=` line and
+  `[CBT] cast <spell> by <caster>` from SPELLCAST_START.
+
 ### 1.16.8
 
 - Record window: new «Clear log» button (visible on the Log skills tab) wipes the
@@ -574,7 +588,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.16.8
+**Current Version:** 1.17.0
 
 ## Credits
 

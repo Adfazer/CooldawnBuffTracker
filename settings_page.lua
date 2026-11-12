@@ -1099,13 +1099,13 @@ local function buildTrackedBuffsSection()
             
             -- Buff name
             local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 68, 0, 12)
-            buffNameLabel:SetExtent(150, 20)
+            buffNameLabel:SetExtent(110, 20)
             buffNameLabel:Show(true)
 
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 224, 0)
-            upButton:SetExtent(34, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 180, 0)
+            upButton:SetExtent(32, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1131,8 +1131,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 260, 0)
-            downButton:SetExtent(42, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 214, 0)
+            downButton:SetExtent(40, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1157,9 +1157,33 @@ local function buildTrackedBuffsSection()
                 end
             end)
             
+            -- Mirror: ауру читаем с player, а её таймер показываем на текущем target
+            if currentUnitType == "target" then
+                local mirrorKey = tostring(buffId)
+                local mirButton = helpers.createButton('mirrorBuffButton_' .. i, buffRow, 'Mir', 256, 0)
+                mirButton:SetExtent(36, 20)
+                mirButton:Show(true)
+                local mirrorOn = settings.target and settings.target.mirror and settings.target.mirror[mirrorKey]
+                if mirrorOn then
+                    pcall(function() mirButton.textLabel.style:SetColor(1.0, 0.82, 0.25, 1) end)
+                end
+                mirButton:SetHandler("OnClick", function()
+                    if not settings.target then settings.target = {} end
+                    settings.target.mirror = settings.target.mirror or {}
+                    if settings.target.mirror[mirrorKey] then
+                        settings.target.mirror[mirrorKey] = nil
+                    else
+                        settings.target.mirror[mirrorKey] = true
+                    end
+                    if helpers and helpers.updateSettings then helpers.updateSettings() end
+                    api:Emit("ADDON_CBT_BUFFS_CHANGED")
+                    updateVisibleItems()
+                end)
+            end
+
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 304, 0)
-            removeButton:SetExtent(70, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 296, 0)
+            removeButton:SetExtent(78, 20)
             removeButton:Show(true)
             
             -- Remove button handler

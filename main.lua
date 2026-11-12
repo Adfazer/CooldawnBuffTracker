@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.16.8"
+  version = "1.17.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1907,6 +1907,77 @@ local function checkBuffs(unitType)
     end
   end
 
+  -- ===== Mirror: ауру читаем с player, показываем на текущем target =====
+  -- Включено кнопкой Mir у записи в Tracked entries (список Target).
+  -- Лог не используем: атрибуция — тот, кто является целью в момент наложения.
+  local mirrorCfg = (settings and settings.target) and settings.target.mirror or nil
+  local hasMirror = false
+  if type(mirrorCfg) == "table" then
+    for _ in pairs(mirrorCfg) do hasMirror = true break end
+  end
+  if unitType == "target" and hasMirror then
+    local pById, pByName = {}, {}
+    local function scanPlayerAuras(countFn, getFn)
+      local n = countFn("player") or 0
+      for i = 1, n do
+        local b = getFn("player", i)
+        if b and b.buff_id then
+          local id = helpers.formatBuffId(b.buff_id)
+          local rec = { id = id, timeLeft = b.timeLeft, stack = b.stack }
+          pById[tostring(id)] = rec
+          local nm = BuffList.GetBuffName(id)
+          if type(nm) == "string" and nm ~= "" then pByName[nm] = rec end
+        end
+      end
+    end
+    pcall(scanPlayerAuras,
+      function(u) return api.Unit:UnitBuffCount(u) end,
+      function(u, i) return api.Unit:UnitBuff(u, i) end)
+    pcall(scanPlayerAuras,
+      function(u) return api.Unit:UnitDeBuffCount(u) end,
+      function(u, i) return api.Unit:UnitDeBuff(u, i) end)
+
+    for _, mirrorId in ipairs(trackedBuffIds) do
+      local key = tostring(mirrorId)
+      if settings.target.mirror[key] and not activeBuffsOnUnit[mirrorId] then
+        local aura = pById[key]
+        if not aura then
+          local cb = findCustomBuff and findCustomBuff(mirrorId)
+          local nm = (cb and cb.name) or BuffList.GetBuffName(mirrorId)
+          if type(nm) == "string" and nm ~= "" then aura = pByName[nm] end
+        end
+        if aura then
+          activeBuffsOnUnit[mirrorId] = true
+          local entry = buffDataTable[mirrorId]
+          local remaining = aura.timeLeft
+          local prevRemaining = entry and entry.lastRemaining
+          local isNewMirror = (not entry) or (not entry.present)
+          local refreshedMirror = prevRemaining ~= nil and remaining ~= nil
+            and remaining > prevRemaining + 1000
+          if isNewMirror or refreshedMirror then
+            local now = getCurrentTime()
+            setBuffStatus(mirrorId, "active", now, unitType, remaining)
+            hasChanges = true
+            cachedBuffStatus[mirrorId] = "active"
+            if currentTargetId then
+              if not targetActiveBuffs[currentTargetId] then
+                targetActiveBuffs[currentTargetId] = {}
+              end
+              targetActiveBuffs[currentTargetId][mirrorId] = true
+            end
+          end
+          local rec = buffDataTable[mirrorId]
+          if rec then
+            rec.present = true
+            rec.lastRemaining = remaining
+            rec.synthetic = false
+            rec.mirrored = true
+          end
+        end
+      end
+    end
+  end
+
   -- Обновляем кэшированные баффы юнита
   if unitType == "player" then
     cachedPlayerBuffs = currentBuffsOnUnit
@@ -2506,6 +2577,11 @@ local function onCombatMessage(event, ...)
   if type(combatEvent) ~= "string" then return end
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
+  if settings and settings.debugBuffId then
+    safeLog(string.format("[CBT] msg %s src=%s tgt=%s spell=%s id=%s",
+      tostring(combatEvent), tostring(args[3]), tostring(args[4]),
+      tostring(parsed.spellName), tostring(parsed.spellId)))
+  end
   if parsed.spellName then
     recordLoggedSpell(parsed.spellName, getCurrentTime())
     triggerSpell(parsed.spellName, args[3], parsed.spellId, args, combatEvent)
@@ -2760,9 +2836,18 @@ local function OnLoad()
     pcall(function() combatEventWnd:Clickable(false) end)
     pcall(function() combatEventWnd:EnablePick(false) end)
     combatEventWnd:SetHandler("OnEvent", function(self, event, ...)
+      if event == "SPELLCAST_START" then
+        local spellName, castingTime, caster = ...
+        if settings and settings.debugBuffId then
+          safeLog(string.format("[CBT] cast %s by %s (%sms)",
+            tostring(spellName), tostring(caster), tostring(castingTime)))
+        end
+        return
+      end
       onCombatMessage(event, ...)
     end)
     pcall(function() combatEventWnd:RegisterEvent("COMBAT_MSG") end)
+    pcall(function() combatEventWnd:RegisterEvent("SPELLCAST_START") end)
   end
   
   -- Создаем ассоциацию с обработчиком обновления настроек

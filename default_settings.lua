@@ -22,7 +22,8 @@ local defaultSettings = {
         timerFontSize = 16,
         timerX = 0,
         timerY = 0,
-        trackedBuffs = {}  -- Empty array - user specifies buffs themselves
+        trackedBuffs = {},  -- Empty array - user specifies buffs themselves
+        mirror = {},        -- [id]=true: ауру читаем с player, показываем на текущем target
     },
     player = {
         posX = 330,
@@ -45,7 +46,8 @@ local defaultSettings = {
         timerFontSize = 16,
         timerX = 0,
         timerY = 0,
-        trackedBuffs = {}  -- Empty array - user specifies buffs themselves
+        trackedBuffs = {},  -- Empty array - user specifies buffs themselves
+        mirror = {},        -- [id]=true: ауру читаем с player, показываем на текущем target
     },
     target = {
         posX = 330,
@@ -69,6 +71,7 @@ local defaultSettings = {
         timerX = 0,
         timerY = 0,
         trackedBuffs = {},  -- Empty array - user specifies buffs themselves
+        mirror = {},        -- [id]=true: ауру читаем с player, показываем на текущем target
         cacheTimeout = 300  -- 5 минут в секундах - время очистки кэша target
     },
     customBuffs = {}, -- Таблица для хранения пользовательских баффов
@@ -110,6 +113,9 @@ function defaultSettings.migrate(settings)
                 if settings[unitType][key] == nil then
                     settings[unitType][key] = value
                 end
+            end
+            if type(settings[unitType].mirror) ~= "table" then
+                settings[unitType].mirror = {}
             end
         end
     end
