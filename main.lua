@@ -14,6 +14,12 @@ local cachedBuffStatus = {}
 -- появление ауры считаем свежим применением и якорим на текущий момент.
 local unitPollSeen = { playerpet = false, player = false, target = false }
 
+-- Начало последнего каста игрока (SPELLCAST_START) — истинный момент запуска КД.
+-- Аура появляется в конце каста, поэтому якорить кулдаун по ней нельзя.
+local lastCastStart = nil
+local lastCastSpell = nil
+local castWatchWin = nil
+
 -- Target tracking variables
 local targetBuffCanvas = nil
 local targetBuffData = {}
@@ -80,7 +86,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.13.2"
+  version = "1.13.3"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -322,7 +328,7 @@ local function initBuffData()
   applyCustomBuffOverrides()
 end
 
-local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime)
+local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime, anchorTime)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
   
   local buffDataTable
@@ -387,10 +393,15 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   local cooldown = tonumber(buff.cooldown) or 0
   
   if status == "active" then
-    -- remainingTime (мс) — серверный остаток баффа. Отсчёт ведём прямо от него,
-    -- поэтому таймер не зависит от точности введённой длительности и одинаково
-    -- работает для player, playerpet и target.
-    if remainingTime ~= nil then
+    if anchorTime then
+      -- Явный якорь: начало каста навыка (SPELLCAST_START), а не момент ауры
+      buff.fixedTime = anchorTime
+      buff.activeUntil = anchorTime + timeOfAction
+      buff.permanent = false
+    elseif remainingTime ~= nil then
+      -- remainingTime (мс) — серверный остаток баффа. Отсчёт ведём прямо от него,
+      -- поэтому таймер не зависит от точности введённой длительности и одинаково
+      -- работает для player, playerpet и target.
       local remainingSeconds = remainingTime / 1000
       -- Оценка момента старта: (настроенная длительность - остаток).
       -- Отрицательное значение = API-остаток больше настроенной длительности
@@ -1779,13 +1790,21 @@ local function checkBuffs(unitType)
         -- Свежее применение: остаток почти равен настроенной длительности (±1.5 c)
         local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
         local anchorNow = unitPollSeen[unitType] or freshCast
+        -- Если недавно был каст игрока — якорим старт на нём (CD идёт с нажатия)
+        local castAnchor = nil
+        if unitType ~= "target" and lastCastStart and (now - lastCastStart) > 0.15
+          and (now - lastCastStart) < 6 then
+          castAnchor = lastCastStart
+        end
         -- Запись уже запущена боевым логом (каст был раньше появления ауры) —
         -- не сдвигаем старт на момент ауры, иначе КД уезжает вперёд.
         local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
           and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
         if (isNewBuff or refreshed) and not triggeredAnchor then
-          if anchorNow then
+          if castAnchor then
+            setBuffStatus(buff.buff_id, "active", now, unitType, nil, castAnchor)
+          elseif anchorNow then
             -- Якорь — момент обнаружения: кулдаун после диспела отсчитывается от
             -- применения, а не от настроенной длительности
             setBuffStatus(buff.buff_id, "active", now, unitType, nil)
@@ -1845,11 +1864,18 @@ local function checkBuffs(unitType)
           local now = getCurrentTime()
           local freshCast = (remaining == nil) or (toaMs <= 0) or (remaining >= toaMs - 1500)
           local anchorNow = unitPollSeen[unitType] or freshCast
+          local castAnchor = nil
+          if unitType ~= "target" and lastCastStart and (now - lastCastStart) > 0.15
+            and (now - lastCastStart) < 6 then
+            castAnchor = lastCastStart
+          end
           local triggeredAnchor = entry and entry.synthetic and entry.fixedTime
             and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
           if (isNewDebuff or refreshed) and not triggeredAnchor then
-            if anchorNow then
+            if castAnchor then
+              setBuffStatus(debuff.buff_id, "active", now, unitType, nil, castAnchor)
+            elseif anchorNow then
               -- Якорь — момент обнаружения (кулдаун от применения, не от длительности)
               setBuffStatus(debuff.buff_id, "active", now, unitType, nil)
             else
@@ -2462,6 +2488,27 @@ local function OnLoad()
     end
   end
 
+  -- Наблюдатель за кастами: начало каста — истинный старт кулдауна навыка
+  castWatchWin = api.Interface:CreateEmptyWindow("cbtCastWatch")
+  if castWatchWin then
+    castWatchWin:SetExtent(1, 1)
+    castWatchWin:Show(false)
+    castWatchWin:RegisterEvent("SPELLCAST_START")
+    castWatchWin:RegisterEvent("SPELLCAST_STOP")
+    castWatchWin:RegisterEvent("SPELLCAST_SUCCEEDED")
+    castWatchWin:SetHandler("OnEvent", function(self, event, ...)
+      local a1, a2, a3 = ...
+      if event == "SPELLCAST_START" then
+        lastCastStart = getCurrentTime()
+        lastCastSpell = tostring(a1 or a2 or "?")
+      end
+      if settings and settings.debugBuffId then
+        safeLog("[CBT] " .. tostring(event) .. " a1=" .. tostring(a1)
+          .. " a2=" .. tostring(a2) .. " a3=" .. tostring(a3))
+      end
+    end)
+  end
+
   -- Расширенное ESC-меню (аддон ESCMenu): своя строка настроек
   local function openFromEscMenu()
     if settingsPage and settingsPage.openSettingsWindow then
@@ -2744,6 +2791,12 @@ end
 local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
+
+  if castWatchWin then
+    pcall(function() castWatchWin:Show(false) end)
+    pcall(function() api.Interface:Free(castWatchWin) end)
+    castWatchWin = nil
+  end
   
   -- Отключаем приёмник боевого лога
   if combatEventWnd then

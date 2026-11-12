@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.13.3
+
+- The cooldown start now anchors to the last `SPELLCAST_START` when a new aura
+  appears within 6 s of it: for cast-time skills the aura appears at cast end,
+  so anchoring there made the addon's cooldown end a few seconds later than the
+  action-bar cooldown. Debug: ON logs every `SPELLCAST_START/STOP/SUCCEEDED`
+  with its arguments.
+
 ### 1.13.2
 
 - Removed the per-row «CD/D» button and its dialog: CD/D are already set on the
@@ -415,7 +423,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.13.2
+**Current Version:** 1.13.3
 
 ## Credits
 
