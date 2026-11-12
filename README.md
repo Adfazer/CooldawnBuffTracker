@@ -119,6 +119,11 @@ mount and target.
 
 ## Changelog
 
+### 1.17.2
+
+- Mirror button now shows its state explicitly: «Mir ON» (green) / «Mir OFF» (grey).
+  Row rebalanced again (name 110, Up 30, Down 38, Mir 56, Remove 64).
+
 ### 1.17.1
 
 - Mirror is now bound to the target that was current when the aura appeared: switching
@@ -597,7 +602,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.17.1
+**Current Version:** 1.17.2
 
 ## Credits
 

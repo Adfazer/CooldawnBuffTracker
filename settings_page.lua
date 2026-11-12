@@ -1105,7 +1105,7 @@ local function buildTrackedBuffsSection()
             
             -- Up button
             local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 180, 0)
-            upButton:SetExtent(32, 20)
+            upButton:SetExtent(30, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1131,8 +1131,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 214, 0)
-            downButton:SetExtent(40, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 212, 0)
+            downButton:SetExtent(38, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1160,12 +1160,16 @@ local function buildTrackedBuffsSection()
             -- Mirror: ауру читаем с player, а её таймер показываем на текущем target
             if currentUnitType == "target" then
                 local mirrorKey = tostring(buffId)
-                local mirButton = helpers.createButton('mirrorBuffButton_' .. i, buffRow, 'Mir', 256, 0)
-                mirButton:SetExtent(36, 20)
-                mirButton:Show(true)
                 local mirrorOn = settings.target and settings.target.mirror and settings.target.mirror[mirrorKey]
+                -- Состояние видно по тексту: Mir ON / Mir OFF (+ цвет)
+                local mirButton = helpers.createButton('mirrorBuffButton_' .. i, buffRow,
+                    mirrorOn and 'Mir ON' or 'Mir OFF', 252, 0)
+                mirButton:SetExtent(56, 20)
+                mirButton:Show(true)
                 if mirrorOn then
-                    pcall(function() mirButton.textLabel.style:SetColor(1.0, 0.82, 0.25, 1) end)
+                    pcall(function() mirButton.textLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
+                else
+                    pcall(function() mirButton.textLabel.style:SetColor(0.75, 0.75, 0.75, 1) end)
                 end
                 mirButton:SetHandler("OnClick", function()
                     if not settings.target then settings.target = {} end
@@ -1182,8 +1186,8 @@ local function buildTrackedBuffsSection()
             end
 
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 296, 0)
-            removeButton:SetExtent(78, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 310, 0)
+            removeButton:SetExtent(64, 20)
             removeButton:Show(true)
             
             -- Remove button handler
