@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.16.3
+
+- «Unit:» label no longer overlaps the Mount/Player/Target buttons (short label,
+  buttons shifted right).
+- Page sizes now fill the list containers: tracked entries 9 per page, custom
+  entries 6 per page (was 4 / 3 with a lot of empty space).
+
 ### 1.16.2
 
 - Unit selector (Mount / Player / Target) moved to the left column above the
@@ -517,7 +524,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.2
+**Current Version:** 1.16.3
 
 ## Credits
 

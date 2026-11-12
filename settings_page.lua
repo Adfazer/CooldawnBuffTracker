@@ -57,10 +57,10 @@ end
 local trackedBuffsList = {} -- For storing buff list widgets
 local currentUnitType = "playerpet" -- By default, show settings for mount
 local buffListPage = 1 -- Текущая страница пагинации для списка баффов
-local buffsPerPage = 4 -- Количество баффов на странице
+local buffsPerPage = 9 -- Количество записей на странице
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
 local customBuffPage = 1 -- Текущая страница пагинации для списка пользовательских баффов
-local customsPerPage = 3 -- Количество custom баффов на странице
+local customsPerPage = 6 -- Количество custom записей на странице
 
 -- Обновляет текст кнопки Presets: показывает "*", когда активен пресет
 local function setPresetsButtonText()
@@ -879,22 +879,22 @@ end
 local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
-                                           'Select unit type for settings:', 20, 44, 16)
+                                           'Unit:', 20, 44, 16)
     unitTypeLabel:SetWidth(250)
     unitTypeLabel:Show(true)
     
     -- Mount settings button
-    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 150, 44)
+    local mountButton = helpers.createButton('mountButton', settingsWindow, 'Mount', 70, 44)
     mountButton:SetWidth(80)
     mountButton:Show(true)
     
     -- Player settings button
-    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 240, 44)
+    local playerButton = helpers.createButton('playerButton', settingsWindow, 'Player', 160, 44)
     playerButton:SetWidth(80)
     playerButton:Show(true)
     
     -- Target settings button
-    local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 330, 44)
+    local targetButton = helpers.createButton('targetButton', settingsWindow, 'Target', 250, 44)
     targetButton:SetWidth(80)
     targetButton:Show(true)
 
