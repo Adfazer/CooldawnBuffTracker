@@ -356,7 +356,7 @@ local function addTrackedBuff()
         end
         
         -- Explicitly call buffs list update event
-        api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+        api:Emit("ADDON_CBT_BUFFS_CHANGED")
         
         -- Go to last page to show newly added buff
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
@@ -412,7 +412,7 @@ local function addBuffFromSearch(buffId)
         if helpers and helpers.updateSettings then
             helpers.updateSettings()
         end
-        api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+        api:Emit("ADDON_CBT_BUFFS_CHANGED")
 
         -- Перейти на последнюю страницу, чтобы показать добавленный бафф
         local trackedBuffs = BuffsToTrack.GetAllTrackedBuffIds(currentUnitType)
@@ -914,7 +914,7 @@ local function initSettingsPage()
                     end
                     
                     -- Explicitly call buffs list update event
-                    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+                    api:Emit("ADDON_CBT_BUFFS_CHANGED")
                 end
             end)
             
@@ -1185,7 +1185,7 @@ local function initSettingsPage()
                 -- данных баффа -> "неизвестный бафф".
                 if BuffsToTrack.AddTrackedBuff(buffData.id, currentUnitType) then
                     updateTrackedBuffsList()
-                    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+                    api:Emit("ADDON_CBT_BUFFS_CHANGED")
                 end
             end)
 
@@ -1621,7 +1621,7 @@ local function initSettingsPage()
             api.SaveSettings()
             
             -- Notify main to update dragging state
-            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+            api:Emit("ADDON_CBT_BUFFS_CHANGED")
         end)
     end
     settingsControls.lockButton = lockButton
@@ -1772,6 +1772,7 @@ end
 local function Unload()
     if settingsWindow ~= nil then
         settingsWindow:Show(false)
+        pcall(function() api.Interface:Free(settingsWindow) end)
         settingsWindow = nil
     end
     

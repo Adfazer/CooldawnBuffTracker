@@ -57,7 +57,7 @@ local function resolveName(idStr)
         return nil
     end
     local tooltip = nil
-    pcall(function() tooltip = api.Ability.GetBuffTooltip(idStr) end)
+    pcall(function() tooltip = api.Ability:GetBuffTooltip(idStr) end)
     if tooltip and tooltip.name and tooltip.name ~= "" then
         return tooltip.name
     end

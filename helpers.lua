@@ -218,14 +218,6 @@ function helpers.createButton(id, parent, text, x, y)
     return button
 end
 
-function helpers.createCheckbox(id, parent, text, offsetX, offsetY)
-    local checkBox = nil
-    checkBox = api._Library.UI.CreateCheckButton(id, parent, text)
-    checkBox:AddAnchor("TOPLEFT", offsetX, offsetY)
-    checkBox:SetButtonStyle("default")
-    return checkBox
-end
-
 -- Create color pick button
 function helpers.createColorPickButton(id, parent, color, offsetX, offsetY)
     local colorButton = nil

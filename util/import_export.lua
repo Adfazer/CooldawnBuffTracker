@@ -45,8 +45,12 @@ function json.encode(value, indent)
         elseif value == -math.huge then
             return "null"
         end
-        -- Форматируем число без экспоненты
-        return string.format("%.0f", value)
+        -- Форматируем число без экспоненты; дробные значения сохраняем (%.10g),
+        -- иначе кулдауны вида 16.2 превращались в 16 при импорте конфига.
+        if value == math.floor(value) and math.abs(value) < 2147483647 then
+            return string.format("%.0f", value)
+        end
+        return string.format("%.10g", value)
     elseif t == "string" then
         return "\"" .. value:gsub('[%z\001-\031"\\/]', escapeChar) .. "\""
     elseif t == "table" then
@@ -431,7 +435,7 @@ local function importConfiguration(configString, errorMsgLabel)
     end
     
     -- Отправляем события для обновления списков баффов
-    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
     
     api.Log:Info("[CBT] Configuration imported successfully")
     return true

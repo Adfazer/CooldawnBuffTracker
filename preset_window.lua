@@ -103,7 +103,7 @@ local function onLoadClicked(presetName)
     -- текущей позицией канваса и затёрла бы позицию из пресета. Позиция, размер
     -- и набор баффов применятся из настроек этим событием и на ближайшем кадре
     -- (OnUpdate -> updateBuffIcons).
-    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
     refreshSettingsPage()
 
     updateActivePresetLabel()

@@ -109,6 +109,8 @@ local ICON_COLORS = {
 }
 
 local settings = {}
+-- api.Off в patch 293 не существует: после OnUnload гасим OnUpdate флагом
+local live = false
 
 local function formatTimerSeconds(seconds)
   if not seconds or seconds <= 0 then return "" end
@@ -303,6 +305,29 @@ local function createChildWidgetSafe(parent, widgetType, name, index)
   return widget
 end
 
+-- Обёртка над CreateItemIconButton: гарантирует SetColor/SetBorderColor,
+-- не подменяя глобальную функцию движка.
+local function createTrackedIconButton(name, parent)
+  if not CreateItemIconButton then return nil end
+  local icon = CreateItemIconButton(name, parent)
+  if not icon then return nil end
+  if not icon.SetBorderColor then
+    icon.SetBorderColor = function(self, r, g, b, a)
+      if self.back and self.back.SetColor then
+        self.back:SetColor(r, g, b, a)
+      end
+    end
+  end
+  if not icon.SetColor then
+    icon.SetColor = function(self, r, g, b, a)
+      if self.back and self.back.SetColor then
+        self.back:SetColor(r, g, b, a)
+      end
+    end
+  end
+  return icon
+end
+
 -- =====================================================================
 -- Этап 4: настраиваемая сетка иконок (columns x rows + maxIcons).
 -- Защитный предел на число создаваемых виджетов-иконок в одном канвасе.
@@ -367,7 +392,7 @@ local function addBuffIcon(parent, index, unitType)
   
   local unitSettings = settings[unitType] or settings.playerpet
   
-  local icon = CreateItemIconButton("buffIcon_" .. index, parent)
+  local icon = createTrackedIconButton("buffIcon_" .. index, parent)
   if not icon then return nil end
   
   icon:SetExtent(unitSettings.iconSize, unitSettings.iconSize)
@@ -508,8 +533,8 @@ local function createBuffCanvas()
   
   canvas:Clickable(true)
   
-  if canvas.SetZOrder then
-    canvas:SetZOrder(100)
+  if canvas.SetUILayer then
+    canvas:SetUILayer("hud")
   end
   
   local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
@@ -622,8 +647,8 @@ local function createPlayerBuffCanvas()
   
   canvas:Clickable(true)
   
-  if canvas.SetZOrder then
-    canvas:SetZOrder(100)
+  if canvas.SetUILayer then
+    canvas:SetUILayer("hud")
   end
   
   local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
@@ -736,8 +761,8 @@ local function createTargetBuffCanvas()
   
   canvas:Clickable(true)
   
-  if canvas.SetZOrder then
-    canvas:SetZOrder(100)
+  if canvas.SetUILayer then
+    canvas:SetUILayer("hud")
   end
   
   local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
@@ -1673,6 +1698,7 @@ local function checkBuffs(unitType)
 end
 
 local function OnUpdate(dt)
+  if not live then return end
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     checkBuffs("playerpet")  -- Проверяем баффы маунта
@@ -1933,6 +1959,7 @@ local function OnLoad()
   -- Инициализируем UI
   initializeUI()
   
+  live = true
   api.On("UPDATE", OnUpdate)
   
   -- Создаем ассоциацию с обработчиком обновления настроек
@@ -2017,8 +2044,8 @@ local function OnLoad()
 end
 
 local function OnUnload()
-  -- Отключаем обработчик обновления
-  api.On("UPDATE", function() end)
+  -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
+  live = false
   
   -- Отключаем модуль отладки баффов
   if BuffDebugger and BuffDebugger.Shutdown then
@@ -2056,6 +2083,8 @@ local function OnUnload()
         canvas:ReleaseHandler("OnDragStart")
         canvas:ReleaseHandler("OnDragStop")
       end
+      -- Free не обязателен для логики, но снимает часть обработчиков
+      pcall(function() api.Interface:Free(canvas) end)
     end
     
     -- Обнуляем переменные канвасов
@@ -2090,34 +2119,10 @@ CooldawnBuffTracker.OnLoad = OnLoad
 CooldawnBuffTracker.OnUnload = OnUnload
 CooldawnBuffTracker.OnSettingToggle = OnSettingToggle
 
--- Also add function SetBorderColor and SetColor for icons if they're not there:
-local originalCreateItemIconButton = CreateItemIconButton
-if originalCreateItemIconButton then
-  CreateItemIconButton = function(name, parent)
-    local icon = originalCreateItemIconButton(name, parent)
-    if icon and not icon.SetBorderColor then
-      icon.SetBorderColor = function(self, r, g, b, a)
-        -- Set border color if method is available
-        if self.back then
-          self.back:SetColor(r, g, b, a)
-        end
-      end
-    end
-    -- Add SetColor method if not available
-    if icon and not icon.SetColor then
-      icon.SetColor = function(self, r, g, b, a)
-        -- Set icon color through back element if available
-        if self.back and self.back.SetColor then
-          self.back:SetColor(r, g, b, a)
-        end
-      end
-    end
-    return icon
-  end
-end
-
 -- Handler for event when tracked buffs list is updated
-api.On("MOUNT_BUFF_TRACKER_UPDATE_BUFFS", function()
+-- (своё событие addon'а, шлётся через api:Emit из buffs_to_track/presets/import)
+api.On("ADDON_CBT_BUFFS_CHANGED", function()
+  if not live then return end
   safeLog("[CBT] Received buff list update event")
   
   -- Обновляем данные баффов (включая удаление ненужных)
@@ -2195,7 +2200,9 @@ api.On("MOUNT_BUFF_TRACKER_UPDATE_BUFFS", function()
 end)
 
 -- Handler for event when buffs list becomes empty
-api.On("MOUNT_BUFF_TRACKER_EMPTY_LIST", function(unitType)
+-- (своё событие addon'а)
+api.On("ADDON_CBT_BUFFS_EMPTY", function(unitType)
+  if not live then return end
   unitType = unitType or "playerpet"
   
   safeLog("[CBT] Received empty buff list event for " .. unitType .. " - forcibly hiding canvas")

@@ -12691,7 +12691,7 @@ local helpers = require("CooldawnBuffTracker/helpers")
 -- This function returns the buff info given a buff ID
 -- It will try to find the buff in predefined list or return a generic data object
 function BuffList.GetBuffInfo(buffId)
-
+    local settings
     if helpers and helpers.getSettings then
         settings = helpers.getSettings()
     else
@@ -12718,7 +12718,7 @@ function BuffList.GetBuffInfo(buffId)
         id = buffId, 
         name = "Buff #" .. buffId, 
         cooldown = 30, 
-        timeOfAction = 50
+        timeOfAction = 3
     }
 end
 
@@ -12730,8 +12730,8 @@ function BuffList.GetBuffName(buffId)
     local buffName = nil
     local api = require("api")
     if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
-        local tooltip = api.Ability.GetBuffTooltip(buffId)
-        if tooltip and tooltip.name then
+        local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
+        if ok and tooltip and tooltip.name then
             buffName = tooltip.name
         end
     end
@@ -12758,20 +12758,27 @@ function BuffList.GetBuffIcon(buffId)
     if not iconPath then
         local api = require("api")
         if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
-            local tooltip = api.Ability.GetBuffTooltip(buffId)
-            if tooltip and tooltip.path then
+            local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
+            if ok and tooltip and tooltip.path then
                 iconPath = tooltip.path
             end
         end
     end
     
     -- Return icon path or default
-    return iconPath and ("game/ui/icon/" .. iconPath) or "game/ui/icon/icon_skill_buff274.dds"
+    if not iconPath then
+        return "game/ui/icon/icon_skill_buff274.dds"
+    end
+    -- tooltip.path уже полный (ui/icon/...), из таблицы — только имя файла
+    if string.find(iconPath, "/", 1, true) then
+        return iconPath
+    end
+    return "game/ui/icon/" .. iconPath
 end
 
 -- Function to check if a buff ID is valid and exists in the game
 function BuffList.IsValidBuff(buffId)
-
+    local settings
     if helpers and helpers.getSettings then
         settings = helpers.getSettings()
     else
@@ -12802,8 +12809,8 @@ function BuffList.IsValidBuff(buffId)
     local isValidFromAPI = false
     local api = require("api")
     if buffId and api and api.Ability and api.Ability.GetBuffTooltip then
-        local tooltip = api.Ability.GetBuffTooltip(buffId)
-        if tooltip and (tooltip.name or tooltip.path) then
+        local ok, tooltip = pcall(function() return api.Ability:GetBuffTooltip(buffId) end)
+        if ok and tooltip and (tooltip.name or tooltip.path) then
             isValidFromAPI = true
         end
     end

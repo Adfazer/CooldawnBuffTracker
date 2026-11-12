@@ -14,7 +14,6 @@ local function loadTrackedBuffsFromSettings(unitType)
             trackedBuffs = {},
             enabled = true
         }
-        api.SaveSettings()
     end
     
     -- Check special setting that disables buff tracking for the specified unit type
@@ -25,8 +24,6 @@ local function loadTrackedBuffsFromSettings(unitType)
     -- If there are no buffs in the settings, create an empty list
     if not settings[unitType].trackedBuffs then
         settings[unitType].trackedBuffs = {}
-        -- Save empty list to settings
-        api.SaveSettings()
     end
     
     return settings[unitType].trackedBuffs
@@ -55,7 +52,7 @@ function BuffsToTrack.SaveTrackedBuffs(buffIdList, unitType)
     api.SaveSettings()
     
     -- Send event to update the canvas
-    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
 end
 
 -- Add a new buff to the tracked list
@@ -100,7 +97,7 @@ function BuffsToTrack.RemoveTrackedBuff(buffId, unitType)
             BuffsToTrack.SaveTrackedBuffs(trackedBuffs, unitType)
             
             -- Send general event to update the canvas
-            api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+            api:Emit("ADDON_CBT_BUFFS_CHANGED")
             
             return true
         end
@@ -117,7 +114,7 @@ function BuffsToTrack.ClearAllTrackedBuffs(unitType)
     BuffsToTrack.SaveTrackedBuffs({}, unitType)
     
     -- Send event to update the canvas
-    api:Emit("MOUNT_BUFF_TRACKER_UPDATE_BUFFS")
+    api:Emit("ADDON_CBT_BUFFS_CHANGED")
     
     return true
 end
