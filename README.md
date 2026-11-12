@@ -155,6 +155,17 @@ mount and target.
 
 ## Changelog
 
+### 1.21.5
+
+- Skillset table curated from the wiki noise: 117 trackable skills left.
+  Removed Rising Hatred everywhere, plus Weak/Tough/Toughened/Spell Shield: Flame/Bleeding
+  pseudo-entries; Battlerage: Soulbound Blades; Auramancy: Hollow Comet's Boon, Radiant
+  Meditate, Teleportation; Occultism: Hollow Absorb Lifeforce, Radiant Mana Force;
+  Sorcery: Flamebolt; Shadowplay: Radiant Stalker's Mark; Vitalism: Aranzeb's Boon,
+  Hollow Renewal, Holy Bolt, Whirlwind's Blessing. Songcraft keeps only Abyssal Echoes,
+  Alarm Call, Critical Discord, Dissonance, Double-Time, Polymorphic Resonance and
+  Startling Strain. Defense keeps Toughen at 60 s (the 45 s entry was the buff variant).
+
 ### 1.21.4
 
 - Fixed the data-file format: `classes.tbl`, `skillsets.tbl` and `cdmods.tbl` are now
@@ -840,7 +851,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.4
+**Current Version:** 1.21.5
 
 ## Credits
 
