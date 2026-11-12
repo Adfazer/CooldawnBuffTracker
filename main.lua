@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.18.0"
+  version = "1.18.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2485,10 +2485,9 @@ local function processBuffIconScan()
 end
 
 -- Отслеживание навыков маунта по расходу маны
-local playerInCombat = false
 local manaPrev = nil
-local manaRegenIdle = 0      -- мана/сек вне боя (EMA)
-local manaRegenCombat = 0    -- мана/сек в бою (EMA)
+local manaRegen = 0          -- единая оценка регена, мана/сек (EMA)
+local manaLastSpendTime = 0  -- время последней траты; реген оцениваем только через 5с после неё
 local manaTimer = 0          -- накопитель до 100 мс
 
 -- Записи-навыки маунта: у кастомной записи задан manaCost > 0
@@ -2529,30 +2528,32 @@ local function pollMountMana(dtSec)
   local maxMana = api.Unit:UnitMaxMana("playerpet")
   if not mana or not maxMana or maxMana <= 0 then
     manaPrev = nil
+    manaLastSpendTime = 0
     return
   end
   if manaPrev == nil then
     manaPrev = mana
+    manaLastSpendTime = 0
     return
   end
   local dt = (dtSec and dtSec > 0) and dtSec or 0.1
   local delta = mana - manaPrev
 
-  -- Реген: только положительные приращения и не на полной мане
-  if delta > 0 and mana < maxMana * 0.995 then
+  -- Реген: единая оценка; обновляем только спустя 5с после последней траты
+  -- и только на положительных приращениях не на полной мане.
+  local now = getCurrentTime()
+  if delta > 0 and mana < maxMana * 0.995
+     and (now - manaLastSpendTime) >= 5 then
     local rate = delta / dt
     if rate < maxMana * 0.5 then
-      if playerInCombat then
-        manaRegenCombat = manaRegenCombat * 0.85 + rate * 0.15
-      else
-        manaRegenIdle = manaRegenIdle * 0.85 + rate * 0.15
-      end
+      manaRegen = manaRegen * 0.85 + rate * 0.15
     end
   end
 
   -- Трата: отрицательная дельта; возвращаем к ней реген за интервал
   if delta < -2 then
-    local regen = playerInCombat and manaRegenCombat or manaRegenIdle
+    manaLastSpendTime = now
+    local regen = manaRegen or 0
     local spend = -delta + (regen or 0) * dt
     local entries = getManaEntries()
     if #entries > 0 then
@@ -2964,13 +2965,6 @@ local function OnLoad()
     pcall(function() combatEventWnd:Clickable(false) end)
     pcall(function() combatEventWnd:EnablePick(false) end)
     combatEventWnd:SetHandler("OnEvent", function(self, event, ...)
-      if event == "UNIT_COMBAT_STATE_CHANGED" then
-        local inCombat, unitId = ...
-        if tostring(unitId) == tostring(api.Unit:GetUnitId("player")) then
-          playerInCombat = inCombat and true or false
-        end
-        return
-      end
       if event == "SPELLCAST_START" then
         local spellName, castingTime, caster = ...
         if settings and settings.debugBuffId then
@@ -2983,7 +2977,6 @@ local function OnLoad()
     end)
     pcall(function() combatEventWnd:RegisterEvent("COMBAT_MSG") end)
     pcall(function() combatEventWnd:RegisterEvent("SPELLCAST_START") end)
-    pcall(function() combatEventWnd:RegisterEvent("UNIT_COMBAT_STATE_CHANGED") end)
   end
   
   -- Создаем ассоциацию с обработчиком обновления настроек
@@ -3072,6 +3065,7 @@ local function OnUnload()
   live = false
   mirrorTargetByBuff = {}
   manaPrev = nil
+  manaLastSpendTime = 0
   manaTimer = 0
 
   -- Сохраняем позиции канвасов ДО их освобождения (иначе GetOffset на мёртвых виджетах)

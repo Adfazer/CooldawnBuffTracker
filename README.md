@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.18.1
+
+- Mana regen uses a single estimate (no in-combat/out-of-combat split): one EMA value,
+  updated only when 5 seconds have passed since the last detected mana spend.
+- Combat-state event no longer registered for this feature.
+
 ### 1.18.0
 
 - **Mount skills by mana spend**: custom entries can carry a mana cost and a mount name.
@@ -623,7 +629,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.0
+**Current Version:** 1.18.1
 
 ## Credits
 
