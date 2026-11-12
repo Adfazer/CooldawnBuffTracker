@@ -119,6 +119,19 @@ mount and target.
 
 ## Changelog
 
+### 1.16.2
+
+- Unit selector (Mount / Player / Target) moved to the left column above the
+  tracked list.
+- Bottom bar (Debug / Import-Export / Presets / Thanks / Save) now sits inside
+  the window: bottom anchors used a positive y that pushed them below the frame.
+- Debug button moved above the custom list; Record (Debug) sits right under it
+  and appears only with Debug: ON.
+- Renamed for the wider scope (buffs, debuffs, skills; the addon name is
+  unchanged): «Buff list» → «Tracked entries», «Custom Buffs» → «Custom entries»,
+  «Add Custom Buff» → «Add custom entry», «Buff ID» → «ID / name»; empty states
+  are «Nothing tracked yet» / «No custom entries yet».
+
 ### 1.16.1
 
 - Fixed the right column overlap: Grid moved 20 px down (below Show label) and
@@ -504,7 +517,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.16.1
+**Current Version:** 1.16.2
 
 ## Credits
 
