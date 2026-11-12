@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.0"
+  version = "1.7.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -309,6 +309,138 @@ local function checkBuffStatus(buff, currentTime)
     return "cooldown"
   else
     return "ready"
+  end
+end
+
+-- ===== Триггеры навыков по боевому логу (враг ударил -> КД его навыка) =====
+-- unitIdByName: имя (точно как в игре) -> id юнита (учим, когда берём цель в таргет)
+-- pendingBySource: имя -> { [buffId] = время }, пока id игрока неизвестен
+local unitIdByName = {}
+local pendingBySource = {}
+local myNameExact = nil   -- мой ник ровно как в игре (string.lower не работает с кириллицей)
+
+-- Записать/обновить кулдаун навыка, применённого игроком sourceId
+local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
+  if not sourceId or not buffId then return end
+  now = now or getCurrentTime()
+  startedAt = startedAt or now
+  local toa = tonumber(BuffList.GetBuffTimeOfAction(buffId)) or 3
+  local cd = tonumber(BuffList.GetBuffCooldown(buffId)) or 30
+  -- устаревшее событие (кулдаун уже прошёл) не показываем
+  if now - startedAt >= cd then return end
+
+  local rec = {
+    fixedTime = startedAt,
+    activeUntil = startedAt + toa,
+    readyAt = startedAt + cd,
+    permanent = false,
+    synthetic = true,   -- нет ауры: пропажа не должна обрывать активную фазу
+    status = "active",
+    missingCount = 0,
+    timeOfAction = toa,
+    cooldown = cd,
+    name = BuffList.GetBuffName(buffId),
+    icon = BuffList.GetBuffIcon(buffId)
+  }
+
+  local cache = targetCache[sourceId]
+  if not cache then
+    cache = { lastSeen = now, buffStates = {} }
+    targetCache[sourceId] = cache
+  end
+  cache.lastSeen = now
+  cache.buffStates[buffId] = rec
+
+  if not targetActiveBuffs[sourceId] then
+    targetActiveBuffs[sourceId] = {}
+  end
+  targetActiveBuffs[sourceId][buffId] = true
+
+  -- если этот игрок — текущая цель, обновляем и «живую» таблицу
+  if currentTargetId and tostring(currentTargetId) == tostring(sourceId) then
+    targetBuffData[buffId] = {
+      name = rec.name,
+      icon = rec.icon,
+      cooldown = cd,
+      timeOfAction = toa,
+      fixedTime = startedAt,
+      activeUntil = startedAt + toa,
+      readyAt = startedAt + cd,
+      permanent = false,
+      synthetic = true,
+      status = "active"
+    }
+  end
+end
+
+-- Запомнить имя юнита (и применить отложенные триггеры для этого имени)
+local function learnUnitName(unitId)
+  if not unitId then return nil end
+  local info = api.Unit:GetUnitInfoById(unitId)
+  if not info or not info.name or info.name == "" then return nil end
+  local key = info.name
+  unitIdByName[key] = unitId
+
+  local pending = pendingBySource[key]
+  if pending then
+    local now = getCurrentTime()
+    for buffId, t in pairs(pending) do
+      triggerTargetCooldown(unitId, buffId, t, now)
+    end
+    pendingBySource[key] = nil
+  end
+
+  return info.name, key
+end
+
+-- Сам применил навык (наш ник в источнике) -> запускаем свои панели
+local function triggerSelfBuff(buffId, now)
+  now = now or getCurrentTime()
+  local tables = { player = playerBuffData, playerpet = buffData }
+  for unitType, tbl in pairs(tables) do
+    if tbl[buffId] and BuffsToTrack.ShouldTrackBuff(buffId, unitType) then
+      setBuffStatus(buffId, "active", now, unitType, nil)
+      tbl[buffId].synthetic = true
+      cachedBuffStatus[buffId] = "active"
+    end
+  end
+end
+
+-- Имя навыка из лога -> запуск/обновление таймера у виновника
+local function triggerSpell(spellName, sourceName)
+  if not spellName or spellName == "" then return end
+  local s = api.GetSettings("CooldawnBuffTracker") or {}
+  local custom = s.customBuffs or {}
+  if #custom == 0 then return end
+
+  local needle = spellName
+  local srcKey = (sourceName and sourceName ~= "") and sourceName or nil
+  local now = getCurrentTime()
+
+  if srcKey and not myNameExact then
+    local myName = learnUnitName(api.Unit:GetUnitId("player"))
+    if myName then myNameExact = myName end
+  end
+
+  for _, cb in ipairs(custom) do
+    local trigger = cb.spellName
+    if trigger and trigger ~= "" and trigger == needle and cb.id then
+      if srcKey and myNameExact and srcKey == myNameExact then
+        triggerSelfBuff(cb.id, now)
+      elseif srcKey then
+        local sourceId = unitIdByName[srcKey]
+        if sourceId then
+          triggerTargetCooldown(sourceId, cb.id, now, now)
+        else
+          local p = pendingBySource[srcKey]
+          if not p then
+            p = {}
+            pendingBySource[srcKey] = p
+          end
+          p[cb.id] = now
+        end
+      end
+    end
   end
 end
 
@@ -1208,6 +1340,7 @@ local function checkBuffs(unitType)
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
             permanent = buffInfo.permanent,
+            synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
             cooldown = buffInfo.cooldown,
@@ -1224,6 +1357,9 @@ local function checkBuffs(unitType)
       currentTargetId = newTargetId
       lastDisplayedTargetId = newTargetId
       lastTargetLostTime = nil  -- Reset lost time since we have a target now
+
+      -- Учим имя цели: по нему потом сопоставляем удары из боевого лога
+      learnUnitName(newTargetId)
       
       -- Initialize or restore cache entry for new target
       if not targetCache[newTargetId] then
@@ -1243,6 +1379,7 @@ local function checkBuffs(unitType)
             activeUntil = cachedBuff.activeUntil,
             readyAt = cachedBuff.readyAt,
             permanent = cachedBuff.permanent,
+            synthetic = cachedBuff.synthetic,
             missingCount = 0,
             status = cachedBuff.status
           }
@@ -1541,6 +1678,7 @@ local function checkBuffs(unitType)
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
             permanent = buffInfo.permanent,
+            synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
             cooldown = buffInfo.cooldown,
@@ -1671,36 +1809,6 @@ local function initializeUI()
   end
 end
 
--- Перезапуск кастомных баффов по имени навыка из боевого лога.
--- Нужен для навыков без ауры и без полоски каста: COMBAT_MSG приносит spellName,
--- когда навык бьёт по игроку (или по его цели), и мы стартуем отсчёт заново.
-local function triggerBuffsBySpell(spellName)
-  if not spellName or spellName == "" then return end
-  local needle = string.lower(spellName)
-  local s = api.GetSettings("CooldawnBuffTracker") or {}
-  local custom = s.customBuffs or {}
-  if #custom == 0 then return end
-  local now = getCurrentTime()
-  local tables = { playerpet = buffData, player = playerBuffData, target = targetBuffData }
-  for _, cb in ipairs(custom) do
-    local trigger = cb.spellName
-    if trigger and trigger ~= "" and string.lower(trigger) == needle then
-      local id = cb.id
-      if id then
-        for unitType, tbl in pairs(tables) do
-          if tbl[id] and BuffsToTrack.ShouldTrackBuff(id, unitType) then
-            setBuffStatus(id, "active", now, unitType, nil)
-            -- Бафф запущен по событию, а не по ауре: пропажа ауры не должна
-            -- обрывать его активную фазу (её длительность задана настройкой).
-            tbl[id].synthetic = true
-            cachedBuffStatus[id] = "active"
-          end
-        end
-      end
-    end
-  end
-end
-
 local function onCombatMessage(event, ...)
   if not live then return end
   if event ~= "COMBAT_MSG" then return end
@@ -1710,7 +1818,7 @@ local function onCombatMessage(event, ...)
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
   if parsed.spellName then
-    triggerBuffsBySpell(parsed.spellName)
+    triggerSpell(parsed.spellName, args[3])
   end
 end
 

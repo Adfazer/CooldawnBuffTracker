@@ -60,9 +60,13 @@ settings storage and all `require` paths.
 
 ### Custom buffs
 - Add a buff by ID with name, cooldown and time-of-action.
-- **Spell trigger** — optional spell name from the combat log: every hit with that
-  spell restarts the buff timer. Useful for instant skills that have neither a
-  cast bar nor a trackable aura (including enemy skills that hit you).
+- **Spell trigger** — optional spell name from the combat log (exact, as shown in
+  the log). When another player hits you with that spell, its cooldown is stored
+  for that player: target him and the target panel shows the remaining cooldown.
+  If you have not targeted him yet, the hit is remembered by name and applied
+  when you first target him (if the cooldown has not expired). Your own casts
+  restart your player/mount panels. Useful for instant skills with no cast bar
+  and no trackable aura.
 - Each entry has **Add** (start tracking it for the currently selected unit type)
   and **Remove** buttons.
 - Long lists are paginated; all custom buffs are saved automatically.
@@ -107,6 +111,16 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.7.1
+
+- The spell trigger now remembers **who** cast the spell: cooldowns are stored
+  per player and the target panel shows them when you target that player.
+- A hit from a player you have not targeted yet is remembered by name and applied
+  the first time you target him (unless the cooldown has already expired).
+- Your own casts restart your player/mount panels, not the target panel.
+- Spell and player names are compared exactly as the game reports them (no
+  case folding, which would break localized/Cyrillic spell names).
 
 ### 1.7.0
 
@@ -162,7 +176,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.0
+**Current Version:** 1.7.1
 
 ## Credits
 
