@@ -1510,24 +1510,24 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 displayName = displayName .. " [" .. buffData.spellName .. "]"
             end
             local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 65, 0, 14)
-            buffNameLabel:SetExtent(200, 20)
+            buffNameLabel:SetExtent(185, 20)
             buffNameLabel:Show(true)
 
             -- Cooldown
-            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 270, 0, 14)
+            local buffCooldownLabel = helpers.createLabel('customBuffCooldownLabel_' .. i, buffRow, tostring(buffData.cooldown), 255, 0, 14)
             buffCooldownLabel:SetExtent(50,20)
             buffCooldownLabel:Show(true)
 
             -- timeOfAction
-            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 330, 0, 14)
+            local buffTimeOfActionLabel = helpers.createLabel('customBuffTimeOfAction_' .. i, buffRow, tostring(buffData.timeOfAction), 310, 0, 14)
             buffTimeOfActionLabel:SetExtent(50, 20)
             buffTimeOfActionLabel:Show(true)
 
             -- Remove button
             -- Add-to-tracking button: сразу добавляет этот бафф в отслеживание
             -- для выбранного типа юнита (Mount/Player/Target)
-            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 388, 0)
-            addToTrackButton:SetExtent(58, 20)
+            local addToTrackButton = helpers.createButton('addCustomToTrackButton_' .. i, buffRow, 'Add', 365, 0)
+            addToTrackButton:SetExtent(54, 20)
             addToTrackButton:Show(true)
             addToTrackButton:SetHandler("OnClick", function()
                 -- ВАЖНО: передаём buffData.id КАК ЕСТЬ (без tonumber). ID кастом-баффов
@@ -1540,8 +1540,16 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 end
             end)
 
-            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 452, 0)
-            removeButton:SetExtent(60, 20)
+            local removeButton = helpers.createButton('removeCustomBuffButton_' .. i, buffRow, 'Remove', 423, 0)
+            removeButton:SetExtent(56, 20)
+
+            -- Edit: правит CD/D этой кастомной записи; обновляет и Buff list
+            local editCustomButton = helpers.createButton('editCustomBuffButton_' .. i, buffRow, 'Edit', 483, 0)
+            editCustomButton:SetExtent(52, 20)
+            editCustomButton:Show(true)
+            editCustomButton:SetHandler("OnClick", function()
+                openCddDialog(buffData.id)
+            end)
             removeButton:Show(true)
 
             -- Remove button handler

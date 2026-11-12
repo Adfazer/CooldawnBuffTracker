@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.15.2
+
+- Added the Edit (CD/D) button to the **Custom Buffs** list as well, next to
+  Add/Remove. It edits the same `settings.customBuffs` entry, then applies the
+  values to the live entries of all three panels (readyAt/activeUntil are
+  recomputed from the same fixed start) and refreshes both lists.
+
 ### 1.15.1
 
 - Fixed the Edit (CD/D) dialog: the custom empty window was created but never
@@ -476,7 +483,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.15.1
+**Current Version:** 1.15.2
 
 ## Credits
 
