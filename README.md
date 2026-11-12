@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.17.1
+
+- Mirror is now bound to the target that was current when the aura appeared: switching
+  the target removes the mirrored entry from the Target panel (the aura itself stays on
+  the player). Returning to that target re-shows it with the real remaining time.
+- Works for both buffs and debuffs (the player's buff and debuff lists are scanned).
+- Mirror entries are marked as present in the poll, so the disappearance logic does not
+  end their active phase every tick.
+
 ### 1.17.0
 
 - **Mirror** toggle («Mir») on tracked entries in the Target list. With it on, the
@@ -588,7 +597,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.17.0
+**Current Version:** 1.17.1
 
 ## Credits
 

@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.17.0"
+  version = "1.17.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -113,6 +113,8 @@ local settings = {}
 local live = false
 -- Окно-приёмник боевого лога (для триггера по имени навыка)
 local combatEventWnd = nil
+-- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
+local mirrorTargetByBuff = {}
 
 local function formatTimerSeconds(seconds)
   if not seconds or seconds <= 0 then return "" end
@@ -1946,8 +1948,25 @@ local function checkBuffs(unitType)
           local nm = (cb and cb.name) or BuffList.GetBuffName(mirrorId)
           if type(nm) == "string" and nm ~= "" then aura = pByName[nm] end
         end
+        if not aura then
+          mirrorTargetByBuff[mirrorId] = nil
+        end
+        if aura then
+          local boundTarget = mirrorTargetByBuff[mirrorId]
+          if boundTarget == nil and currentTargetId ~= nil then
+            boundTarget = currentTargetId
+            mirrorTargetByBuff[mirrorId] = boundTarget
+          end
+          local sameTarget = boundTarget ~= nil and currentTargetId ~= nil
+            and tostring(boundTarget) == tostring(currentTargetId)
+          if not sameTarget then
+            -- зеркало прикреплено к другой цели: с панели убираем, ауру не трогаем
+            aura = nil
+          end
+        end
         if aura then
           activeBuffsOnUnit[mirrorId] = true
+          currentBuffsOnUnit[mirrorId] = true
           local entry = buffDataTable[mirrorId]
           local remaining = aura.timeLeft
           local prevRemaining = entry and entry.lastRemaining
@@ -2934,6 +2953,7 @@ end
 local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
+  mirrorTargetByBuff = {}
 
   -- Сохраняем позиции канвасов ДО их освобождения (иначе GetOffset на мёртвых виджетах)
   if helpers and helpers.updateSettings then
