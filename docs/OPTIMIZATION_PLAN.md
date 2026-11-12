@@ -139,7 +139,8 @@ end
    `buff_search_window.lua:60`). Метод объявлен через `:` — при вызове с точкой `self` получает
    `buffId`, реальные аргументы съезжают, тултип не возвращается. Итог: «Try to get actual buff
    name from game API» не работает никогда, имена — только из `customBuffs`, иконки — только из
-   `ddsData`. Чинить на `api.Ability:GetBuffTooltip(id)`.
+   `ddsData`. Чинить на `api.Ability:GetBuffTooltip(id)` — после этого ОДИН вызов даёт и имя, и
+   иконку (`.path`), и описание, для любого id (см. 7.1). Кэшировать результат по id.
 5. **`api.SaveSettings()` внутри горячего пути.** `buffs_to_track.lua:8-31`
    (`loadTrackedBuffsFromSettings`) пишет файл настроек, если у юнита нет поля `trackedBuffs`;
    функция вызывается из `checkBuffs` каждые 50 мс. По правилам навыка сохранять настройки можно
@@ -278,21 +279,76 @@ CooldawnBuffTracker/
 
 ## 7. Данные и упаковка
 
-* `buff_helper.lua` — 533 КБ, 12 677 записей, из них масса дублей
-  (`icon_buff_debuff.dds` / `icon_unknown_item.dds`). Замер на дев-машине (Lua 5.1): компиляция
-  6.4 мс, построение таблицы 0.7 мс — то есть в игре это разово десятки мс на каждой загрузке.
-  Не катастрофа, но: держать данные отдельным `data/icon_paths.lua`, грузить лениво при первом
-  промахе кэша (или как одну строку-blob и парсить по требованию). Приоритет низкий.
+### 7.1 Иконки и имена: таблица не обязательна (проверено по клиенту)
+
+В клиенте AAC (patch 293, `pak_aac/src`) есть два источника картинки баффа:
+
+* **активный бафф** — `api.Unit:UnitBuff(unit, i)` возвращает `.path` (клиент сам рисует им
+  иконку в бафф-винде: `x2ui/components/buffwindow.lua:232` — `F_SLOT.SetIconBackGround(button,
+  buffInfo.path)`);
+* **любой id, в том числе неактивный** — `api.Ability:GetBuffTooltip(id)` → в клиенте
+  `X2Ability:GetBuffTooltip(buffId, itemLevel)` (`x2ui/addons/api.lua:1153-1155`), и его результат
+  содержит `.path`, `.name`, `.description`. Доказательства использования вне боевых баффов:
+  `x2ui/loginstage/character_create/character_create.lua:99-100`
+  (`skillBtn:SetIconPath(buffInfo.path)` для рассовых баффов до входа в мир),
+  `x2ui/characterinfo/appellation.lua:114`, `x2ui/questcontext/common.lua:419`,
+  `x2ui/community/expedition/expedition_management_infomation_sub.lua:106,115`.
+
+Вывод: 533-КБ таблица `ddsData` **не нужна как основной источник** — достаточно
+`api.Ability:GetBuffTooltip(id)` (через двоеточие!) с кэшем `id -> {path, name}` и маленькой
+fallback-картой для id, на которые тултип вернёт nil (серверные баффы, которых нет в клиентских
+данных). При этом `.path` используется ровно так, как его отдаёт клиент — без ручной склейки
+`"game/ui/icon/"` (корпус использует и `buff.path` напрямую: `LoseControl/main.lua:236`,
+`better-archeage/buff_tracker.lua:136`).
+
+Проверить в игре (5 минут): прогнать `api.Ability:GetBuffTooltip(id)` по всем id из
+`trackedBuffs`/`customBuffs` и вывести `path/name` — приложение B, расширенное на тултип.
+
+### 7.2 Что реально лежит в гейм-паке AAC
+
+Пак AAC — `C:\AAClassic\game_pak` в ВМ 300 на `.147` (проверено: 44 885 643 776 байт,
+3 ноября 2026 23:06, версия 293). Читается двумя путями:
+
+* смонтировать диск ВМ тома только для чтения: `losetup -r -f --show
+  /dev/zvol/rpool/data/vm-300-disk-0-part2` + `ntfs-3g -o ro` в `/mnt/ro300` (ВМ 300 держать
+  выключенной; размонтировать после);
+* или `tools/pak.py` из workspace навыка (`~/work/aa-addon-skill`) — ридер формата AAPak
+  «WIBO» (AES-128-CBC, штатный ключ XLGames), FAT уже собран:
+  `pak_aac/fat_aac.json` — **336 990 файлов**.
+
+Состав пака (по FAT): 62 642 `.dds` (вся иконная графика, включая `game/ui/icon/`), 1 248 `.alb`
+(клиентские Lua-скрипты), 59 140 `.mtl`, 42 730 `.chr`, 39 207 `.bai`, ~12 500 `.dat`, 6 297
+`.xml`. **Таблицы `buff_id -> иконка/имя/длительность` в паке нет.** Единственный кандидат —
+`game/db/compact.sqlite` (28 МБ): это **не SQLite** — заголовок не `SQLite format 3`, ключом пака
+не расшифровывается (проверено), т.е. закрытый формат клиента.
+
+### 7.3 Серверная AAEmu-база — справочник, но не AAC
+
+В `~/work/aa-vneshki/db/ArcheAge_Server_Compact_r208088_v1.2.4.13_update_2026-01-23/` лежит
+серверная `compact.sqlite3` (679 таблиц): `buffs` — 9 816 строк (`id, name, desc, icon_id,
+duration, …`), `icons` — 8 186 (`id, filename`). Сверка с таблицей аддона: для стандартных id
+(131, 330, 2405, 3523, 3636, 4994, 5178, 6148, 6413, 6747, 7650, 7651) **иконки совпадают 1:1**
+и длительности осмысленны — то есть `ddsData` исторически и собран из такой базы. Но AAC-кастомные
+id (`8000211`, `8000049`, `8000405`, `8000033`, `15067`) в этой базе отсутствуют (12 из 17
+совпали). Как источник «свежих таблиц AAC» она не годится; как справочник — да.
+
+### 7.4 Остальное
+
 * `IsValidBuff`/`GetBuffInfo` просматривают `ALL_BUFFS` (пусто) и `customBuffs` линейно на каждый
-  вызов — заменить на индекс `id -> buff` при загрузке настроек.
+  вызов — заменить на индекс `id -> buff` при загрузке настроек; `ALL_BUFFS` удалить.
 * `json.encode/decode` (692 строки в `import_export.lua`) — можно схлопнуть до ~80 строк или
   заменить на `api.serialize` + прямой `File:Read` (см. 4.1.6). Это заодно уберёт потерю дробей.
-* Манифест CAM (`classic-addon-manager/addons/CooldawnBuffTracker.yaml`): после удаления
-  `createCheckbox` зависимость `dependencies: ['addonlibrary']` не нужна. Обновление у
-  пользователей идёт через GitHub Release — при релизе ставить тег и публиковать release, а не
-  только push.
+* Манифест CAM (`classic-addon-manager/addons/CooldawnBuffTracker.yaml`): `dependencies:
+  ['addonlibrary']` нужна только из-за мёртвой `helpers.createCheckbox` — после её удаления
+  зависимость убрать (см. 6 и 9). Обновление у пользователей идёт через GitHub Release — при
+  релизе ставить тег и публиковать release, а не только push.
 * README: добавить раздел установки (папка в `Addon/` + строка в `addons.txt`) и короткий
   changelog; перенести `example config.txt` в `docs/`.
+* Имя: `CooldawnBuffTracker` — опечатка (правильно **Cooldown**, «перезарядка»). Менять
+  папку/id/репозиторий нельзя: это сломает `addons.txt` у пользователей, ключ настроек
+  (`api.GetSettings` санитизирует имя папки), `require("CooldawnBuffTracker/…")` и манифест CAM.
+  Правим только человекочитаемые подписи: `name` в `main.lua`, `alias` в CAM yaml, заголовок
+  README — «Cooldown Buff Tracker».
 
 ---
 
@@ -330,8 +386,11 @@ CooldawnBuffTracker/
 работают.
 
 **Этап 5 — данные и релиз (раздел 7).**
-Ленивая загрузка иконок, чистка манифеста CAM, README, тег + release.
-Критерий: `aac_check` PASS, `aac_smoke` PASS, установка из CAM на чистом клиенте.
+Иконки/имена через `api.Ability:GetBuffTooltip` + кэш, `ddsData` урезать до fallback (7.1);
+чистка манифеста CAM (снять `addonlibrary`), README, тег + release.
+Критерий: `aac_check` PASS, `aac_smoke` PASS, установка из CAM на чистом клиенте; в игре все
+трекаемые баффы показывают правильные иконки и имена, промахов тултипа нет (или они закрыты
+fallback-картой).
 
 Приоритет: 1 → 2 → 3; 4 и 5 можно параллелить.
 
@@ -345,8 +404,9 @@ CooldawnBuffTracker/
   запись только по действию пользователя (кнопка Save, конец drag, OnUnload).
 * `SetZOrder`/`SetUILayer` и `GetEffectiveOffset` — сначала проверить на одном окне в игре
   (методы могут отсутствовать в конкретной сборке; вызывать с проверкой).
-* `api.Ability:GetBuffTooltip` после фикса даёт имя, но **не гарантирует** путь иконки —
-  `ddsData` остаётся основным источником картинок.
+* `api.Ability:GetBuffTooltip` после фикса даёт `.name`, `.path` и `.description` для любого id
+  (раздел 7.1). Таблица `ddsData` остаётся только fallback'ом для id, где тултип вернул nil
+  (серверные баффы, которых нет в клиентских данных).
 * Импорт старых конфигов: после 4.1.6 дробные значения начнут сохраняться корректно; ранее
   экспортированные файлы уже потеряли дроби — это не восстановить, но новые будут целыми.
 
@@ -412,6 +472,44 @@ return addon
 
 Ожидание: `timeLeft` (мс) присутствует у всех трёх юнитов. Если у `playerpet` он `nil`/`0` —
 ре-синк для маунта невозможен, оставляем локальный отсчёт и фиксируем это в README.
+
+Вторая проба — иконки/имена без таблицы (для этапа 5). Запускается на персонаже с заполненными
+`trackedBuffs` и печатает, что вернул тултип по каждому id:
+
+```lua
+local api = require("api")
+local addon = { name = "cbt_probe_tip", author = "me", version = "0.1" }
+local function run()
+  local s = api.GetSettings("CooldawnBuffTracker") or {}
+  local seen = {}
+  for _, ut in ipairs({ "playerpet", "player", "target" }) do
+    for _, id in ipairs((s[ut] and s[ut].trackedBuffs) or {}) do
+      if not seen[id] then
+        seen[id] = true
+        local ok, info = pcall(function() return api.Ability:GetBuffTooltip(id) end)
+        if ok and type(info) == "table" then
+          api.Log:Info(string.format("id=%s name=%s path=%s",
+            tostring(id), tostring(info.name), tostring(info.path)))
+        elseif ok then
+          api.Log:Info("id=" .. tostring(id) .. " -> nil (нужен fallback)")
+        else
+          api.Log:Err("id=" .. tostring(id) .. " -> " .. tostring(info))
+        end
+      end
+    end
+  end
+end
+function addon.OnLoad()
+  -- дать клиенту догрузить данные и войти в мир
+  api:DoIn(5000, function() run() end)
+end
+function addon.OnUnload() end
+function addon.OnSettingToggle() end
+return addon
+```
+
+Ожидание: у большинства id есть `path` и `name`. Для id, где вернулся nil, оставляем запись в
+fallback-таблице (их и надо держать в `ddsData`).
 
 ## Приложение C. Базлайн-вывод верификаторов
 
