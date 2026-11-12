@@ -1915,11 +1915,17 @@ local function initSettingsPage()
         return
     end
 
-    -- Тёмная подложка под содержимым (в стиле Power Ranger: почти чёрный фон)
-    local backdrop = settingsWindow:CreateColorDrawable(0.055, 0.060, 0.070, 0.97, "background")
-    if backdrop then
-        backdrop:AddAnchor("TOPLEFT", settingsWindow, 4, 34)
-        backdrop:AddAnchor("BOTTOMRIGHT", settingsWindow, -4, -4)
+    -- Тёмная подложка: дочерний виджет создан ДО секций, поэтому лежит над
+    -- фоном окна и под остальными элементами (drawable самого окна уходил под
+    -- нативную текстуру и текст оставался на светлом фоне).
+    local body = settingsWindow:CreateChildWidget("emptywidget", "cbtSettingsBody", 0, false)
+    if body then
+        body:SetExtent(592, 962)
+        body:AddAnchor("TOPLEFT", settingsWindow, 4, 34)
+        body:Show(true)
+        local bodyBg = body:CreateColorDrawable(0.055, 0.060, 0.070, 0.97, "background")
+        bodyBg:AddAnchor("TOPLEFT", body, 0, 0)
+        bodyBg:AddAnchor("BOTTOMRIGHT", body, 0, 0)
     end
     
     settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)

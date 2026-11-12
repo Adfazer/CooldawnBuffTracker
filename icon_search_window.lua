@@ -23,8 +23,8 @@ local COLORS = {
     bg       = {0.055, 0.060, 0.070, 0.97},
     row      = {0.100, 0.110, 0.130, 0.92},
     rowHover = {0.170, 0.190, 0.230, 0.95},
-    text     = {0.870, 0.890, 0.930, 1},
-    muted    = {0.620, 0.660, 0.720, 1},
+    text     = {0.870, 0.690, 0.000, 1},
+    muted    = {0.760, 0.630, 0.280, 1},
     accent   = {0.850, 0.700, 0.320, 1},
 }
 
@@ -142,9 +142,15 @@ local function buildWindow()
     win:SetHandler("OnCloseByEsc", function() win:Show(false) end)
     function win:OnClose() self:Show(false) end
 
-    local bg = win:CreateColorDrawable(COLORS.bg[1], COLORS.bg[2], COLORS.bg[3], COLORS.bg[4], "background")
-    bg:AddAnchor("TOPLEFT", win, 4, 34)
-    bg:AddAnchor("BOTTOMRIGHT", win, -4, -4)
+    local bg = win:CreateChildWidget("emptywidget", "cbtIconSearchBody", 0, false)
+    if bg then
+        bg:SetExtent(552, 482)
+        bg:AddAnchor("TOPLEFT", win, 4, 34)
+        bg:Show(true)
+        local plate = bg:CreateColorDrawable(COLORS.bg[1], COLORS.bg[2], COLORS.bg[3], COLORS.bg[4], "background")
+        plate:AddAnchor("TOPLEFT", bg, 0, 0)
+        plate:AddAnchor("BOTTOMRIGHT", bg, 0, 0)
+    end
 
     editBox = helpers.createEdit("cbtIconSearchEdit", win, "", 20, 44)
     editBox:SetExtent(380, 24)

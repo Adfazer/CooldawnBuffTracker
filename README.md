@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.9.2
+
+- Fixed the "settings window without text": a window-level colour drawable sank
+  under the native window texture and the light labels became invisible on the
+  client's light theme. The dark plate is now a child `emptywidget` created
+  before the sections (above the window background, below the controls), and the
+  labels are back to the theme's gold, readable on both dark and light themes.
+
 ### 1.9.1
 
 - Registered in the **default ESC menu**: the addon now builds/uses the
@@ -311,7 +319,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.9.1
+**Current Version:** 1.9.2
 
 ## Credits
 
