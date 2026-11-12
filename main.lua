@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.6.0"
+  version = "1.6.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -544,8 +544,8 @@ local function createPanelCanvas(windowId, unitType)
 
   canvas:Clickable(true)
 
-  if canvas.SetUILayer then
-    canvas:SetUILayer("hud")
+  if canvas.SetZOrder then
+    canvas:SetZOrder(100)
   end
 
   local bg = canvas:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")

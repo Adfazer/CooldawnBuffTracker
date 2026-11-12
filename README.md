@@ -104,6 +104,15 @@ mount and target.
 
 ## Changelog
 
+### 1.6.1
+
+- Fixed: buff panels no longer render above the inventory, auction and other
+  windows (reverted the HUD UI-layer change to the previous z-order behaviour).
+- Fixed the settings window: clicks on Position X/Y no longer hit the
+  "Show label" / "Lock" buttons; the Save button and font-size changes apply
+  correctly again.
+- Numeric fields now also apply on Enter (same logic as Save).
+
 ### 1.6.0
 
 - Timers are now equally accurate for player, mount and target: the real
@@ -124,7 +133,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.6.0
+**Current Version:** 1.6.1
 
 ## Credits
 

@@ -281,6 +281,17 @@ local function saveSettings()
     end
 end
 
+-- Применять значение поля по Enter (та же логика, что у кнопки Save),
+-- чтобы не ждать клика по кнопке.
+local function bindApplyOnEnter(edit)
+    if not edit or not edit.SetHandler then return end
+    edit:SetHandler("OnEnterPressed", function(self)
+        if self and self.ClearFocus then self:ClearFocus() end
+        settings = helpers.getSettings()
+        saveSettings()
+    end)
+end
+
 local function settingsWindowClose()
     -- Обновляем настройки перед сохранением
     settings = helpers.getSettings() -- Обновим переменную settings актуальными данными
@@ -969,7 +980,7 @@ local function buildTrackedBuffsSection()
     
     -- IMMEDIATELY fill list of tracked buffs
     updateTrackedBuffsList(true)
-    return buffsListContainer
+    return buffsListContainer, trackedBuffsGroupLabel
 end
 
 local function buildNewBuffInput(buffsListContainer)
@@ -1043,9 +1054,9 @@ local function buildNewBuffInput(buffsListContainer)
     return newBuffIdLabel
 end
 
-local function buildCustomBuffsSection(newBuffIdLabel)
+local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     -- CUSTOM BUFFS LIST (перемещаем после поля ввода Buff ID)
-    local customBuffsListHeader = helpers.createLabel('customBuffsListHeader', newBuffIdLabel,
+    local customBuffsListHeader = helpers.createLabel('customBuffsListHeader', trackedBuffsGroupLabel,
                                                     'Custom Buffs:', 0, 30, 16)
     customBuffsListHeader:SetWidth(570)
     customBuffsListHeader:Show(true)
@@ -1424,6 +1435,7 @@ local function buildIconSection(customBuffErrorPanel)
         iconSize:Show(true)
     end
     settingsControls.iconSize = iconSize
+    bindApplyOnEnter(iconSize)
     
     -- Icon spacing
     local iconSpacingLabel = helpers.createLabel('iconSpacingLabel', iconSizeLabel,
@@ -1439,6 +1451,7 @@ local function buildIconSection(customBuffErrorPanel)
         iconSpacing:Show(true)
     end
     settingsControls.iconSpacing = iconSpacing
+    bindApplyOnEnter(iconSpacing)
 
     -- =============================================================
     -- Этап 4: настройки сетки иконок. Самодостаточный блок-второй столбец,
@@ -1470,6 +1483,7 @@ local function buildIconSection(customBuffErrorPanel)
         gridColumns:Show(true)
     end
     settingsControls.gridColumns = gridColumns
+    bindApplyOnEnter(gridColumns)
 
     -- Rows
     local gridRowsLabel = helpers.createLabel('gridRowsLabel', gridColumnsLabel,
@@ -1484,6 +1498,7 @@ local function buildIconSection(customBuffErrorPanel)
         gridRows:Show(true)
     end
     settingsControls.gridRows = gridRows
+    bindApplyOnEnter(gridRows)
 
     -- Max icons (<= Columns * Rows)
     local maxIconsLabel = helpers.createLabel('maxIconsLabel', gridRowsLabel,
@@ -1498,6 +1513,7 @@ local function buildIconSection(customBuffErrorPanel)
         maxIcons:Show(true)
     end
     settingsControls.maxIcons = maxIcons
+    bindApplyOnEnter(maxIcons)
 
     -- Row spacing — вертикальный отступ между строками сетки
     local rowSpacingLabel = helpers.createLabel('rowSpacingLabel', maxIconsLabel,
@@ -1512,6 +1528,7 @@ local function buildIconSection(customBuffErrorPanel)
         gridRowSpacing:Show(true)
     end
     settingsControls.gridRowSpacing = gridRowSpacing
+    bindApplyOnEnter(gridRowSpacing)
     -- нижний элемент сетки — к нему якорим кнопку "Thank you", чтобы не наезжала
     settingsControls.gridBottomLabel = rowSpacingLabel
 
@@ -1548,12 +1565,12 @@ local function buildIconSection(customBuffErrorPanel)
         end
     end)
     settingsControls.showLabel = showLabelButton
-    return showLabelButton
+    return showLabelButton, iconSpacingLabel
 end
 
-local function buildPositionSection(showLabelButton)
+local function buildPositionSection(showLabelButton, iconSpacingLabel)
     -- Icon position settings
-    local positionLabel = helpers.createLabel('positionLabel', showLabelButton,
+    local positionLabel = helpers.createLabel('positionLabel', iconSpacingLabel,
                                             'Icon position', 0, 35, 18)
     positionLabel:SetWidth(570)
     positionLabel:Show(true)
@@ -1578,6 +1595,7 @@ local function buildPositionSection(showLabelButton)
         posX:Show(true)
     end
     settingsControls.posX = posX
+    bindApplyOnEnter(posX)
     
     -- Y coordinate
     local posYLabel = helpers.createLabel('posYLabel', posXLabel,
@@ -1593,6 +1611,7 @@ local function buildPositionSection(showLabelButton)
         posY:Show(true)
     end
     settingsControls.posY = posY
+    bindApplyOnEnter(posY)
     
     -- Lock positioning button (ON/OFF toggle)
     local lockIsOn = settings[currentUnitType] and settings[currentUnitType].lockPositioning or false
@@ -1656,6 +1675,7 @@ local function buildTimerSection(lockButton)
         timerFontSize:Show(true)
     end
     settingsControls.timerFontSize = timerFontSize
+    bindApplyOnEnter(timerFontSize)
     
     -- Timer text color
     local timerTextColorLabel = helpers.createLabel('timerTextColorLabel', timerFontSizeLabel,
@@ -1747,12 +1767,12 @@ local function initSettingsPage()
     function settingsWindow:OnClose() settingsWindowClose() end
     
     buildUnitTypeSelector()
-    local buffsListContainer = buildTrackedBuffsSection()
+    local buffsListContainer, trackedBuffsGroupLabel = buildTrackedBuffsSection()
     local newBuffIdLabel = buildNewBuffInput(buffsListContainer)
-    local customBuffsListContainer = buildCustomBuffsSection(newBuffIdLabel)
+    local customBuffsListContainer = buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     local customBuffErrorPanel = buildCustomBuffInputs(customBuffsListContainer)
-    local showLabelButton = buildIconSection(customBuffErrorPanel)
-    local lockButton = buildPositionSection(showLabelButton)
+    local showLabelButton, iconSpacingLabel = buildIconSection(customBuffErrorPanel)
+    local lockButton = buildPositionSection(showLabelButton, iconSpacingLabel)
     buildTimerSection(lockButton)
 
     -- Final check - call update one more time for confidence
