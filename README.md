@@ -119,6 +119,15 @@ mount and target.
 
 ## Changelog
 
+### 1.16.0
+
+- Settings window redesigned for landscape: 1200x600, three columns —
+  tracked buffs | custom buffs + add form | icon/grid/position/timer. Uniform
+  field widths, aligned rows, Save button inside the window, Debug / Import /
+  Presets / Thanks moved to a bottom bar.
+- Saving keeps the current page of both lists (Enter-to-apply too); switching
+  the unit type still resets the page by design.
+
 ### 1.15.3
 
 - Removed the Edit button from the tracked Buff list: CD/D are edited in the
@@ -489,7 +498,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.15.3
+**Current Version:** 1.16.0
 
 ## Credits
 
