@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.18.5
+
+- Cooldown/Duration dialog title no longer duplicates identical name / Spell / id: the
+  string is assembled from distinct parts only, and long titles are truncated to fit.
+- The hint is split into two short lines, so nothing overflows the small dialog.
+
 ### 1.18.4
 
 - Layer model fixed: tracked buff panels are pinned to the `game` layer (above the world,
@@ -655,7 +661,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.4
+**Current Version:** 1.18.5
 
 ## Credits
 

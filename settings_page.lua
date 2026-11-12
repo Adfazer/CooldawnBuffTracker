@@ -865,9 +865,21 @@ local function openCddDialog(buffId)
     cddWindow = wnd
     wnd:Show(true)
 
-    local title = helpers.createLabel('cbtCddName', wnd,
-        tostring(BuffList.GetBuffName(buffId)) .. '  [' .. key .. ']', 15, 40, 14)
-    title:SetWidth(330)
+    -- Заголовок: не дублируем name/Spell/id и обрезаем длинные строки
+    local dispName = (cb and cb.name and cb.name ~= "" and cb.name) or BuffList.GetBuffName(buffId) or ""
+    dispName = tostring(dispName)
+    local dispSpell = (cb and cb.spellName and cb.spellName ~= "" and cb.spellName) or ""
+    dispSpell = tostring(dispSpell)
+    local parts = {}
+    if dispName ~= "" then parts[#parts + 1] = dispName end
+    if dispSpell ~= "" and dispSpell ~= dispName then parts[#parts + 1] = "[" .. dispSpell .. "]" end
+    if key ~= "" and key ~= dispName and key ~= dispSpell then parts[#parts + 1] = "(" .. key .. ")" end
+    local titleText = table.concat(parts, " ")
+    if titleText == "" then titleText = key end
+    if #titleText > 46 then titleText = titleText:sub(1, 43) .. "..." end
+
+    local title = helpers.createLabel('cbtCddName', wnd, titleText, 15, 40, 14)
+    title:SetWidth(345)
     title:Show(true)
 
     local cdLabel = helpers.createLabel('cbtCddCdLabel', wnd, 'Cooldown (s):', 15, 70, 14)
@@ -899,10 +911,16 @@ local function openCddDialog(buffId)
     mountEdit:Show(true)
 
     local hint = helpers.createLabel('cbtCddHint', wnd,
-        'Mana > 0 = mount skill by mana spend (empty mount = any). CD 0 = no cooldown.', 15, 190, 12)
+        'CD 0 = no cooldown. Mana > 0 = mount skill.', 15, 188, 12)
     hint:SetWidth(350)
     hint.style:SetColor(0.72, 0.74, 0.80, 1)
     hint:Show(true)
+
+    local hint2 = helpers.createLabel('cbtCddHint2', wnd,
+        'Empty mount name = any mount.', 15, 202, 12)
+    hint2:SetWidth(350)
+    hint2.style:SetColor(0.72, 0.74, 0.80, 1)
+    hint2:Show(true)
 
     local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 222)
     saveBtn:SetExtent(120, 26)
