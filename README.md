@@ -117,6 +117,12 @@ mount and target.
 
 ## Changelog
 
+### 1.7.7
+
+- Self casts are recorded for your own unit as well: if you target yourself, the
+  Target panel now shows the cooldown too (a target is a target). Casts made while
+  someone else is targeted still go only to the Player/Mount panels.
+
 ### 1.7.6
 
 - Debug: ON now dumps the raw `COMBAT_MSG` arguments (1..14) and the parsed
@@ -221,7 +227,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.7.6
+**Current Version:** 1.7.7
 
 ## Credits
 

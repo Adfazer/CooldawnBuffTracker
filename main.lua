@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.7.6"
+  version = "1.7.7"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -493,32 +493,45 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
           .. " spellName=" .. tostring(spellName))
       end
       learnSkillIcon(cb, spellId)
-      if srcKey and myNameExact and srcKey == myNameExact then
-        local hits = triggerSelfBuff(cb.id, now)
-        if settings.debugBuffId then
-          if hits > 0 then
-            safeLog("[CBT] '" .. spellName .. "': свой каст -> обновлено панелей: " .. tostring(hits))
-          else
-            safeLog("[CBT] '" .. spellName .. "': свой каст, но бафф не отслеживается на Player/Mount (добавь его туда)")
-          end
-        end
+      local isSelf = (srcKey and myNameExact and srcKey == myNameExact) and true or false
+      local sourceId = nil
+      if isSelf then
+        sourceId = api.Unit:GetUnitId("player")
       elseif srcKey then
-        local sourceId = unitIdByName[srcKey]
+        sourceId = unitIdByName[srcKey]
+      end
+
+      if isSelf then
+        local hits = triggerSelfBuff(cb.id, now)
+        -- КД пишем на юнит-источник: если ты держишь себя в таргете, он покажется
+        -- и на панели Target тоже (сам себе цель — это цель).
         if sourceId then
           triggerTargetCooldown(sourceId, cb.id, now, now)
-          if settings.debugBuffId then
-            safeLog("[CBT] '" .. spellName .. "': КД записан для " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
+        end
+        if settings.debugBuffId then
+          if hits > 0 then
+            safeLog("[CBT] '" .. spellName .. "': свой каст -> панелей Player/Mount: " .. tostring(hits))
+          else
+            safeLog("[CBT] '" .. spellName .. "': свой каст, но бафф не отслеживается на Player/Mount")
           end
-        else
-          local p = pendingBySource[srcKey]
-          if not p then
-            p = {}
-            pendingBySource[srcKey] = p
+          if sourceId and currentTargetId and tostring(currentTargetId) == tostring(sourceId) then
+            safeLog("[CBT] '" .. spellName .. "': ты сам в таргете -> записано в Target")
           end
-          p[cb.id] = now
-          if settings.debugBuffId then
-            safeLog("[CBT] '" .. spellName .. "': источник " .. tostring(srcKey) .. " неизвестен, ждём первого таргета")
-          end
+        end
+      elseif sourceId then
+        triggerTargetCooldown(sourceId, cb.id, now, now)
+        if settings.debugBuffId then
+          safeLog("[CBT] '" .. spellName .. "': КД записан для " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
+        end
+      elseif srcKey then
+        local p = pendingBySource[srcKey]
+        if not p then
+          p = {}
+          pendingBySource[srcKey] = p
+        end
+        p[cb.id] = now
+        if settings.debugBuffId then
+          safeLog("[CBT] '" .. spellName .. "': источник " .. tostring(srcKey) .. " неизвестен, ждём первого таргета")
         end
       else
         if settings.debugBuffId then
