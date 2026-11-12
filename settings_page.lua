@@ -2827,68 +2827,15 @@ local function buildTimerSection(lockButton)
 end
 
 local function buildEffectiveCdSection()
-    local TIP = "Effective cooldowns (Target only):\n"
-        .. "base CD + known skillset candidates\n"
-        .. "+ per-target learning from observed re-use.\n"
-        .. "Reset procs (Deflect and Retaliate, Quick Recovery)\n"
-        .. "are handled separately. Off = the configured CD."
-    local PICK_TIP = "Pick skills to track with effective cooldowns (Target only)"
-
-    local check = CbtWindow.CheckButton('effectiveCdCheck', settingsWindow, function(checked)
-        local s = helpers.getSettings()
-        s.effectiveCd = checked and true or false
-        pcall(function() api.SaveSettings() end)
-        if settingsControls.effectiveCdCheck then
-            pcall(function() settingsControls.effectiveCdCheck:SetChecked(s.effectiveCd == true) end)
-        end
-        api:Emit("ADDON_CBT_BUFFS_CHANGED")
-        api.Log:Info("[CBT] effective CD: " .. (s.effectiveCd and "ON" or "OFF") .. " (Target only)")
-    end)
-    if check then
-        check:AddAnchor("TOPLEFT", settingsWindow, 420, 42)
-        check:SetChecked(settings.effectiveCd == true)
-        check:Show(true)
-        CbtWindow.Tooltip(check, TIP)
-        settingsControls.effectiveCdCheck = check
-    end
-
-    local label = helpers.createLabel('effectiveCdLabel', settingsWindow,
-        'Effective CD (Target)', 444, 38, 14)
-    label:SetWidth(170)
-    label:Show(true)
-    settingsControls.effectiveCdLabel = label
-
-    local resetBtn = helpers.createButton('effectiveCdReset', settingsWindow, 'Reset learning', 650, 38)
-    resetBtn:SetExtent(120, 24)
-    resetBtn:Show(true)
-    CbtWindow.Tooltip(resetBtn, "Forget every learned tree ratio for all targets.")
-    resetBtn:SetHandler("OnClick", function()
-        local n = 0
-        if M.resetEffectiveLearning then
-            local ok, v = pcall(M.resetEffectiveLearning)
-            if ok and tonumber(v) then n = tonumber(v) end
-        end
-        resetBtn:SetText("Reset: " .. tostring(n))
-        if api and api.DoIn then
-            api:DoIn(1200, function()
-                pcall(function()
-                    if resetBtn and resetBtn.SetText then resetBtn:SetText("Reset learning") end
-                end)
-            end)
-        end
-    end)
-    settingsControls.effectiveCdReset = resetBtn
-
-    local pickBtn = helpers.createButton('effectiveCdPick', settingsWindow, 'Effective CDs', 790, 38)
-    pickBtn:SetExtent(120, 24)
+    local pickBtn = helpers.createButton('effectiveCdPick', settingsWindow, 'Effective CDs', 730, 70)
+    pickBtn:SetExtent(120, 22)
     pickBtn:Show(true)
-    CbtWindow.Tooltip(pickBtn, PICK_TIP)
+    CbtWindow.Tooltip(pickBtn, "Pick skills to track with effective cooldowns (Target only)")
     pickBtn:SetHandler("OnClick", function()
         if M.openEffectiveCdWindow then M.openEffectiveCdWindow() end
     end)
     settingsControls.effectiveCdPick = pickBtn
 end
-
 local function initSettingsPage()
     settings = helpers.getSettings()
 

@@ -155,6 +155,14 @@ mount and target.
 
 ## Changelog
 
+### 1.21.2
+
+- Occultism cooldown buff **7657** added as a flat **-12 s** modifier (flat seconds are
+  subtracted before the additive percentages).
+- The Effective CDs controls moved into the picker window: the settings page has a single
+  «Effective CDs» button; the picker carries the master **Enable** checkbox and
+  **Reset learning**, so nothing overlaps the Debug/Record row.
+
 ### 1.21.1
 
 - Always-on skillset passives: a target whose class contains **Battlerage** gets
@@ -818,7 +826,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.1
+**Current Version:** 1.21.2
 
 ## Credits
 

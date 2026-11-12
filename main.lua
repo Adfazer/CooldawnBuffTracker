@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.21.1"
+  version = "1.21.2"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2837,6 +2837,7 @@ EffectivePicker.setHooks({
   isPicked = isSkillPicked,
   onToggle = toggleEffectiveSkill,
   onReload = reloadEffectiveTables,
+  onResetLearning = function() return EffectiveCD.ResetLearning() end,
 })
 
 local function processBuffIconScan()

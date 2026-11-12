@@ -202,10 +202,47 @@ local function build()
   countLabel:Show(true)
 
   statusLabel = helpers.createLabel("cbtEffStatus", win,
-    "Pick skills to track with effective cooldowns (Target only)", 18, 122, 12)
-  statusLabel:SetExtent(600, 16)
+    "Pick skills (Target only)", 18, 122, 12)
+  statusLabel:SetExtent(290, 16)
   setColor(statusLabel, COLORS.muted)
   statusLabel:Show(true)
+
+  local enable = CbtWindow.CheckButton("cbtEffEnable", win, function(checked)
+    local s = helpers.getSettings()
+    if s then
+      s.effectiveCd = checked and true or false
+      pcall(function() api.SaveSettings() end)
+    end
+    pcall(function() api:Emit("ADDON_CBT_BUFFS_CHANGED") end)
+    if statusLabel then
+      statusLabel:SetText(checked and "Effective cooldowns enabled" or "Effective cooldowns disabled")
+    end
+  end)
+  if enable then
+    enable:AddAnchor("TOPLEFT", win, 320, 120)
+    local s = helpers.getSettings()
+    enable:SetChecked(s and s.effectiveCd == true)
+    enable:Show(true)
+    CbtWindow.Tooltip(enable, "Enable effective cooldowns for the Target panel")
+  end
+
+  local enableLabel = helpers.createLabel("cbtEffEnableLabel", win, "Enable", 340, 119, 12)
+  enableLabel:SetExtent(44, 16)
+  setColor(enableLabel, COLORS.text)
+  enableLabel:Show(true)
+
+  local resetBtn = helpers.createButton("cbtEffReset", win, "Reset learning", 400, 118)
+  resetBtn:SetExtent(110, 22)
+  resetBtn:Show(true)
+  CbtWindow.Tooltip(resetBtn, "Forget every learned tree ratio for all targets.")
+  resetBtn:SetHandler("OnClick", function()
+    local n = 0
+    if hooks.onResetLearning then
+      local ok, v = pcall(hooks.onResetLearning)
+      if ok and tonumber(v) then n = tonumber(v) end
+    end
+    if statusLabel then statusLabel:SetText("Learning reset: " .. tostring(n) .. " target(s)") end
+  end)
 
   for i = 1, PER_PAGE do
     rows[i] = makeRow(i)
