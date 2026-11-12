@@ -1909,17 +1909,61 @@ end
 local function initSettingsPage()
     settings = helpers.getSettings()
     
-    -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
-    settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 1000) -- Высота окна с запасом под Label color + кнопку Save внизу
+    -- Кастомное окно (как у BetterBars): пустое окно + тёмный ninepart-фон +
+    -- собственная шапка с заголовком, крестиком и перетаскиванием.
+    settingsWindow = api.Interface:CreateEmptyWindow("CooldawnBuffTrackerSettings")
     if not settingsWindow then
         api.Log:Err("[CBT] Failed to create settings window!")
         return
     end
+    settingsWindow:SetExtent(600, 1000)
+    settingsWindow:SetUILayer("dialog")
+    pcall(function() settingsWindow:SetCloseOnEscape(true) end)
+    pcall(function() settingsWindow:EnableHidingIsRemove(false) end)
 
-    -- Тёмная подложка: дочерний виджет создан ДО секций, поэтому лежит над
-    -- фоном окна и под остальными элементами (drawable самого окна уходил под
-    -- нативную текстуру и текст оставался на светлом фоне).
+    local winBg = settingsWindow:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
+    winBg:SetTextureInfo("bg_quest")
+    winBg:SetInset(6, 6, 6, 6)
+    winBg:SetColor(0.045, 0.048, 0.055, 0.98)
+    winBg:AddAnchor("TOPLEFT", settingsWindow, 0, 0)
+    winBg:AddAnchor("BOTTOMRIGHT", settingsWindow, 0, 0)
+
+    local header = settingsWindow:CreateChildWidget("emptywidget", "cbtSettingsHeader", 0, true)
+    header:SetExtent(600, 30)
+    header:AddAnchor("TOPLEFT", settingsWindow, 0, 0)
+    header:AddAnchor("TOPRIGHT", settingsWindow, 0, 0)
+    header:Clickable(true)
+    local headerBg = header:CreateColorDrawable(0.015, 0.015, 0.020, 0.96, "background")
+    headerBg:AddAnchor("TOPLEFT", header, 0, 0)
+    headerBg:AddAnchor("BOTTOMRIGHT", header, 0, 0)
+
+    local titleLabel = header:CreateChildWidget("label", "cbtSettingsTitle", 0, true)
+    titleLabel:SetExtent(320, 22)
+    titleLabel:AddAnchor("LEFT", header, 12, 0)
+    titleLabel.style:SetFontSize(18)
+    titleLabel.style:SetAlign(ALIGN.LEFT)
+    titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
+    titleLabel:SetText("Cooldown Buff Tracker")
+
+    local closeBtn = header:CreateChildWidget("button", "cbtSettingsClose", 0, true)
+    closeBtn:SetExtent(20, 20)
+    closeBtn:AddAnchor("RIGHT", header, -8, 0)
+    api.Interface:ApplyButtonSkin(closeBtn, BUTTON_BASIC.WINDOW_SMALL_CLOSE)
+    closeBtn:SetHandler("OnClick", function() settingsWindowClose() end)
+
+    header:EnableDrag(true)
+    header:SetHandler("OnDragStart", function()
+        settingsWindow:StartMoving()
+        pcall(function() api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0) end)
+    end)
+    header:SetHandler("OnDragStop", function()
+        settingsWindow:StopMovingOrSizing()
+        pcall(function() api.Cursor:ClearCursor() end)
+    end)
+    settingsWindow.header = header
+
+    -- Тёмная подложка контента: дочерний виджет создан ДО секций, поэтому лежит
+    -- над фоном окна и под остальными элементами.
     local body = settingsWindow:CreateChildWidget("emptywidget", "cbtSettingsBody", 0, false)
     if body then
         body:SetExtent(592, 962)
@@ -1990,6 +2034,10 @@ end
 
 local function Unload()
     if settingsWindow ~= nil then
+        if settingsWindow.header then
+            pcall(function() settingsWindow.header:ReleaseHandler("OnDragStop") end)
+            pcall(function() settingsWindow.header:ReleaseHandler("OnDragStart") end)
+        end
         settingsWindow:Show(false)
         pcall(function() api.Interface:Free(settingsWindow) end)
         settingsWindow = nil

@@ -119,6 +119,14 @@ mount and target.
 
 ## Changelog
 
+### 1.11.0
+
+- The settings and icon-search windows are now fully custom (BetterBars style):
+  `CreateEmptyWindow` + dark nine-part plate, own header strip with a gold title,
+  close button and drag grip — no more native cream title bar/frame. ESC closes
+  them (`SetCloseOnEscape` + `OnCloseByEsc`), drag handlers are released on
+  unload.
+
 ### 1.10.0
 
 - Settings UI restyled to match BetterBars/Power Ranger: flat dark buttons with
@@ -329,7 +337,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.10.0
+**Current Version:** 1.11.0
 
 ## Credits
 

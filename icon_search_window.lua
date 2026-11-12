@@ -136,11 +136,55 @@ local function refresh()
 end
 
 local function buildWindow()
-    win = api.Interface:CreateWindow("cbtIconSearch", "Поиск иконки", 560, 520)
+    win = api.Interface:CreateEmptyWindow("cbtIconSearch")
     if not win then return end
+    win:SetExtent(560, 520)
+    win:SetUILayer("dialog")
+    pcall(function() win:SetCloseOnEscape(true) end)
+    pcall(function() win:EnableHidingIsRemove(false) end)
     win:AddAnchor("CENTER", "UIParent", 0, 0)
     win:SetHandler("OnCloseByEsc", function() win:Show(false) end)
-    function win:OnClose() self:Show(false) end
+
+    local winBg = win:CreateNinePartDrawable(TEXTURE_PATH.HUD, "background")
+    winBg:SetTextureInfo("bg_quest")
+    winBg:SetInset(6, 6, 6, 6)
+    winBg:SetColor(0.045, 0.048, 0.055, 0.98)
+    winBg:AddAnchor("TOPLEFT", win, 0, 0)
+    winBg:AddAnchor("BOTTOMRIGHT", win, 0, 0)
+
+    local header = win:CreateChildWidget("emptywidget", "cbtIconSearchHeader", 0, true)
+    header:SetExtent(560, 30)
+    header:AddAnchor("TOPLEFT", win, 0, 0)
+    header:AddAnchor("TOPRIGHT", win, 0, 0)
+    header:Clickable(true)
+    local headerBg = header:CreateColorDrawable(0.015, 0.015, 0.020, 0.96, "background")
+    headerBg:AddAnchor("TOPLEFT", header, 0, 0)
+    headerBg:AddAnchor("BOTTOMRIGHT", header, 0, 0)
+
+    local titleLabel = header:CreateChildWidget("label", "cbtIconSearchTitle", 0, true)
+    titleLabel:SetExtent(300, 22)
+    titleLabel:AddAnchor("LEFT", header, 12, 0)
+    titleLabel.style:SetFontSize(18)
+    titleLabel.style:SetAlign(ALIGN.LEFT)
+    titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
+    titleLabel:SetText("Поиск иконки")
+
+    local closeBtn = header:CreateChildWidget("button", "cbtIconSearchCloseBtn", 0, true)
+    closeBtn:SetExtent(20, 20)
+    closeBtn:AddAnchor("RIGHT", header, -8, 0)
+    api.Interface:ApplyButtonSkin(closeBtn, BUTTON_BASIC.WINDOW_SMALL_CLOSE)
+    closeBtn:SetHandler("OnClick", function() win:Show(false) end)
+
+    header:EnableDrag(true)
+    header:SetHandler("OnDragStart", function()
+        win:StartMoving()
+        pcall(function() api.Cursor:SetCursorImage(CURSOR_PATH.MOVE, 0, 0) end)
+    end)
+    header:SetHandler("OnDragStop", function()
+        win:StopMovingOrSizing()
+        pcall(function() api.Cursor:ClearCursor() end)
+    end)
+    win.header = header
 
     local bg = win:CreateChildWidget("emptywidget", "cbtIconSearchBody", 0, false)
     if bg then
@@ -243,6 +287,10 @@ end
 
 function M.Unload()
     if win ~= nil then
+        if win.header then
+            pcall(function() win.header:ReleaseHandler("OnDragStop") end)
+            pcall(function() win.header:ReleaseHandler("OnDragStart") end)
+        end
         pcall(function() win:Show(false) end)
         pcall(function() api.Interface:Free(win) end)
         win = nil
