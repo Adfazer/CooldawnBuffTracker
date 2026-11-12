@@ -485,6 +485,16 @@ local function addCustomBuff()
         timeOfAction = timeOfAction
     }
 
+    -- Необязательное имя навыка из боевого лога: по нему бафф перезапускается
+    local spellName = ""
+    if settingsControls.newCustomBuffSpell then
+        spellName = settingsControls.newCustomBuffSpell:GetText() or ""
+        spellName = spellName:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+    if spellName ~= "" then
+        newBuff.spellName = spellName
+    end
+
     -- Добавляем бафф в настройки
     if not settings.customBuffs then
         settings.customBuffs = {}
@@ -496,6 +506,9 @@ local function addCustomBuff()
     settingsControls.newCustomBuffName:SetText("")
     settingsControls.newCustomBuffCooldown:SetText("")
     settingsControls.newCustomBuffTimeOfAction:SetText("")
+    if settingsControls.newCustomBuffSpell then
+        settingsControls.newCustomBuffSpell:SetText("")
+    end
 
     -- Скрываем сообщение об ошибке
     if settingsControls.customBuffErrorPanel then
@@ -1163,7 +1176,11 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffIdLabel:Show(true)
 
             -- Name
-            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, buffData.name, 80, 0, 14)
+            local displayName = buffData.name or ""
+            if buffData.spellName and buffData.spellName ~= "" then
+                displayName = displayName .. " [" .. buffData.spellName .. "]"
+            end
+            local buffNameLabel = helpers.createLabel('customBuffNameLabel_' .. i, buffRow, displayName, 80, 0, 14)
             buffNameLabel:SetExtent(200, 20)
             buffNameLabel:Show(true)
 
@@ -1373,6 +1390,17 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffTimeOfAction:Show(true)
     settingsControls.newCustomBuffTimeOfAction = newCustomBuffTimeOfAction
     
+    -- Поле Spell: имя навыка из боевого лога (необязательно). Если задано,
+    -- каждое событие COMBAT_MSG с этим spellName перезапускает отсчёт баффа.
+    local newCustomBuffSpellLabel = helpers.createLabel('newCustomBuffSpellLabel', customBuffInputsLabel, 'Spell:', 0, 60, 14)
+    newCustomBuffSpellLabel:SetWidth(100)
+    newCustomBuffSpellLabel:Show(true)
+
+    local newCustomBuffSpell = helpers.createEdit('newCustomBuffSpell', newCustomBuffSpellLabel, "", 45, 0)
+    newCustomBuffSpell:SetWidth(250)
+    newCustomBuffSpell:Show(true)
+    settingsControls.newCustomBuffSpell = newCustomBuffSpell
+
     -- Кнопка добавления пользовательского баффа
     local addCustomBuffButton = helpers.createButton('addCustomBuffButton', customBuffInputsLabel, 'Add Custom Buff', 355, 60)
     addCustomBuffButton:SetWidth(150)

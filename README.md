@@ -60,6 +60,9 @@ settings storage and all `require` paths.
 
 ### Custom buffs
 - Add a buff by ID with name, cooldown and time-of-action.
+- **Spell trigger** — optional spell name from the combat log: every hit with that
+  spell restarts the buff timer. Useful for instant skills that have neither a
+  cast bar nor a trackable aura (including enemy skills that hit you).
 - Each entry has **Add** (start tracking it for the currently selected unit type)
   and **Remove** buttons.
 - Long lists are paginated; all custom buffs are saved automatically.
@@ -104,6 +107,13 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.7.0
+
+- Custom buffs get an optional **Spell** field: the spell name as it appears in
+  the combat log. Every `COMBAT_MSG` with that spell name (including hits on
+  you) restarts the buff's active phase and cooldown. This covers instant
+  skills that have no cast bar and no trackable aura.
 
 ### 1.6.3
 
@@ -152,7 +162,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.6.3
+**Current Version:** 1.7.0
 
 ## Credits
 

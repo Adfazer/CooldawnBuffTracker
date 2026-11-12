@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.6.3"
+  version = "1.7.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -111,6 +111,8 @@ local ICON_COLORS = {
 local settings = {}
 -- api.Off в patch 293 не существует: после OnUnload гасим OnUpdate флагом
 local live = false
+-- Окно-приёмник боевого лога (для триггера по имени навыка)
+local combatEventWnd = nil
 
 local function formatTimerSeconds(seconds)
   if not seconds or seconds <= 0 then return "" end
@@ -1372,6 +1374,7 @@ local function checkBuffs(unitType)
         if rec then
           rec.present = true
           rec.lastRemaining = remaining
+          rec.synthetic = false   -- аура реально на юните, триггер больше не нужен
         end
       end
     end
@@ -1430,6 +1433,7 @@ local function checkBuffs(unitType)
           if rec then
             rec.present = true
             rec.lastRemaining = remaining
+            rec.synthetic = false
           end
         end
       end
@@ -1473,7 +1477,7 @@ local function checkBuffs(unitType)
         -- Записи о присутствии больше нет: следующее появление = новая активация
         buffInfo.present = false
         buffInfo.lastRemaining = nil
-        if buffInfo.status == "active" then
+        if buffInfo.status == "active" and not buffInfo.synthetic then
           -- Досрочное снятие (диспел/смерть) или конец действия:
           -- активная фаза заканчивается СЕЙЧАС, а кулдаун считается от старта баффа.
           buffInfo.activeUntil = currentTime
@@ -1667,6 +1671,49 @@ local function initializeUI()
   end
 end
 
+-- Перезапуск кастомных баффов по имени навыка из боевого лога.
+-- Нужен для навыков без ауры и без полоски каста: COMBAT_MSG приносит spellName,
+-- когда навык бьёт по игроку (или по его цели), и мы стартуем отсчёт заново.
+local function triggerBuffsBySpell(spellName)
+  if not spellName or spellName == "" then return end
+  local needle = string.lower(spellName)
+  local s = api.GetSettings("CooldawnBuffTracker") or {}
+  local custom = s.customBuffs or {}
+  if #custom == 0 then return end
+  local now = getCurrentTime()
+  local tables = { playerpet = buffData, player = playerBuffData, target = targetBuffData }
+  for _, cb in ipairs(custom) do
+    local trigger = cb.spellName
+    if trigger and trigger ~= "" and string.lower(trigger) == needle then
+      local id = cb.id
+      if id then
+        for unitType, tbl in pairs(tables) do
+          if tbl[id] and BuffsToTrack.ShouldTrackBuff(id, unitType) then
+            setBuffStatus(id, "active", now, unitType, nil)
+            -- Бафф запущен по событию, а не по ауре: пропажа ауры не должна
+            -- обрывать его активную фазу (её длительность задана настройкой).
+            tbl[id].synthetic = true
+            cachedBuffStatus[id] = "active"
+          end
+        end
+      end
+    end
+  end
+end
+
+local function onCombatMessage(event, ...)
+  if not live then return end
+  if event ~= "COMBAT_MSG" then return end
+  local args = { ... }
+  local combatEvent = args[2]
+  if type(combatEvent) ~= "string" then return end
+  local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
+  if not ok or type(parsed) ~= "table" then return end
+  if parsed.spellName then
+    triggerBuffsBySpell(parsed.spellName)
+  end
+end
+
 local function OnLoad()
   -- Загружаем настройки
   if helpers then
@@ -1834,6 +1881,16 @@ local function OnLoad()
   
   live = true
   api.On("UPDATE", OnUpdate)
+
+  -- Приёмник боевого лога: триггер кастомных баффов по имени навыка
+  combatEventWnd = api.Interface:CreateEmptyWindow("CBTCombatEvents")
+  if combatEventWnd then
+    combatEventWnd:Show(true)
+    combatEventWnd:SetHandler("OnEvent", function(self, event, ...)
+      onCombatMessage(event, ...)
+    end)
+    pcall(function() combatEventWnd:RegisterEvent("COMBAT_MSG") end)
+  end
   
   -- Создаем ассоциацию с обработчиком обновления настроек
   CooldawnBuffTracker.OnSettingsSaved = function()
@@ -1919,6 +1976,15 @@ end
 local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
+  
+  -- Отключаем приёмник боевого лога
+  if combatEventWnd then
+    pcall(function() combatEventWnd:UnregisterEvent("COMBAT_MSG") end)
+    pcall(function() combatEventWnd:ReleaseHandler("OnEvent") end)
+    pcall(function() combatEventWnd:Show(false) end)
+    pcall(function() api.Interface:Free(combatEventWnd) end)
+    combatEventWnd = nil
+  end
   
   -- Отключаем модуль отладки баффов
   if BuffDebugger and BuffDebugger.Shutdown then
