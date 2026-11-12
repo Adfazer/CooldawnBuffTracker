@@ -104,7 +104,7 @@ mount and target.
 
 ## Changelog
 
-### Unreleased
+### 1.6.0
 
 - Timers are now equally accurate for player, mount and target: the real
   remaining time comes from the game API instead of a local countdown started
@@ -124,7 +124,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.5.0
+**Current Version:** 1.6.0
 
 ## Credits
 

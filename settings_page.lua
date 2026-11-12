@@ -636,21 +636,7 @@ local function addPixelViewerButton()
     end
 end
 
-local function initSettingsPage()
-    settings = helpers.getSettings()
-    
-    -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
-    settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
-                                             'CooldawnBuffTracker', 600, 1000) -- Высота окна с запасом под Label color + кнопку Save внизу
-    if not settingsWindow then
-        api.Log:Err("[CBT] Failed to create settings window!")
-        return
-    end
-    
-    settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
-    settingsWindow:SetHandler("OnCloseByEsc", settingsWindowClose)
-    function settingsWindow:OnClose() settingsWindowClose() end
-    
+local function buildUnitTypeSelector()
     -- UNIT TYPE SELECTOR - Add at the very top (c дополнительным отступом)
     local unitTypeLabel = helpers.createLabel('unitTypeLabel', settingsWindow,
                                            'Select unit type for settings:', 15, 30, 16)
@@ -716,7 +702,9 @@ local function initSettingsPage()
     
     -- Initialize button style
     updateUnitTypeButtons()
-    
+end
+
+local function buildTrackedBuffsSection()
     -- FIRST BLOCK - контейнер для размещения элементов (без заголовка)
     local trackedBuffsGroupLabel = helpers.createLabel('trackedBuffsGroupLabel', settingsWindow,
                                                     '', 15, 50, 20)  -- Удаляем текст "Buff tracker management"
@@ -981,7 +969,10 @@ local function initSettingsPage()
     
     -- IMMEDIATELY fill list of tracked buffs
     updateTrackedBuffsList(true)
+    return buffsListContainer
+end
 
+local function buildNewBuffInput(buffsListContainer)
     -- THIRD BLOCK - Input field for new tracked buff (перемещаем его выше списка пользовательских баффов)
     local newBuffIdLabel = helpers.createLabel('newBuffIdLabel', settingsWindow, 'Buff ID:', 15, 0, 15)
     newBuffIdLabel:SetWidth(100)
@@ -1049,9 +1040,12 @@ local function initSettingsPage()
     -- By default error panel is hidden
     errorPanel:Show(false)
     settingsControls.errorPanel = errorPanel
+    return newBuffIdLabel
+end
 
+local function buildCustomBuffsSection(newBuffIdLabel)
     -- CUSTOM BUFFS LIST (перемещаем после поля ввода Buff ID)
-    local customBuffsListHeader = helpers.createLabel('customBuffsListHeader', trackedBuffsGroupLabel,
+    local customBuffsListHeader = helpers.createLabel('customBuffsListHeader', newBuffIdLabel,
                                                     'Custom Buffs:', 0, 30, 16)
     customBuffsListHeader:SetWidth(570)
     customBuffsListHeader:Show(true)
@@ -1247,7 +1241,10 @@ local function initSettingsPage()
 
     settingsControls.updateCustomVisibleItems = updateCustomVisibleItems
     updateCustomBuffsList(true) -- Инициализация списка
+    return customBuffsListContainer
+end
 
+local function buildCustomBuffInputs(customBuffsListContainer)
     -- CUSTOM BUFF INPUTS
     local customBuffInputsLabel = helpers.createLabel('customBuffInputsLabel', settingsWindow,
                                                     'Add Custom Buff:', 15, 0, 18)
@@ -1398,7 +1395,10 @@ local function initSettingsPage()
     addCustomBuffError.style:SetColor(1, 0, 0, 1)
     addCustomBuffError:Show(true)
     settingsControls.addCustomBuffError = addCustomBuffError
+    return customBuffErrorPanel
+end
 
+local function buildIconSection(customBuffErrorPanel)
     -- FOURTH BLOCK - Icon settings
     local iconGroupLabel = helpers.createLabel('iconGroupLabel', settingsWindow,
                                              'Icon settings', 15, 0, 20)
@@ -1548,9 +1548,12 @@ local function initSettingsPage()
         end
     end)
     settingsControls.showLabel = showLabelButton
-    
+    return showLabelButton
+end
+
+local function buildPositionSection(showLabelButton)
     -- Icon position settings
-    local positionLabel = helpers.createLabel('positionLabel', iconSpacingLabel,
+    local positionLabel = helpers.createLabel('positionLabel', showLabelButton,
                                             'Icon position', 0, 35, 18)
     positionLabel:SetWidth(570)
     positionLabel:Show(true)
@@ -1625,7 +1628,10 @@ local function initSettingsPage()
         end)
     end
     settingsControls.lockButton = lockButton
-    
+    return lockButton
+end
+
+local function buildTimerSection(lockButton)
     -- Timer settings group
     local timerGroupLabel = helpers.createLabel('timerGroupLabel', lockButton,
                                              'Timer settings', 0, 35, 18)
@@ -1723,6 +1729,31 @@ local function initSettingsPage()
             end
         end
     end)
+end
+
+local function initSettingsPage()
+    settings = helpers.getSettings()
+    
+    -- Use CreateWindow instead of CreateEmptyWindow for correct support of ESC and dragging
+    settingsWindow = api.Interface:CreateWindow("CooldawnBuffTrackerSettings",
+                                             'CooldawnBuffTracker', 600, 1000) -- Высота окна с запасом под Label color + кнопку Save внизу
+    if not settingsWindow then
+        api.Log:Err("[CBT] Failed to create settings window!")
+        return
+    end
+    
+    settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
+    settingsWindow:SetHandler("OnCloseByEsc", settingsWindowClose)
+    function settingsWindow:OnClose() settingsWindowClose() end
+    
+    buildUnitTypeSelector()
+    local buffsListContainer = buildTrackedBuffsSection()
+    local newBuffIdLabel = buildNewBuffInput(buffsListContainer)
+    local customBuffsListContainer = buildCustomBuffsSection(newBuffIdLabel)
+    local customBuffErrorPanel = buildCustomBuffInputs(customBuffsListContainer)
+    local showLabelButton = buildIconSection(customBuffErrorPanel)
+    local lockButton = buildPositionSection(showLabelButton)
+    buildTimerSection(lockButton)
 
     -- Final check - call update one more time for confidence
     -- Force update list one more time

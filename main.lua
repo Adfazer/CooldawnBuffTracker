@@ -73,10 +73,10 @@ if not BuffList then
 end
 
 local CooldawnBuffTracker = {
-  name = "CooldawnBuffTracker",
+  name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.5.0"
+  version = "1.6.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -401,7 +401,7 @@ local function addBuffIcon(parent, index, unitType)
   
   local unitSettings = settings[unitType] or settings.playerpet
   
-  local icon = createTrackedIconButton("buffIcon_" .. index, parent)
+  local icon = createTrackedIconButton("buffIcon_" .. tostring(unitType) .. "_" .. index, parent)
   if not icon then return nil end
   
   icon:SetExtent(unitSettings.iconSize, unitSettings.iconSize)
@@ -563,7 +563,10 @@ local function createPanelCanvas(windowId, unitType)
   canvas.unitType = unitType
 
   canvas.buffIcons = {}
-  for i = 1, MAX_GRID_ICONS do
+  local initialIcons = #BuffsToTrack.GetAllTrackedBuffIds(unitType)
+  if initialIcons < 1 then initialIcons = 1 end
+  if initialIcons > MAX_GRID_ICONS then initialIcons = MAX_GRID_ICONS end
+  for i = 1, initialIcons do
     canvas.buffIcons[i] = addBuffIcon(canvas, i, unitType)
 
     -- Ensure that the icon has the correct position based on settings
@@ -724,6 +727,24 @@ local function hasTrackedBuffs(unitType)
   end
 end
 
+-- Достраивает пул иконок панели до нужного числа (не больше MAX_GRID_ICONS).
+-- Иконки создаются по мере надобности, а не 40 на каждую панель сразу.
+local function ensureIconPool(canvas, unitType, needed)
+  if not canvas or not needed then return end
+  if needed > MAX_GRID_ICONS then needed = MAX_GRID_ICONS end
+  local have = #canvas.buffIcons
+  if needed <= have then return end
+  local us = settings[unitType] or settings.playerpet
+  for i = have + 1, needed do
+    local icon = addBuffIcon(canvas, i, unitType)
+    if not icon then break end
+    icon:RemoveAllAnchors()
+    icon:SetExtent(us.iconSize, us.iconSize)
+    anchorIconInGrid(icon, canvas, i, us)
+    canvas.buffIcons[i] = icon
+  end
+end
+
 local function updateBuffIcons(unitType)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
   
@@ -874,6 +895,7 @@ local function updateBuffIcons(unitType)
   -- Число одновременно показанных иконок ограничено настройкой maxIcons
   local us = settings[unitType]
   local maxShown = math.min(#activeBuffs, getMaxIcons(us))
+  ensureIconPool(canvas, unitType, maxShown)
 
   -- Подпись раскладки: геометрия + набор/иконки/имена показанных баффов.
   -- Пока подпись не меняется, виджеты не пересобираются — обновляются только
