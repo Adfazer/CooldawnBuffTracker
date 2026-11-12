@@ -185,9 +185,10 @@ function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     
     -- Set color if available
     if FONT_COLOR and FONT_COLOR.TITLE then
-        label.style:SetColor(FONT_COLOR.TITLE[1], FONT_COLOR.TITLE[2], FONT_COLOR.TITLE[3], 1)
+        -- Тёмная тема: основной текст светлый, золото оставлено акцентам
+        label.style:SetColor(0.87, 0.89, 0.93, 1)
     else
-        label.style:SetColor(0.87, 0.69, 0, 1) -- Gold color by default
+        label.style:SetColor(0.87, 0.89, 0.93, 1)
     end
     
     label.style:SetAlign(ALIGN.LEFT)

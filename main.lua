@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.8.6"
+  version = "1.9.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1858,25 +1858,44 @@ local function readDumpFile(path)
   return nil
 end
 
+local function buildDumpList(entries)
+  local list = {}
+  for i = 1, #entries do
+    local e = entries[i]
+    if e and e.name and e.name ~= "" and e.path and e.path ~= "" then
+      list[#list + 1] = e
+    end
+  end
+  table.sort(list, function(a, b)
+    local x = tostring(a.name):lower()
+    local y = tostring(b.name):lower()
+    if x == y then return tostring(a.id) < tostring(b.id) end
+    return x < y
+  end)
+  return list
+end
+
 local function loadBuffDump()
   if not (api.File and api.File.Read) then return end
-  -- сначала свежий дамп в корне Addon, иначе вшитый в аддон
-  local data, usedPath = readDumpFile("buff_dump.tbl")
+  -- дамп живёт в папке аддона; корень Addon читаем только как наследие старых версий
+  local data, usedPath = readDumpFile("CooldawnBuffTracker/buff_dump.tbl")
   if not data then
-    data, usedPath = readDumpFile("CooldawnBuffTracker/buff_dump.tbl")
+    data, usedPath = readDumpFile("buff_dump.tbl")
   end
   if not data then return end
   local byName = {}
+  local entries = {}
   local n = 0
   for line in data.dump:gmatch("[^\n]+") do
     local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
     if id and name and path and path ~= "" then
       n = n + 1
       addDumpEntry(byName, id, name, path)
+      entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
     end
   end
   if n > 0 then
-    buffDump = { byName = byName, count = n }
+    buffDump = { byName = byName, list = buildDumpList(entries), count = n }
     safeLog("[CBT] buff dump: " .. n .. " баффов загружено из " .. tostring(usedPath))
   end
 end
@@ -1972,6 +1991,26 @@ if settingsPage then
   settingsPage.startScan = startBuffIconScan
 end
 
+-- Поиск по базе баффов для окна «Поиск иконки» (живой фильтр по имени)
+local function searchIcons(query, limit)
+  if not (buffDump and buffDump.list) then return {} end
+  local q = normalizeSkillName(query)
+  local out = {}
+  local max = limit or 100
+  for i = 1, #buffDump.list do
+    local e = buffDump.list[i]
+    if q == "" or string.find(string.lower(tostring(e.name)), q, 1, true) then
+      out[#out + 1] = { name = e.name, path = e.path, id = e.id }
+      if #out >= max then break end
+    end
+  end
+  return out
+end
+
+if settingsPage then
+  settingsPage.searchIcons = searchIcons
+end
+
 local function processBuffIconScan()
   if not buffIconScan then return end
   local st = buffIconScan
@@ -1981,17 +2020,19 @@ local function processBuffIconScan()
     local text = table.concat(st.entries, "\n")
     local saved = false
     if api.File and api.File.Write then
-      saved = pcall(api.File.Write, api.File, "buff_dump.tbl",
+      saved = pcall(api.File.Write, api.File, "CooldawnBuffTracker/buff_dump.tbl",
         { version = 1, count = #st.entries, dump = text })
     end
     local byName = {}
+    local entries = {}
     for _, line in ipairs(st.entries) do
       local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
       if id and name and path and path ~= "" then
         addDumpEntry(byName, id, name, path)
+        entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
       end
     end
-    buffDump = { byName = byName, count = #st.entries }
+    buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries }
     safeLog("[CBT] buff dump: " .. #st.entries .. " баффов, "
       .. (saved and "сохранён в buff_dump.tbl" or "НЕ сохранён (api.File недоступен)")
       .. "; таблиц=" .. tostring(st.tables) .. " с именем=" .. tostring(st.named)
@@ -2004,6 +2045,9 @@ local function processBuffIconScan()
       else
         safeLog("[CBT] buff dump: '" .. st.target .. "' не найден")
       end
+    end
+    if settingsPage and settingsPage.onIconDumpUpdated then
+      pcall(settingsPage.onIconDumpUpdated)
     end
     buffIconScan = nil
     return
@@ -2040,6 +2084,13 @@ end
 local function OnUpdate(dt)
   if not live then return end
   processBuffIconScan()
+  -- Мастер-выключатель из списка аддонов (ESC-меню), поле settings.enabled
+  if settings and settings.enabled == false then
+    if buffCanvas and buffCanvas:IsVisible() then buffCanvas:Show(false) end
+    if playerBuffCanvas and playerBuffCanvas:IsVisible() then playerBuffCanvas:Show(false) end
+    if targetBuffCanvas and targetBuffCanvas:IsVisible() then targetBuffCanvas:Show(false) end
+    return
+  end
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     checkBuffs("playerpet")  -- Проверяем баффы маунта
@@ -2189,6 +2240,20 @@ local function OnLoad()
   -- Загружаем ранее сохранённый дамп баффов (id -> name -> иконка)
   loadBuffDump()
   applyDumpToCustomBuffs()
+
+  -- Расширенное ESC-меню (аддон ESCMenu): своя строка настроек
+  local function openFromEscMenu()
+    if settingsPage and settingsPage.openSettingsWindow then
+      settingsPage.openSettingsWindow()
+    end
+  end
+  if type(ESCMenu) == "table" and type(ESCMenu.RegisterAddonBtn) == "function" then
+    pcall(ESCMenu.RegisterAddonBtn, ESCMenu, "Cooldown Buff Tracker", openFromEscMenu, "System", "optimizer")
+  else
+    ESCMenu = ESCMenu or {}
+    ESCMenu.queue = ESCMenu.queue or {}
+    table.insert(ESCMenu.queue, { name = "Cooldown Buff Tracker", callback = openFromEscMenu, category = "System" })
+  end
 
   safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
   

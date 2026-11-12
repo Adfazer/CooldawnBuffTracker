@@ -1,4 +1,5 @@
 local defaultSettings = {
+    enabled = true,
     playerpet = {
         posX = 330,
         posY = 30,
@@ -80,6 +81,11 @@ local defaultSettings = {
 -- только если их ещё нет в постоянном хранилище.
 function defaultSettings.migrate(settings)
     if not settings then return settings end
+
+    -- Верхнеуровневый enabled нужен списку аддонов (кнопка Options в ESC-меню)
+    if settings.enabled == nil then
+        settings.enabled = true
+    end
 
     -- Таблица пресетов создаётся один раз и далее живёт в settings.txt
     if settings.presets == nil then

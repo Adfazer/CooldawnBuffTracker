@@ -1,5 +1,6 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
+local iconSearch = require('CooldawnBuffTracker/icon_search_window')
 
 -- Load module for working with buffs
 local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
@@ -49,6 +50,9 @@ local function onSkillIconFound(name, id, path)
     api.Log:Info("[CBT] иконка навыка: " .. tostring(path or "?"))
 end
 M.onSkillIconFound = onSkillIconFound
+M.onIconDumpUpdated = function()
+    pcall(function() iconSearch.refresh() end)
+end
 local trackedBuffsList = {} -- For storing buff list widgets
 local currentUnitType = "playerpet" -- By default, show settings for mount
 local buffListPage = 1 -- Текущая страница пагинации для списка баффов
@@ -1488,6 +1492,25 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         end
     end)
 
+    -- Кнопка поиска иконки по базе баффов (живой фильтр + превью)
+    local searchIconButton = helpers.createButton('searchIconButton', customBuffInputsLabel, 'Поиск иконки', 355, 90)
+    searchIconButton:SetWidth(150)
+    searchIconButton:Show(true)
+    searchIconButton:SetHandler("OnClick", function()
+        iconSearch.setProvider(function(q, l) return M.searchIcons and M.searchIcons(q, l) or {} end)
+        iconSearch.setScanStarter(function() if M.startScan then M.startScan("") end end)
+        iconSearch.setPicker(function(path, name)
+            if settingsControls.newCustomBuffIcon then
+                settingsControls.newCustomBuffIcon:SetText(path or "")
+            end
+            if settingsControls.customBuffIconPreview then
+                F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
+            end
+            api.Log:Info('[CBT] иконка выбрана: ' .. tostring(name or '') .. ' -> ' .. tostring(path or ''))
+        end)
+        iconSearch.open(settingsControls.newCustomBuffSpell and settingsControls.newCustomBuffSpell:GetText() or "")
+    end)
+
     -- Кнопка поиска иконки по имени навыка (когда в логе spellId=0)
     local findIconButton = helpers.createButton('findIconButton', customBuffInputsLabel, 'Find icon', 355, 30)
     findIconButton:SetWidth(150)
@@ -1891,6 +1914,13 @@ local function initSettingsPage()
         api.Log:Err("[CBT] Failed to create settings window!")
         return
     end
+
+    -- Тёмная подложка под содержимым (в стиле Power Ranger: почти чёрный фон)
+    local backdrop = settingsWindow:CreateColorDrawable(0.055, 0.060, 0.070, 0.97, "background")
+    if backdrop then
+        backdrop:AddAnchor("TOPLEFT", settingsWindow, 4, 34)
+        backdrop:AddAnchor("BOTTOMRIGHT", settingsWindow, -4, -4)
+    end
     
     settingsWindow:AddAnchor("CENTER", 'UIParent', 0, 0)
     settingsWindow:SetHandler("OnCloseByEsc", settingsWindowClose)
@@ -1957,6 +1987,9 @@ local function Unload()
         settingsWindow = nil
     end
     
+    -- Close icon search window if it's open
+    pcall(function() iconSearch.Unload() end)
+
     -- Close palette if it's open
     local F_ETC = require('CooldawnBuffTracker/util/etc')
     if F_ETC then

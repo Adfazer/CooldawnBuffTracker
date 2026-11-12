@@ -119,6 +119,22 @@ mount and target.
 
 ## Changelog
 
+### 1.9.0
+
+- **Icon search window** (button «Поиск иконки»): type a name and see live matches
+  with icon previews from the buff dump; click a row to put the icon into the
+  custom-buff form; a «Скан баффов» button rebuilds the dump in place.
+- **Dark theme** for the settings window: near-black backdrop, light labels,
+  gold accents (Power Ranger style).
+- **ESC menu integration**: a row «Cooldown Buff Tracker» is registered in the
+  ESCMenu addon (System/Addons column) when that addon is installed; the stock
+  Addon Manager now shows the Options button too (top-level `settings.enabled`).
+- `settings.enabled` acts as a master switch (the Addon Manager checkbox hides
+  and shows the HUD panels).
+- The buff dump is now written into the addon folder
+  (`CooldawnBuffTracker/buff_dump.tbl`); the Addon-root copy is read only as a
+  legacy fallback.
+
 ### 1.8.6
 
 - Removed the diagnostic buff-id probes from the scan — no per-skill ids or
@@ -287,7 +303,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.8.6
+**Current Version:** 1.9.0
 
 ## Credits
 
