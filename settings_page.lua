@@ -1085,22 +1085,14 @@ local function buildTrackedBuffsSection()
             buffIdLabel:Show(true)
             
             -- Buff name
-            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 75, 0, 14)
-            buffNameLabel:SetExtent(245, 20)
+            local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
+            buffNameLabel:SetExtent(290, 20)
             buffNameLabel:Show(true)
-
-            -- Edit: CD/D этой записи
-            local editButton = helpers.createButton('editBuffButton_' .. i, buffRow, 'Edit', 330, 0)
-            editButton:SetExtent(44, 20)
-            editButton:Show(true)
-            editButton:SetHandler("OnClick", function()
-                openCddDialog(buffId)
-            end)
 
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 378, 0)
-            upButton:SetExtent(36, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 380, 0)
+            upButton:SetExtent(40, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1126,8 +1118,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 418, 0)
-            downButton:SetExtent(44, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 425, 0)
+            downButton:SetExtent(45, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1153,8 +1145,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 466, 0)
-            removeButton:SetExtent(74, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 475, 0)
+            removeButton:SetExtent(70, 20)
             removeButton:Show(true)
             
             -- Remove button handler

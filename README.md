@@ -119,6 +119,12 @@ mount and target.
 
 ## Changelog
 
+### 1.15.3
+
+- Removed the Edit button from the tracked Buff list: CD/D are edited in the
+  Custom Buffs list only (one place, no duplicate entry points). Buff-list row
+  buttons are back to their wider positions.
+
 ### 1.15.2
 
 - Added the Edit (CD/D) button to the **Custom Buffs** list as well, next to
@@ -483,7 +489,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.15.2
+**Current Version:** 1.15.3
 
 ## Credits
 
