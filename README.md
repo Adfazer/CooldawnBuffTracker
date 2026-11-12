@@ -155,6 +155,12 @@ mount and target.
 
 ## Changelog
 
+### 1.21.3
+
+- Witchcraft buff **18475** (Exploitation) added as a stacking cooldown reduction:
+  **-10% per stack**, capped at 5 stacks, applied to Witchcraft skills while the buff
+  is on the target.
+
 ### 1.21.2
 
 - Occultism cooldown buff **7657** added as a flat **-12 s** modifier (flat seconds are
@@ -826,7 +832,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.2
+**Current Version:** 1.21.3
 
 ## Credits
 
