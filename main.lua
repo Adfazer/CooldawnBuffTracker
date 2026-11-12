@@ -80,7 +80,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.13.1"
+  version = "1.13.2"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -156,6 +156,22 @@ local function findCustomBuff(buffId)
   return nil
 end
 
+-- Поиск кастомного баффа по отображаемому имени/Spell (когда id не совпадает
+-- с buff_id ауры: пользователь мог задать ключом имя навыка)
+local function findCustomBuffByName(name)
+  if not name or name == "" then return nil end
+  local key = tostring(name):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  local s = settings or api.GetSettings("CooldawnBuffTracker") or {}
+  for _, cb in ipairs(s.customBuffs or {}) do
+    local n = cb.name or cb.spellName
+    if n and n ~= "" then
+      local k = tostring(n):lower():gsub("^%s+", ""):gsub("%s+$", "")
+      if k == key then return cb end
+    end
+  end
+  return nil
+end
+
 -- Пользовательские CD/D для обычного баффа (settings.buffOverrides)
 local function findBuffOverride(buffId)
   local s = settings or api.GetSettings("CooldawnBuffTracker") or {}
@@ -204,7 +220,7 @@ local function applyCustomBuffOverrides()
   local tables = { buffData, playerBuffData, targetBuffData }
   for _, tbl in pairs(tables) do
     for id, entry in pairs(tbl) do
-      local cb = findCustomBuff(id)
+      local cb = findCustomBuff(id) or findCustomBuffByName(entry.name)
       if cb then
         local cd = tonumber(cb.cooldown)
         if cd ~= nil and cd >= 0 then entry.cooldown = cd end
@@ -255,7 +271,7 @@ local function initBuffData()
     -- Добавляем новые баффы
     for _, buffId in ipairs(trackedBuffIds) do
       if not buffDataTable[buffId] then
-        local customCfg = findCustomBuff(buffId)
+        local customCfg = findCustomBuff(buffId) or findCustomBuffByName(BuffList.GetBuffName(buffId))
         local buffName, buffIcon, buffCooldown, buffTimeOfAction
         if customCfg then
           -- У кастомного баффа CD/D берём из его настроек (0 — допустимый CD)
@@ -320,7 +336,7 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   
   -- If buff doesn't exist in table, create it first (for tracked buffs)
   if not buffDataTable[buffId] then
-    local customCfg = findCustomBuff(buffId)
+    local customCfg = findCustomBuff(buffId) or findCustomBuffByName(BuffList.GetBuffName(buffId))
     local buffName, buffIcon, buffCooldown, buffTimeOfAction
     if customCfg then
       buffName = (customCfg.name and customCfg.name ~= "" and customCfg.name)
@@ -2434,6 +2450,17 @@ local function OnLoad()
   -- Загружаем ранее сохранённый дамп баффов (id -> name -> иконка)
   loadBuffDump()
   applyDumpToCustomBuffs()
+
+  -- Диагностика кастомных баффов: видно, чем они ключуются и какие CD/D у них
+  if settings and settings.debugBuffId then
+    for _, cb in ipairs(settings.customBuffs or {}) do
+      safeLog("[CBT] custom: id=" .. tostring(cb.id)
+        .. " name=" .. tostring(cb.name)
+        .. " spell=" .. tostring(cb.spellName)
+        .. " CD=" .. tostring(cb.cooldown)
+        .. " D=" .. tostring(cb.timeOfAction))
+    end
+  end
 
   -- Расширенное ESC-меню (аддон ESCMenu): своя строка настроек
   local function openFromEscMenu()

@@ -119,6 +119,16 @@ mount and target.
 
 ## Changelog
 
+### 1.13.2
+
+- Removed the per-row «CD/D» button and its dialog: CD/D are already set on the
+  custom-buff form, the duplicate control only confused.
+- Custom buffs are matched to auras by id **or by display name / spell name**, so
+  an entry keyed by name still contributes its CD/D to the panel entry. Before,
+  such entries fell through to the empty built-in table and used CD=30 / D=3
+  (the "addon shows more cooldown" case).
+- Debug: ON logs the custom buff list at load: `[CBT] custom: id=… name=… spell=… CD=… D=…`.
+
 ### 1.13.1
 
 - The CD/D editor is opened by a **button** in each tracked-buff row («CD/D»),
@@ -405,7 +415,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.13.1
+**Current Version:** 1.13.2
 
 ## Credits
 
