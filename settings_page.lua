@@ -561,11 +561,20 @@ local function addCustomBuff()
         id = spellName
     end
 
-    if isManaEntry and not timeOfAction then
-        timeOfAction = 0
-    end
-
-    if id == "" or name == "" or not cooldown or not timeOfAction then
+    -- Мана-запись: обязательны имя, стоимость маны, имя маунта и кулдаун.
+    -- ID/Spell/D/иконка — опциональны (ключом станет имя).
+    if isManaEntry then
+        if not timeOfAction then timeOfAction = 0 end
+        if id == "" then id = name end
+        if id == "" or name == "" or not cooldown or manaCost <= 0 or mountName == "" then
+            if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
+                settingsControls.addCustomBuffError:SetText(
+                    "Error: name, mana cost, mount name and cooldown are required")
+                settingsControls.customBuffErrorPanel:Show(true)
+            end
+            return
+        end
+    elseif id == "" or name == "" or not cooldown or not timeOfAction then
         if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
             settingsControls.addCustomBuffError:SetText("Error: All fields must be filled correctly")
             settingsControls.customBuffErrorPanel:Show(true)
@@ -1939,18 +1948,18 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     newCustomBuffMana:Show(true)
     settingsControls.newCustomBuffMana = newCustomBuffMana
 
-    local newCustomBuffMountLabel = helpers.createLabel('newCustomBuffMountLabel', customBuffInputsLabel, 'Mount:', 372, 90, 14)
+    local newCustomBuffMountLabel = helpers.createLabel('newCustomBuffMountLabel', customBuffInputsLabel, 'Mount:', 0, 118, 14)
     newCustomBuffMountLabel:SetWidth(52)
     newCustomBuffMountLabel:Show(true)
 
     local newCustomBuffMount = helpers.createEdit('newCustomBuffMount', newCustomBuffMountLabel, "", 56, 0)
-    newCustomBuffMount:SetWidth(136)
+    newCustomBuffMount:SetWidth(130)
     newCustomBuffMount:Show(true)
     settingsControls.newCustomBuffMount = newCustomBuffMount
 
     local manaSkillHint = helpers.createLabel('cbtManaSkillHint', customBuffInputsLabel,
-        'Mana skill: detected by mana spend (Mount list)', 268, 112, 11)
-    manaSkillHint:SetWidth(300)
+        'Mana skill: detected by mana spend', 200, 118, 11)
+    manaSkillHint:SetWidth(210)
     manaSkillHint.style:SetColor(0.55, 0.95, 0.55, 1)
     manaSkillHint:Show(false)
     settingsControls.manaSkillHint = manaSkillHint
@@ -1978,7 +1987,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     local customBuffErrorPanel = api.Interface:CreateWidget('window', 'customBuffErrorPanel', settingsWindow)
     customBuffErrorPanel:SetExtent(350, 25)
     customBuffErrorPanel:RemoveAllAnchors()
-    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 140)
+    customBuffErrorPanel:AddAnchor("TOPLEFT", customBuffInputsLabel, "BOTTOMLEFT", 0, 160)
     customBuffErrorPanel:Show(false)
     settingsControls.customBuffErrorPanel = customBuffErrorPanel
     

@@ -119,6 +119,16 @@ mount and target.
 
 ## Changelog
 
+### 1.18.2
+
+- Mana entries: only name, mana cost, mount name and cooldown are required; ID, Spell,
+  duration and icon are optional (the key falls back to the name).
+- Mount field moved to its own row so it no longer overlaps the icon-settings column.
+- Mana detection: mount name matched case-insensitively and as a substring of the pet
+  name; pet name falls back to GetUnitNameById when UnitName is nil; cost tolerance
+  widened to ±max(3, 20%). Debug «no match» now prints the pet name, blocked counters
+  and every tracked mana entry with its mount/ready state.
+
 ### 1.18.1
 
 - Mana regen uses a single estimate (no in-combat/out-of-combat split): one EMA value,
@@ -629,7 +639,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.18.1
+**Current Version:** 1.18.2
 
 ## Credits
 

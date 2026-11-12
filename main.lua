@@ -76,7 +76,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.18.1"
+  version = "1.18.2"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -2490,6 +2490,16 @@ local manaRegen = 0          -- единая оценка регена, мана
 local manaLastSpendTime = 0  -- время последней траты; реген оцениваем только через 5с после неё
 local manaTimer = 0          -- накопитель до 100 мс
 
+-- Имя текущего маунта: UnitName может быть nil, пробуем через id
+local function resolvePetName()
+  local name = api.Unit:UnitName("playerpet")
+  if not name or name == "" then
+    local id = api.Unit:GetUnitId("playerpet")
+    if id then name = api.Unit:GetUnitNameById(id) end
+  end
+  return name or ""
+end
+
 -- Записи-навыки маунта: у кастомной записи задан manaCost > 0
 local function getManaEntries()
   local out = {}
@@ -2557,16 +2567,23 @@ local function pollMountMana(dtSec)
     local spend = -delta + (regen or 0) * dt
     local entries = getManaEntries()
     if #entries > 0 then
-      local petName = api.Unit:UnitName("playerpet") or ""
+      local petName = resolvePetName()
+      local petKey = petName:lower()
       local best, bestDiff = nil, nil
+      local blockedByMount, blockedByCd = 0, 0
       for _, e in ipairs(entries) do
-        local mountOk = (e.mount == "" or e.mount == petName)
-        if mountOk and e.ready then
-          local tol = math.max(2, e.cost * 0.15)
-          local diff = math.abs(spend - e.cost)
-          if diff <= tol and (bestDiff == nil or diff < bestDiff) then
-            best, bestDiff = e, diff
-          end
+        local em = (e.mount or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+        -- пустое имя = любой маунт; если имя пета неизвестно — не блокируем
+        local mountOk = (em == "" or petKey == "" or em == petKey
+          or petKey:find(em, 1, true) ~= nil)
+        local tol = math.max(3, e.cost * 0.2)
+        local diff = math.abs(spend - e.cost)
+        if not mountOk then
+          blockedByMount = blockedByMount + 1
+        elseif not e.ready then
+          blockedByCd = blockedByCd + 1
+        elseif diff <= tol and (bestDiff == nil or diff < bestDiff) then
+          best, bestDiff = e, diff
         end
       end
       if best then
@@ -2577,7 +2594,13 @@ local function pollMountMana(dtSec)
             tostring(best.id), tostring(best.cost), spend, regen or 0, petName))
         end
       elseif settings.debugBuffId then
-        safeLog(string.format("[CBT] mana drop %.1f (regen %.1f) — no entry matched", spend, regen or 0))
+        local detail = {}
+        for _, e in ipairs(entries) do
+          detail[#detail + 1] = string.format("%s(mount=%s,ready=%s)",
+            tostring(e.cost), tostring(e.mount), tostring(e.ready))
+        end
+        safeLog(string.format("[CBT] mana drop %.1f (regen %.1f) — no match; pet='%s'; mount-blocked=%d cd-blocked=%d; entries: %s",
+          spend, regen or 0, petName, blockedByMount, blockedByCd, table.concat(detail, " | ")))
       end
     end
   end
