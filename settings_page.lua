@@ -893,7 +893,7 @@ local function buildTrackedBuffsSection()
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
 
     local trackedHint = helpers.createLabel('trackedBuffsHint', trackedBuffsGroupLabel,
-        'Клик по имени баффа — задать свои CD/D', 150, 14, 12)
+        'Кнопка CD/D у баффа — задать свои CD/D', 150, 14, 12)
     trackedHint:SetWidth(400)
     trackedHint.style:SetColor(0.70, 0.72, 0.78, 1)
     trackedHint:Show(true)
@@ -1007,19 +1007,22 @@ local function buildTrackedBuffsSection()
             buffIdLabel:SetExtent(70, 20)
             buffIdLabel:Show(true)
             
-            -- Buff name (клик — настройка CD/D для обычного баффа)
+            -- Buff name
             local buffNameLabel = helpers.createLabel('buffNameLabel_' .. i, buffRow, buffName, 80, 0, 14)
-            buffNameLabel:SetExtent(290, 20)
+            buffNameLabel:SetExtent(245, 20)
             buffNameLabel:Show(true)
-            if buffNameLabel.SetHandler then
-                buffNameLabel:SetHandler("OnClick", function()
-                    openBuffOverrideDialog(buffId)
-                end)
-            end
+
+            -- Кнопка настройки CD/D для этого баффа (кнопки кликаются надёжно)
+            local cdButton = helpers.createButton('buffCdButton_' .. i, buffRow, 'CD/D', 330, 0)
+            cdButton:SetExtent(56, 20)
+            cdButton:Show(true)
+            cdButton:SetHandler("OnClick", function()
+                openBuffOverrideDialog(buffId)
+            end)
             
             -- Up button
-            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 380, 0)
-            upButton:SetExtent(40, 20)
+            local upButton = helpers.createButton('upBuffButton_' .. i, buffRow, 'Up', 392, 0)
+            upButton:SetExtent(36, 20)
             upButton:Show(true)
             upButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "up", currentUnitType) then
@@ -1045,8 +1048,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Down button
-            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 425, 0)
-            downButton:SetExtent(45, 20)
+            local downButton = helpers.createButton('downBuffButton_' .. i, buffRow, 'Down', 432, 0)
+            downButton:SetExtent(44, 20)
             downButton:Show(true)
             downButton:SetHandler("OnClick", function()
                 if BuffsToTrack.MoveTrackedBuff(buffId, "down", currentUnitType) then
@@ -1072,8 +1075,8 @@ local function buildTrackedBuffsSection()
             end)
             
             -- Remove button
-            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 475, 0)
-            removeButton:SetExtent(70, 20)
+            local removeButton = helpers.createButton('removeBuffButton_' .. i, buffRow, 'Remove', 480, 0)
+            removeButton:SetExtent(72, 20)
             removeButton:Show(true)
             
             -- Remove button handler
@@ -2143,6 +2146,11 @@ local function Unload()
     
     -- Close icon search window if it's open
     pcall(function() iconSearch.Unload() end)
+
+    if overrideWindow then
+        pcall(function() api.Interface:Free(overrideWindow) end)
+        overrideWindow = nil
+    end
 
     -- Close palette if it's open
     local F_ETC = require('CooldawnBuffTracker/util/etc')

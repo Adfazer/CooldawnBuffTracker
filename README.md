@@ -119,6 +119,13 @@ mount and target.
 
 ## Changelog
 
+### 1.13.1
+
+- The CD/D editor is opened by a **button** in each tracked-buff row («CD/D»),
+  not by clicking the name label: labels created through `CreateWidget` inside an
+  addon-built row do not receive `OnClick` reliably, while buttons do (the same
+  proven widgets as Up/Down/Remove). Row buttons shifted to make room.
+
 ### 1.13.0
 
 - Regular (non-custom) tracked buffs can now take their own CD/D: **click the buff
@@ -398,7 +405,7 @@ mount and target.
 
 ## Version
 
-**Current Version:** 1.13.0
+**Current Version:** 1.13.1
 
 ## Credits
 
