@@ -8,6 +8,7 @@ local recordWindow = require('CooldawnBuffTracker/record_window')
 -- Load module for working with buffs
 local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
 local BuffList = require("CooldawnBuffTracker/buff_helper")
+local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
 
 -- Импортируем модуль для отображения пиксельного изображения
 local pixelViewer = require('CooldawnBuffTracker/util/pixel_viewer')
@@ -1057,7 +1058,7 @@ local function openCddDialog(buffId)
         pcall(function() CbtWindow.Destroy(cddWindow) end)
         cddWindow = nil
     end
-    local wnd = CbtWindow.Create("cbtCddWindow", "Entry: cooldown / duration", 520, 300, function()
+    local wnd = CbtWindow.Create("cbtCddWindow", "Entry: cooldown / duration", 640, 600, function()
         if cddWindow then cddWindow:Show(false) end
     end)
     if not wnd then return end
@@ -1078,7 +1079,7 @@ local function openCddDialog(buffId)
     if #titleText > 62 then titleText = titleText:sub(1, 59) .. "..." end
 
     local title = helpers.createLabel('cbtCddName', wnd, titleText, 15, 42, 14)
-    title:SetWidth(490)
+    title:SetWidth(610)
     title:Show(true)
 
     ---------------------------------------------------------------
@@ -1152,7 +1153,7 @@ local function openCddDialog(buffId)
     local iconPreview = CreateItemIconButton('cbtCddIconPreview', wnd)
     if iconPreview then
         iconPreview:SetExtent(28, 28)
-        iconPreview:AddAnchor("TOPLEFT", wnd, 470, 132)
+        iconPreview:AddAnchor("TOPLEFT", wnd, 590, 132)
         if iconPreview.RegisterForClicks then
             pcall(function() iconPreview:RegisterForClicks("LeftButton") end)
         end
@@ -1192,15 +1193,437 @@ local function openCddDialog(buffId)
     end
 
     local errorLabel = helpers.createLabel('cbtCddError', wnd, '', 15, 206, 13)
-    errorLabel:SetWidth(490)
+    errorLabel:SetWidth(610)
     pcall(function() errorLabel.style:SetColor(0.95, 0.45, 0.45, 1) end)
     errorLabel:Show(false)
 
     local hint = helpers.createLabel('cbtCddHint', wnd,
-        'Cooldown / Duration are seconds; 0 is valid. Icon is optional.', 15, 222, 12)
-    hint:SetWidth(490)
+        'Cooldown / Duration are seconds; 0 is valid. Icon is optional.', 15, 184, 12)
+    hint:SetWidth(610)
     pcall(function() hint.style:SetColor(0.72, 0.74, 0.80, 1) end)
     hint:Show(true)
+
+    ---------------------------------------------------------------
+    -- Effective CDs (1.28.0). Только цель: flat/percent/reset-моды,
+    -- стаки читаются из ауры цели, smart учится per target id.
+    ---------------------------------------------------------------
+    local EFF_MAX_ROWS = 6
+    local effChecked = (cb ~= nil and cb.effectiveCDs == true)
+    local effSectionAllowed = false
+    local mods = {}
+    if cb and type(cb.cdMods) == "table" then
+        for _, mod in ipairs(cb.cdMods) do
+            if type(mod) == "table" then
+                local copy = {}
+                for k, v in pairs(mod) do copy[k] = v end
+                mods[#mods + 1] = copy
+            end
+        end
+    end
+
+    local effWidgets = {}
+    local function effWidget(widget)
+        if widget then effWidgets[#effWidgets + 1] = widget end
+        return widget
+    end
+
+    local effCheck = nil
+    local effCheckLabel = nil
+    local smartEdit, smartStatus = nil, nil
+    local srcEdit, alwaysEdit = nil, nil
+    local refBase, refFlat, refPct, refEff, refPot = nil, nil, nil, nil, nil
+    local effRows, effRowSource, effRowType, effRowValue, effRowCond = {}, {}, {}, {}, {}
+
+    local renderEffRows
+    local refreshEffCard
+    local setEffVisible
+
+    local function showEffError(message)
+        errorLabel:SetText("Error: " .. message)
+        errorLabel:Show(true)
+    end
+
+    -- Разбор источника модификатора: custom entry по id/имени/Spell, затем число
+    -- (id), затем имя как есть (совпадение по имени ауры на цели).
+    local function resolveModSource(text)
+        text = trimText(text)
+        if text == "" then return nil, "enter a buff ID or name" end
+        local s = helpers.getSettings()
+        for _, item in ipairs(s and s.customBuffs or {}) do
+            if tostring(item.id) == text or item.name == text or item.spellName == text then
+                local name = item.name
+                if type(name) ~= "string" or name == "" then name = item.spellName end
+                if type(name) ~= "string" or name == "" then name = tostring(item.id) end
+                return { id = item.id, name = name }
+            end
+        end
+        local number = tonumber(text)
+        if number then
+            local name = BuffList.GetBuffName(number)
+            if type(name) ~= "string" or name == "" then name = text end
+            return { id = number, name = name }
+        end
+        return { id = nil, name = text }
+    end
+
+    setEffVisible = function(on)
+        for _, widget in ipairs(effWidgets) do
+            if widget then pcall(function() widget:Show(on and true or false) end) end
+        end
+        if on then
+            renderEffRows()
+            refreshEffCard()
+        end
+    end
+
+    renderEffRows = function()
+        local visible = effChecked and effSectionAllowed
+        for i = 1, EFF_MAX_ROWS do
+            local row = effRows[i]
+            if row then
+                local mod = mods[i]
+                if visible and mod then
+                    row:Show(true)
+                    local kind = mod.kind
+                    if kind ~= "flat" and kind ~= "percent" and kind ~= "reset" then
+                        kind = "flat"
+                        mod.kind = kind
+                    end
+                    local source = EffectiveCD.sourceLabel(mod, i)
+                    if #source > 36 then source = source:sub(1, 33) .. "..." end
+                    effRowSource[i]:SetText(source)
+                    effRowType[i]:SetText(kind == "flat" and "Flat"
+                        or (kind == "percent" and "Percent" or "Reset"))
+                    effRowCond[i]:SetText((mod.condition == "always") and "Always" or "On target")
+                    local edit = effRowValue[i]
+                    if kind == "reset" then
+                        edit:SetText("")
+                        edit:Show(false)
+                    else
+                        edit:Show(true)
+                        edit:SetText(tostring(tonumber(mod.value) or 0))
+                    end
+                else
+                    row:Show(false)
+                end
+            end
+        end
+        refreshEffCard()
+    end
+
+    refreshEffCard = function()
+        if not refBase then return end
+        local entry = {
+            id = (cb and cb.id) or key,
+            kind = editKind,
+            cooldown = tonumber(trimText(cdEdit:GetText())) or 0,
+            effectiveCDs = true,
+            smartPct = tonumber(trimText(smartEdit and smartEdit:GetText() or "")) or 0,
+            cdMods = {},
+        }
+        for i, mod in ipairs(mods) do
+            local copy = {}
+            for k, v in pairs(mod) do copy[k] = v end
+            local edit = effRowValue[i]
+            if edit and copy.kind ~= "reset" then
+                local value = tonumber(trimText(edit:GetText()))
+                if value then copy.value = value end
+            end
+            entry.cdMods[i] = copy
+        end
+
+        local preview = nil
+        if M.getEffectivePreview then
+            local ok, result = pcall(M.getEffectivePreview, entry)
+            if ok then preview = result end
+        end
+
+        local function num(value)
+            local n = tonumber(value) or 0
+            if math.abs(n - math.floor(n + 0.5)) < 0.05 then
+                return string.format("%.0f", n)
+            end
+            return string.format("%.1f", n)
+        end
+        local function delta(value, suffix)
+            local n = tonumber(value) or 0
+            if n == 0 then return "0" .. suffix end
+            return "-" .. num(n) .. suffix
+        end
+        local function sources(list)
+            local parts = {}
+            for _, item in ipairs(list or {}) do
+                local text = tostring(item.label or "?")
+                local stacks = tonumber(item.stacks) or 1
+                if stacks > 1 then text = text .. " x" .. num(stacks) end
+                parts[#parts + 1] = text
+            end
+            local text = table.concat(parts, ", ")
+            if #text > 84 then text = text:sub(1, 81) .. "..." end
+            return text
+        end
+
+        if not preview then
+            refBase:SetText("Base CD: -")
+            refFlat:SetText("Flat total: -")
+            refPct:SetText("Percent total: -")
+            refEff:SetText("Effective now: -")
+            refPot:SetText("Potential: -")
+            if smartStatus then smartStatus:SetText("Not learned") end
+            return
+        end
+
+        refBase:SetText("Base CD: " .. num(preview.base) .. " s")
+        local flatText = delta(preview.flat, " s")
+        if #preview.flatList > 0 then
+            flatText = flatText .. " (" .. sources(preview.flatList) .. ")"
+        end
+        refFlat:SetText("Flat total: " .. flatText)
+        local pctText = delta(preview.pct, "%")
+        if #preview.pctList > 0 then
+            pctText = pctText .. " (" .. sources(preview.pctList) .. ")"
+        end
+        refPct:SetText("Percent total: " .. pctText)
+        local effectiveText = num(preview.effective) .. " s"
+        if not preview.hasTarget then effectiveText = effectiveText .. " (no target)" end
+        refEff:SetText("Effective now: " .. effectiveText)
+        refPot:SetText("Potential: " .. num(preview.potential) .. " s")
+        if smartStatus then
+            if preview.learned then
+                smartStatus:SetText("Learned for this target (+" .. num(preview.smartPct) .. "%)")
+            else
+                smartStatus:SetText("Not learned")
+            end
+        end
+    end
+
+    if cb then
+        effCheck = CbtWindow.CheckButton("cbtCddEffCheck", wnd, function(checked)
+            effChecked = checked and true or false
+            setEffVisible(effChecked and effSectionAllowed)
+        end)
+        if effCheck then
+            effCheck:AddAnchor("TOPLEFT", wnd, 15, 231)
+            effCheck:SetChecked(effChecked)
+            effCheck:Show(true)
+        end
+
+        effCheckLabel = helpers.createLabel('cbtCddEffLabel', wnd, 'Effective CDs', 38, 229, 13)
+        effCheckLabel:SetWidth(112)
+        effCheckLabel:Show(true)
+
+        local note = helpers.createLabel('cbtCddEffNote', wnd,
+            'Target only. Stacks are read from the target\'s aura (1 if none).', 160, 230, 11)
+        note:SetWidth(470)
+        pcall(function() note.style:SetColor(0.72, 0.74, 0.80, 1) end)
+        effWidget(note)
+
+        local header = helpers.createLabel('cbtCddEffHeader', wnd, 'Modifiers', 15, 254, 14)
+        header:SetWidth(120)
+        effWidget(header)
+
+        local smartLabel = helpers.createLabel('cbtCddSmartLabel', wnd, 'Smart %:', 386, 256, 12)
+        smartLabel:SetWidth(52)
+        pcall(function() smartLabel.style:SetColor(0.72, 0.74, 0.80, 1) end)
+        effWidget(smartLabel)
+
+        smartEdit = helpers.createEdit('cbtCddSmart', wnd, tostring(tonumber(cb.smartPct) or 0), 440, 252)
+        smartEdit:SetWidth(44)
+        smartEdit:SetMaxTextLength(5)
+        smartEdit:Show(true)
+        effWidget(smartEdit)
+        smartEdit:SetHandler("OnEnterPressed", function(self)
+            if self and self.ClearFocus then self:ClearFocus() end
+            refreshEffCard()
+        end)
+
+        smartStatus = helpers.createLabel('cbtCddSmartStatus', wnd, 'Not learned', 490, 256, 11)
+        smartStatus:SetWidth(140)
+        pcall(function() smartStatus.style:SetColor(0.60, 0.62, 0.68, 1) end)
+        effWidget(smartStatus)
+
+        srcEdit = helpers.createEdit('cbtCddEffSource', wnd, '', 15, 276)
+        srcEdit:SetWidth(230)
+        srcEdit:SetMaxTextLength(60)
+        srcEdit:Show(true)
+        effWidget(srcEdit)
+
+        local addSourceBtn = helpers.createButton('cbtCddEffAdd', wnd, 'Add', 250, 276)
+        addSourceBtn:SetExtent(50, 20)
+        pcall(function() addSourceBtn.textLabel.style:SetFontSize(12) end)
+        addSourceBtn:Show(true)
+        effWidget(addSourceBtn)
+        addSourceBtn:SetHandler("OnClick", function()
+            local source, message = resolveModSource(srcEdit:GetText())
+            if not source then
+                showEffError(message or "invalid modifier source")
+                return
+            end
+            if #mods >= 64 then
+                showEffError("too many modifiers")
+                return
+            end
+            mods[#mods + 1] = {
+                id = source.id,
+                name = source.name,
+                kind = "flat",
+                value = 0,
+                condition = "target",
+            }
+            srcEdit:SetText("")
+            errorLabel:Show(false)
+            if effCheck and not effChecked then effCheck:SetChecked(true) end
+            effChecked = true
+            setEffVisible(true)
+        end)
+
+        local alwaysLabel = helpers.createLabel('cbtCddEffAlwaysLabel', wnd, 'Always:', 308, 278, 12)
+        alwaysLabel:SetWidth(50)
+        pcall(function() alwaysLabel.style:SetColor(0.72, 0.74, 0.80, 1) end)
+        effWidget(alwaysLabel)
+
+        alwaysEdit = helpers.createEdit('cbtCddEffAlways', wnd, '', 360, 276)
+        alwaysEdit:SetWidth(52)
+        alwaysEdit:SetMaxTextLength(6)
+        alwaysEdit:Show(true)
+        effWidget(alwaysEdit)
+
+        local addFlatBtn = helpers.createButton('cbtCddEffAddFlat', wnd, '+Flat', 418, 276)
+        addFlatBtn:SetExtent(62, 20)
+        pcall(function() addFlatBtn.textLabel.style:SetFontSize(12) end)
+        addFlatBtn:Show(true)
+        effWidget(addFlatBtn)
+
+        local addPercentBtn = helpers.createButton('cbtCddEffAddPercent', wnd, '+Percent', 484, 276)
+        addPercentBtn:SetExtent(78, 20)
+        pcall(function() addPercentBtn.textLabel.style:SetFontSize(12) end)
+        addPercentBtn:Show(true)
+        effWidget(addPercentBtn)
+
+        local function addUnconditional(kind)
+            local value = tonumber(trimText(alwaysEdit:GetText()))
+            if value == nil or value < 0 then
+                showEffError("always value must be a number >= 0")
+                return
+            end
+            if #mods >= 64 then
+                showEffError("too many modifiers")
+                return
+            end
+            mods[#mods + 1] = { kind = kind, value = value, condition = "always" }
+            alwaysEdit:SetText("")
+            errorLabel:Show(false)
+            if effCheck and not effChecked then effCheck:SetChecked(true) end
+            effChecked = true
+            setEffVisible(true)
+        end
+
+        addFlatBtn:SetHandler("OnClick", function() addUnconditional("flat") end)
+        addPercentBtn:SetHandler("OnClick", function() addUnconditional("percent") end)
+
+        local columnSpecs = {
+            { text = 'Source', x = 21, w = 120 },
+            { text = 'Type', x = 259, w = 60 },
+            { text = 'Value', x = 333, w = 50 },
+            { text = 'Condition', x = 393, w = 90 },
+        }
+        for index, spec in ipairs(columnSpecs) do
+            local label = helpers.createLabel('cbtCddEffCol' .. index, wnd, spec.text, spec.x, 300, 11)
+            label:SetWidth(spec.w)
+            pcall(function() label.style:SetColor(0.60, 0.62, 0.68, 1) end)
+            effWidget(label)
+        end
+
+        for i = 1, EFF_MAX_ROWS do
+            local row = wnd:CreateChildWidget("emptywidget", "cbtCddEffRow" .. i, 0, false)
+            row:SetExtent(610, 22)
+            row:AddAnchor("TOPLEFT", wnd, 15, 322 + (i - 1) * 22)
+            local rowBg = row:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
+            rowBg:AddAnchor("TOPLEFT", row, 0, 0)
+            rowBg:AddAnchor("BOTTOMRIGHT", row, 0, 0)
+
+            effRowSource[i] = helpers.createLabel('cbtCddEffSrc' .. i, row, '', 6, 1, 12)
+            effRowSource[i]:SetExtent(232, 20)
+            effRowType[i] = helpers.createButton('cbtCddEffType' .. i, row, 'Flat', 244, 1)
+            effRowType[i]:SetExtent(68, 20)
+            pcall(function() effRowType[i].textLabel.style:SetFontSize(12) end)
+            effRowValue[i] = helpers.createEdit('cbtCddEffValue' .. i, row, '', 318, 1)
+            effRowValue[i]:SetExtent(54, 18)
+            effRowValue[i]:SetMaxTextLength(6)
+            effRowCond[i] = helpers.createButton('cbtCddEffCond' .. i, row, 'On target', 378, 1)
+            effRowCond[i]:SetExtent(92, 20)
+            pcall(function() effRowCond[i].textLabel.style:SetFontSize(12) end)
+            local removeBtn = helpers.createButton('cbtCddEffDel' .. i, row, 'Remove', 476, 1)
+            removeBtn:SetExtent(56, 20)
+            pcall(function() removeBtn.textLabel.style:SetFontSize(12) end)
+
+            effRowType[i]:SetHandler("OnClick", function()
+                local mod = mods[i]
+                if not mod then return end
+                if mod.kind == "flat" then
+                    mod.kind = "percent"
+                elseif mod.kind == "percent" then
+                    mod.kind = "reset"
+                    mod.value = nil
+                else
+                    mod.kind = "flat"
+                    if tonumber(mod.value) == nil then mod.value = 0 end
+                end
+                renderEffRows()
+            end)
+            effRowCond[i]:SetHandler("OnClick", function()
+                local mod = mods[i]
+                if not mod then return end
+                mod.condition = (mod.condition == "always") and "target" or "always"
+                renderEffRows()
+            end)
+            removeBtn:SetHandler("OnClick", function()
+                if not mods[i] then return end
+                table.remove(mods, i)
+                renderEffRows()
+            end)
+            effRowValue[i]:SetHandler("OnEnterPressed", function(self)
+                if self and self.ClearFocus then self:ClearFocus() end
+                local mod = mods[i]
+                local value = tonumber(trimText(self:GetText()))
+                if mod and value then mod.value = value end
+                refreshEffCard()
+            end)
+
+            row:Show(false)
+            effWidget(row)
+            effRows[i] = row
+        end
+
+        local panel = wnd:CreateChildWidget("emptywidget", "cbtCddRefPanel", 0, false)
+        panel:SetExtent(610, 108)
+        panel:AddAnchor("TOPLEFT", wnd, 15, 456)
+        local panelBg = panel:CreateColorDrawable(0.10, 0.11, 0.13, 0.96, "background")
+        panelBg:AddAnchor("TOPLEFT", panel, 0, 0)
+        panelBg:AddAnchor("BOTTOMRIGHT", panel, 0, 0)
+        effWidget(panel)
+
+        local refHeader = helpers.createLabel('cbtCddRefHeader', panel, 'Reference', 10, 2, 13)
+        refHeader:SetWidth(120)
+
+        refBase = helpers.createLabel('cbtCddRefBase', panel, 'Base CD: -', 10, 20, 12)
+        refBase:SetWidth(580)
+        refFlat = helpers.createLabel('cbtCddRefFlat', panel, 'Flat total: -', 10, 36, 12)
+        refFlat:SetWidth(580)
+        refPct = helpers.createLabel('cbtCddRefPct', panel, 'Percent total: -', 10, 52, 12)
+        refPct:SetWidth(580)
+        refEff = helpers.createLabel('cbtCddRefEff', panel, 'Effective now: -', 10, 68, 13)
+        refEff:SetWidth(580)
+        pcall(function() refEff.style:SetColor(0.92, 0.93, 0.96, 1) end)
+        refPot = helpers.createLabel('cbtCddRefPot', panel, 'Potential: -', 10, 86, 12)
+        refPot:SetWidth(580)
+        pcall(function() refPot.style:SetColor(0.55, 0.57, 0.62, 1) end)
+
+        cdEdit:SetHandler("OnEnterPressed", function(self)
+            if self and self.ClearFocus then self:ClearFocus() end
+            refreshEffCard()
+        end)
+    end
 
     applyType = function(kind)
         editKind = kind
@@ -1257,6 +1680,11 @@ local function openCddDialog(buffId)
             end
         end
         errorLabel:Show(false)
+        -- Effective CDs: только для buff/debuff и skill; mana-навык фичу не поддерживает
+        effSectionAllowed = (cb ~= nil) and (kind ~= 'mana')
+        if effCheck then effCheck:Show(effSectionAllowed) end
+        if effCheckLabel then effCheckLabel:Show(effSectionAllowed) end
+        setEffVisible(effSectionAllowed and effChecked)
         refreshEditIcon()
     end
 
@@ -1277,10 +1705,26 @@ local function openCddDialog(buffId)
             if trimText(mountEdit:GetText()) == "" then return "Mount name is required" end
             if trimText(nameEdit:GetText()) == "" then return "Name is required" end
         end
+        -- Effective CD modifiers: значение обязательно только у включённой фичи
+        if cb and kind ~= "mana" and effChecked then
+            for i, mod in ipairs(mods) do
+                if mod.kind ~= "reset" then
+                    local edit = effRowValue[i]
+                    local value = tonumber(trimText(edit and edit:GetText() or tostring(mod.value or "")))
+                    if value == nil or value < 0 then
+                        return "modifier " .. tostring(i) .. ": value must be a number >= 0"
+                    end
+                end
+            end
+            local smart = tonumber(trimText(smartEdit and smartEdit:GetText() or ""))
+            if smart == nil or smart < 0 or smart > 100 then
+                return "Smart reduction % must be a number 0..100"
+            end
+        end
         return nil
     end
 
-    local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 250)
+    local saveBtn = helpers.createButton('cbtCddSave', wnd, 'Save', 15, 570)
     saveBtn:SetExtent(120, 26)
     saveBtn:Show(true)
     saveBtn:SetHandler("OnClick", function()
@@ -1340,6 +1784,38 @@ local function openCddDialog(buffId)
             end
             cb.iconFile = iconPath or DEFAULT_ENTRY_ICON
 
+            -- Effective CDs (1.28.0): флаг, smart % и список модификаторов.
+            -- Мана-навык фичу не поддерживает — флаг снимаем.
+            if editKind ~= "mana" then
+                cb.effectiveCDs = effChecked and true or false
+                local smart = tonumber(trimText(smartEdit and smartEdit:GetText() or "")) or 0
+                if smart < 0 then smart = 0 end
+                if smart > 100 then smart = 100 end
+                cb.smartPct = smart
+                local list = {}
+                for i, mod in ipairs(mods) do
+                    local kind = mod.kind
+                    if kind ~= "percent" and kind ~= "reset" then kind = "flat" end
+                    local item = {
+                        kind = kind,
+                        condition = (mod.condition == "always") and "always" or "target",
+                    }
+                    if kind ~= "reset" then
+                        local edit = effRowValue[i]
+                        local value = tonumber(trimText(edit and edit:GetText() or ""))
+                        if value == nil then value = tonumber(mod.value) or 0 end
+                        if value < 0 then value = 0 end
+                        item.value = value
+                    end
+                    if mod.id ~= nil and tostring(mod.id) ~= "" then item.id = mod.id end
+                    if type(mod.name) == "string" and mod.name ~= "" then item.name = mod.name end
+                    list[#list + 1] = item
+                end
+                cb.cdMods = list
+            else
+                cb.effectiveCDs = false
+            end
+
             -- Mirror допустим только для баффов/дебаффов: снимаем флаг у всех юнитов
             if editKind ~= "buff" then
                 for _, ut in ipairs({ "playerpet", "player", "target" }) do
@@ -1371,7 +1847,7 @@ local function openCddDialog(buffId)
         wnd:Show(false)
     end)
 
-    local cancelBtn = helpers.createButton('cbtCddCancel', wnd, 'Cancel', 145, 250)
+    local cancelBtn = helpers.createButton('cbtCddCancel', wnd, 'Cancel', 145, 570)
     cancelBtn:SetExtent(100, 26)
     cancelBtn:Show(true)
     cancelBtn:SetHandler("OnClick", function() wnd:Show(false) end)

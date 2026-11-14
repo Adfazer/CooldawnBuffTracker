@@ -4,6 +4,7 @@ local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
 local helpers = require("CooldawnBuffTracker/helpers")
 local settingsPage = require("CooldawnBuffTracker/settings_page")
 local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
+local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
@@ -74,7 +75,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.27.0"
+  version = "1.28.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -341,7 +342,7 @@ local function initBuffData()
   applyCustomBuffOverrides()
 end
 
-local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime, anchorTime)
+local function setBuffStatus(buffId, status, currentTime, unitType, remainingTime, anchorTime, cdOverride)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
 
   local buffDataTable
@@ -403,7 +404,14 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   buff.status = status
 
   local timeOfAction = tonumber(buff.timeOfAction) or 0
-  local cdUsed = tonumber(buff.cooldown) or 0
+  local cdUsed = tonumber(cdOverride)
+  if cdUsed == nil then cdUsed = tonumber(buff.cooldown) or 0 end
+  if cdUsed < 0 then cdUsed = 0 end
+  if cdOverride ~= nil then
+    -- Эффективный КД (1.28.0) живёт рядом с настроенным: cooldown остаётся
+    -- базовым для отображения, readyAt считается от эффективного.
+    buff.effCD = cdUsed
+  end
 
   if status == "active" then
     if anchorTime then
@@ -479,6 +487,222 @@ local function checkBuffStatus(buff, currentTime)
   else
     return "ready"
   end
+end
+
+-- ===== Эффективные КД цели (1.28.0) =====
+-- Модификаторы (flat / percent / reset) задаёт пользователь в Edit окне записи;
+-- работают ТОЛЬКО на панели Target и только у записей с effectiveCDs = true.
+-- Состояние smart и класс цели хранятся СТРОГО per target id в targetCache:
+-- смена класса сбрасывает smart того же id (респек ветвей), переход на другую
+-- цель ничего не чистит — у прежней цели её smart живёт до истечения кэша.
+
+local function ensureTargetCacheEntry(targetId)
+  if targetId == nil then return nil end
+  local cache = targetCache[targetId]
+  if not cache then
+    cache = { lastSeen = getCurrentTime(), buffStates = {} }
+    targetCache[targetId] = cache
+  end
+  if type(cache.smart) ~= "table" then cache.smart = {} end
+  return cache
+end
+
+-- Снимок аур текущей цели: id -> { stack = n }. id — строка (как в targetBuffData).
+-- Нужен на момент применения записи и для reset-модификаторов.
+local function readTargetAuras()
+  local okId, unitId = pcall(function() return api.Unit:GetUnitId("target") end)
+  if not okId or unitId == nil then return nil end
+  local snapshot = {}
+  local okBuff, buffCount = pcall(function() return api.Unit:UnitBuffCount("target") end)
+  if okBuff and type(buffCount) == "number" then
+    for i = 1, buffCount do
+      local buff = api.Unit:UnitBuff("target", i)
+      if buff and buff.buff_id then
+        local id = helpers.formatBuffId(buff.buff_id)
+        snapshot[tostring(id)] = { stack = buff.stack }
+      end
+    end
+  end
+  local okDebuff, debuffCount = pcall(function() return api.Unit:UnitDeBuffCount("target") end)
+  if okDebuff and type(debuffCount) == "number" then
+    for i = 1, debuffCount do
+      local debuff = api.Unit:UnitDeBuff("target", i)
+      if debuff and debuff.buff_id then
+        local id = helpers.formatBuffId(debuff.buff_id)
+        snapshot[tostring(id)] = { stack = debuff.stack }
+      end
+    end
+  end
+  return snapshot
+end
+
+-- Есть ли хоть одна запись с эффективными КД: без неё ауры цели лишний раз
+-- не читаем и ничего не считаем.
+local function targetUsesEffective()
+  for _, cb in ipairs((settings and settings.customBuffs) or {}) do
+    if EffectiveCD.isEnabled(cb) then return true end
+  end
+  return false
+end
+
+local function effectiveEntryFor(buffId)
+  local cb = findCustomBuff(buffId)
+  if not cb and targetUsesEffective() then
+    local name = BuffList.GetBuffName(buffId)
+    if type(name) == "string" and name ~= "" then
+      cb = findCustomBuffByName(name)
+    end
+  end
+  if cb and EffectiveCD.isEnabled(cb) then return cb end
+  return nil
+end
+
+local function smartStateFor(targetId, entryKey, create)
+  if targetId == nil or entryKey == nil then return nil end
+  local cache = targetCache[targetId]
+  if not cache and not create then return nil end
+  cache = ensureTargetCacheEntry(targetId)
+  if not cache then return nil end
+  local state = cache.smart[entryKey]
+  if not state and create then
+    state = { learned = false, paused = false }
+    cache.smart[entryKey] = state
+  end
+  return state
+end
+
+-- Момент применения записи: сначала проверяем раннее повторное применение
+-- (факт < прогноз * 0.95), затем считаем эффективный КД по снимку аур цели.
+-- Reset-пауза: интервал через reset не считается доказательством, пауза
+-- снимается на следующем применении.
+local function applyEffectiveCD(cb, snapshot, now, targetId)
+  if not cb or not EffectiveCD.isEnabled(cb) or targetId == nil then return nil end
+  local key = tostring(cb.id)
+  local state = smartStateFor(targetId, key, true)
+  local smartPct = tonumber(cb.smartPct) or 0
+  if smartPct < 0 then smartPct = 0 end
+
+  if state.paused then
+    state.paused = false
+  elseif not state.learned and smartPct > 0 and state.lastApply ~= nil and state.predicted ~= nil then
+    local actual = (tonumber(now) or 0) - (tonumber(state.lastApply) or 0)
+    local predicted = tonumber(state.predicted) or 0
+    if actual > 0 and predicted > 0 and actual < predicted * 0.95 then
+      state.learned = true
+      safeLog(string.format(
+        "[CBT] effective CD: smart %.1f%% learned for %s on target %s (applied after %.2f s < %.2f s)",
+        smartPct, key, tostring(targetId), actual, predicted * 0.95))
+    end
+  end
+
+  local eval = EffectiveCD.evaluate(cb, snapshot, { learned = state.learned, smartPct = smartPct })
+  state.lastApply = now
+  state.predicted = eval.effective
+  return eval.effective, eval
+end
+
+-- Класс цели читается только у текущей цели (другого API нет). Пишем его в
+-- кэш ИМЕННО этого id; смена класса сбрасывает smart только этого id.
+local targetClassCheckedAt = 0
+local function maybeCheckTargetClass(targetId, now)
+  if targetId == nil then return end
+  if (now - targetClassCheckedAt) < 1.0 then return end
+  targetClassCheckedAt = now
+  local ok, className = pcall(function() return api.Ability:GetUnitClassName("target") end)
+  if not ok or type(className) ~= "string" or className == "" then return end
+  local cache = ensureTargetCacheEntry(targetId)
+  if not cache then return end
+  local prev = cache.className
+  local knownPrev = (type(prev) == "string" and prev ~= "" and prev ~= "Pending") or false
+  local knownNow = (className ~= "Pending")
+  if knownPrev and knownNow and className ~= prev then
+    cache.smart = {}
+    safeLog("[CBT] effective CD: target " .. tostring(targetId) .. " class "
+      .. tostring(prev) .. " -> " .. className .. ", smart reset for this target")
+  end
+  if knownNow or not knownPrev then
+    cache.className = className
+  end
+end
+
+local function resetModKey(cb, modIndex)
+  return tostring(cb.id) .. "|" .. tostring(modIndex)
+end
+
+-- Reset-модификаторы: появление их баффа на цели обнуляет таймер записи
+-- (активная фаза кончается, навык готов) и ставит smart на паузу.
+-- Первый опрос после взятия цели/восстановления кэша только запоминает уже
+-- висящие баффы — «появлением» они не считаются.
+local function processTargetResets(snapshot, now, records, targetId)
+  if snapshot == nil or targetId == nil then return false end
+  local cache = ensureTargetCacheEntry(targetId)
+  if not cache then return false end
+  local seeding = (type(cache.resetSeen) ~= "table")
+  local seen = cache.resetSeen or {}
+  local nextSeen = {}
+  local changed = false
+
+  for buffId, rec in pairs(records or {}) do
+    local cb = effectiveEntryFor(buffId)
+    if cb and EffectiveCD.hasReset(cb) then
+      for modIndex, mod in ipairs(EffectiveCD.mods(cb)) do
+        if mod.kind == "reset" then
+          local aura = EffectiveCD.findAura(mod, snapshot)
+          if aura then
+            local key = resetModKey(cb, modIndex)
+            nextSeen[key] = true
+            if not seeding and not seen[key] then
+              local state = smartStateFor(targetId, tostring(cb.id), true)
+              if state then state.paused = true end
+              if rec and rec.fixedTime then
+                rec.readyAt = now
+                rec.activeUntil = now
+                rec.status = "ready"
+                rec.statusChangeTime = now
+                rec.effCD = 0
+                changed = true
+              end
+              safeLog("[CBT] effective CD: reset '" .. EffectiveCD.sourceLabel(mod, modIndex)
+                .. "' zeroed " .. tostring(cb.id) .. " on target " .. tostring(targetId))
+            end
+          end
+        end
+      end
+    end
+  end
+
+  cache.resetSeen = nextSeen
+  return changed
+end
+
+-- Данные для карточки Reference в Edit окне: текущая цель, активные условия,
+-- smart этой цели. entry — рабочая копия записи из окна настроек.
+local function getEffectivePreview(entry)
+  if not EffectiveCD.isEnabled(entry) then return nil end
+  local targetId = currentTargetId
+  local snapshot = nil
+  if targetId ~= nil then
+    local ok, liveId = pcall(function() return api.Unit:GetUnitId("target") end)
+    if ok and liveId ~= nil and tostring(liveId) == tostring(targetId) then
+      snapshot = readTargetAuras()
+    end
+  end
+  local state = nil
+  if targetId ~= nil and entry.id ~= nil then
+    state = smartStateFor(targetId, tostring(entry.id), false)
+  end
+  local learned = state and state.learned or false
+  local paused = state and state.paused or false
+  local smartPct = tonumber(entry.smartPct) or 0
+  local eval = EffectiveCD.evaluate(entry, snapshot, {
+    learned = learned and not paused,
+    potentialLearned = learned,
+    smartPct = smartPct,
+  })
+  eval.learned = learned and smartPct > 0
+  eval.paused = paused
+  eval.hasTarget = (snapshot ~= nil)
+  return eval
 end
 
 -- ===== Триггеры навыков по боевому логу (враг ударил -> КД его навыка) =====
@@ -566,11 +790,23 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
   if now - startedAt >= cd then return end
 
   local cdUsed = cd
+  local effCD = nil
+  -- Эффективный КД навыка (1.28.0): момент применения — каст навыка целью.
+  -- Снимок аур читаем только у текущей цели (другой юнит API не отдаёт).
+  if cb and helpers.entryKind(cb) == "skill" and EffectiveCD.isEnabled(cb) then
+    local snapshot = nil
+    if currentTargetId ~= nil and tostring(currentTargetId) == tostring(sourceId) then
+      snapshot = readTargetAuras()
+    end
+    effCD = applyEffectiveCD(cb, snapshot, startedAt, sourceId)
+    if effCD ~= nil then cdUsed = effCD end
+  end
 
   local rec = {
     fixedTime = startedAt,
     activeUntil = startedAt + toa,
     readyAt = startedAt + cdUsed,
+    effCD = effCD,
     synthetic = true,   -- нет ауры: пропажа не должна обрывать активную фазу
     status = "active",
     missingCount = 0,
@@ -580,7 +816,7 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
     icon = BuffList.GetBuffIcon(buffId)
   }
 
-  local cache = targetCache[sourceId]
+  local cache = ensureTargetCacheEntry(sourceId)
   if not cache then
     cache = { lastSeen = now, buffStates = {} }
     targetCache[sourceId] = cache
@@ -603,6 +839,7 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
       fixedTime = startedAt,
       activeUntil = startedAt + toa,
       readyAt = startedAt + cdUsed,
+      effCD = effCD,
       synthetic = true,
       status = "active"
     }
@@ -1189,8 +1426,8 @@ local function createPanelCanvas(windowId, unitType, canvasIndex)
 end
 
 -- Function to cleanup old target cache entries
-local function cleanupTargetCache()
-  local currentTime = getCurrentTime()
+local function cleanupTargetCache(now)
+  local currentTime = tonumber(now) or getCurrentTime()
   local cacheTimeout = settings.target and settings.target.cacheTimeout or 300 -- Default 5 minutes
 
   local keysToRemove = {}
@@ -2352,6 +2589,8 @@ local function checkBuffs(unitType)
   local unitSettings = settings[unitType]
   local buffDataTable
   local hasCanvases = #(unitCanvases[unitType] or {}) > 0
+  -- Снимок аур цели для эффективных КД (1.28.0); заполняется только для target.
+  local effectiveSnapshot = nil
 
   if unitType == "target" then
     -- Special handling for target with caching logic
@@ -2411,6 +2650,7 @@ local function checkBuffs(unitType)
             fixedTime = buffInfo.fixedTime,
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
+            effCD = buffInfo.effCD,
             synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
@@ -2434,33 +2674,38 @@ local function checkBuffs(unitType)
       learnUnitName(newTargetId)
 
       -- Initialize or restore cache entry for new target
-      if not targetCache[newTargetId] then
-        targetCache[newTargetId] = {
-          lastSeen = currentTime,
-          buffStates = {}
+      local newCache = ensureTargetCacheEntry(newTargetId)
+      if not newCache then
+        newCache = { lastSeen = currentTime, buffStates = {} }
+        targetCache[newTargetId] = newCache
+      end
+      -- Restore buff data from cache
+      for buffId, cachedBuff in pairs(newCache.buffStates) do
+        targetBuffData[buffId] = {
+          name = cachedBuff.name,
+          icon = cachedBuff.icon,
+          cooldown = cachedBuff.cooldown,
+          timeOfAction = cachedBuff.timeOfAction,
+          fixedTime = cachedBuff.fixedTime,
+          activeUntil = cachedBuff.activeUntil,
+          readyAt = cachedBuff.readyAt,
+          effCD = cachedBuff.effCD,
+          synthetic = cachedBuff.synthetic,
+          missingCount = 0,
+          status = cachedBuff.status
         }
-      else
-        -- Restore buff data from cache
-        for buffId, cachedBuff in pairs(targetCache[newTargetId].buffStates) do
-          targetBuffData[buffId] = {
-            name = cachedBuff.name,
-            icon = cachedBuff.icon,
-            cooldown = cachedBuff.cooldown,
-            timeOfAction = cachedBuff.timeOfAction,
-            fixedTime = cachedBuff.fixedTime,
-            activeUntil = cachedBuff.activeUntil,
-            readyAt = cachedBuff.readyAt,
-            synthetic = cachedBuff.synthetic,
-            missingCount = 0,
-            status = cachedBuff.status
-          }
-          -- Recalculate status based on current time
-          if cachedBuff.fixedTime then
-            local expectedStatus = checkBuffStatus(targetBuffData[buffId], currentTime)
-            targetBuffData[buffId].status = expectedStatus
-          end
+        -- Recalculate status based on current time
+        if cachedBuff.fixedTime then
+          local expectedStatus = checkBuffStatus(targetBuffData[buffId], currentTime)
+          targetBuffData[buffId].status = expectedStatus
         end
       end
+
+      -- Класс новой цели читаем сразу, не дожидаясь троттлинга
+      targetClassCheckedAt = 0
+      -- Reset-моды на цели: первый опрос после возврата к этой цели снова
+      -- только запоминает уже висящие баффы (появлением они не считаются).
+      newCache.resetSeen = nil
     else
       -- Same target, update lastSeen and save to display cache
       lastDisplayedTargetId = newTargetId
@@ -2470,6 +2715,15 @@ local function checkBuffs(unitType)
     -- Update lastSeen for current target
     if targetCache[currentTargetId] then
       targetCache[currentTargetId].lastSeen = currentTime
+    end
+
+    -- Эффективные КД: снимок аур текущей цели и класс ИМЕННО этого id.
+    -- Без включённых записей ауры лишний раз не читаем.
+    if targetUsesEffective() then
+      effectiveSnapshot = readTargetAuras()
+      if effectiveSnapshot then
+        maybeCheckTargetClass(currentTargetId, currentTime)
+      end
     end
 
     -- Update cached display data with current targetBuffData
@@ -2512,10 +2766,16 @@ local function checkBuffs(unitType)
   local activeBuffsOnUnit = {}
   local hasChanges = false
   local currentBuffsOnUnit = {}
-  -- Все ауры цели за этот тик: нужны эффективным КД (Battle Focus, 9000610,
+  -- Все ауры цели за этот тик: нужны эффективным КД (flat/percent-моды,
   -- стаки, reset-проки), в том числе для навыков, которые не отслеживаются.
   local auraNow = nil
-  if unitType == "target" then auraNow = {} end
+  if unitType == "target" then auraNow = effectiveSnapshot or {} end
+  -- Reset-модификаторы: появление их баффа на цели обнуляет таймер записи.
+  if effectiveSnapshot then
+    if processTargetResets(effectiveSnapshot, getCurrentTime(), targetBuffData, currentTargetId) then
+      hasChanges = true
+    end
+  end
 
   -- Проверяем активные баффы на юните
   local buffCountRaw = api.Unit:UnitBuffCount(unitType)
@@ -2558,12 +2818,20 @@ local function checkBuffs(unitType)
           and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
         if (isNewBuff or refreshed) and not triggeredAnchor then
+          -- Эффективный КД (1.28.0): момент применения баффа — появление ауры.
+          local effCD = nil
+          if effectiveSnapshot then
+            local effEntry = effectiveEntryFor(buff.buff_id)
+            if effEntry then
+              effCD = applyEffectiveCD(effEntry, effectiveSnapshot, now, currentTargetId)
+            end
+          end
           if anchorNow then
             -- Якорь — момент обнаружения: кулдаун после диспела отсчитывается от
             -- применения, а не от настроенной длительности
-            setBuffStatus(buff.buff_id, "active", now, unitType, nil)
+            setBuffStatus(buff.buff_id, "active", now, unitType, nil, nil, effCD)
           else
-            setBuffStatus(buff.buff_id, "active", now, unitType, remaining)
+            setBuffStatus(buff.buff_id, "active", now, unitType, remaining, nil, effCD)
           end
           hasChanges = true
 
@@ -2576,6 +2844,21 @@ local function checkBuffs(unitType)
               targetActiveBuffs[currentTargetId] = {}
             end
             targetActiveBuffs[currentTargetId][buff.buff_id] = true
+          end
+        elseif (isNewBuff or refreshed) and triggeredAnchor and effectiveSnapshot then
+          -- Синтетическую запись уже запустил боевой лог; для баффа/дебаффа момент
+          -- применения — появление ауры. Навык считается по касту, второй раз
+          -- smart-интервал не трогаем (иначе аура сразу после каста = «рано»).
+          local effEntry = effectiveEntryFor(buff.buff_id)
+          local rec = buffDataTable[buff.buff_id]
+          if effEntry and helpers.entryKind(effEntry) ~= "skill"
+            and rec and rec.fixedTime then
+            local effCD = applyEffectiveCD(effEntry, effectiveSnapshot, now, currentTargetId)
+            if effCD ~= nil then
+              rec.effCD = effCD
+              rec.readyAt = rec.fixedTime + effCD
+              hasChanges = true
+            end
           end
         end
 
@@ -2622,12 +2905,20 @@ local function checkBuffs(unitType)
             and (now - entry.fixedTime) < ((tonumber(entry.timeOfAction) or 0) + 5)
 
           if (isNewDebuff or refreshed) and not triggeredAnchor then
+            -- Эффективный КД (1.28.0): момент применения дебаффа — появление ауры.
+            local effCD = nil
+            if effectiveSnapshot then
+              local effEntry = effectiveEntryFor(debuff.buff_id)
+              if effEntry then
+                effCD = applyEffectiveCD(effEntry, effectiveSnapshot, now, currentTargetId)
+              end
+            end
             if anchorNow then
               -- Якорь — момент обнаружения (кулдаун от применения, не от длительности)
-              setBuffStatus(debuff.buff_id, "active", now, unitType, nil)
+              setBuffStatus(debuff.buff_id, "active", now, unitType, nil, nil, effCD)
             else
               -- Дебафф уже висел до того, как мы его увидели — оцениваем старт по остатку
-              setBuffStatus(debuff.buff_id, "active", now, unitType, remaining)
+              setBuffStatus(debuff.buff_id, "active", now, unitType, remaining, nil, effCD)
             end
             hasChanges = true
 
@@ -2640,6 +2931,18 @@ local function checkBuffs(unitType)
                 targetActiveBuffs[currentTargetId] = {}
               end
               targetActiveBuffs[currentTargetId][debuff.buff_id] = true
+            end
+          elseif (isNewDebuff or refreshed) and triggeredAnchor and effectiveSnapshot then
+            local effEntry = effectiveEntryFor(debuff.buff_id)
+            local rec = buffDataTable[debuff.buff_id]
+            if effEntry and helpers.entryKind(effEntry) ~= "skill"
+              and rec and rec.fixedTime then
+              local effCD = applyEffectiveCD(effEntry, effectiveSnapshot, now, currentTargetId)
+              if effCD ~= nil then
+                rec.effCD = effCD
+                rec.readyAt = rec.fixedTime + effCD
+                hasChanges = true
+              end
             end
           end
 
@@ -2833,6 +3136,7 @@ local function checkBuffs(unitType)
             fixedTime = buffInfo.fixedTime,
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
+            effCD = buffInfo.effCD,
             synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
@@ -3262,6 +3566,8 @@ if settingsPage then
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
   settingsPage.findIconByName = findIconByName
+  -- 1.28.0: карточка Reference в Edit окне считает значения на живой цели
+  settingsPage.getEffectivePreview = getEffectivePreview
 end
 
 local function processBuffIconScan()

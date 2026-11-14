@@ -177,6 +177,44 @@ mount and target.
 
 ## Changelog
 
+### 1.28.0
+
+- **Effective CDs for target entries.** A buff/debuff or skill custom entry can
+  now reduce its own timer by user-defined modifiers. The feature is target-only:
+  Player and Mount entries keep the configured cooldown, and mana skills are not
+  offered it.
+- **Modifiers are fully user-defined.** Each entry stores `effectiveCDs`
+  (on/off), `smartPct` (0 = off) and `cdMods`: a list of
+  `{ id/name, kind = flat | percent | reset, value, condition = target | always }`.
+  `flat` is seconds, `percent` is a percentage, `reset` carries no value. A
+  conditional modifier counts only while its buff/debuff is on the target; an
+  `always` modifier always counts. There are no built-in skillsets or tables.
+- **Formula:** `eff = max(0, base - sumFlat) * (1 - sumPercent / 100)` — flat
+  seconds first, then the additive sum of the percentages (10% + 20% = 30%).
+  Every value is multiplied by the stack count read from the target's aura
+  (1 when the aura reports no stack).
+- **Reset modifiers** zero the entry's timer when their buff appears on the
+  target: the buff/debuff active phase ends and the skill becomes ready. A
+  reset pauses smart until the next application, and that interval is never
+  used as evidence for an early re-use.
+- **Smart reduction %** learns the real cooldown ratio per target id. On each
+  application the actual interval is compared with the cooldown predicted at
+  the previous application; applying more than 5% earlier marks the percentage
+  as learned for that target and it applies from then on. State lives in the
+  target cache (`targetCache[id].smart[entry]`) and is cleared with the cache.
+  `api.Ability:GetUnitClassName('target')` is stored per target id: a class
+  change (a respec) clears smart **for that id only**; switching targets never
+  touches the previous target's state, and mobs (`Pending`) never reset it.
+- **Edit window** grew to 640×600 and gained the Effective CDs block: the
+  checkbox, the target-only stack note, a modifier list (`Source | Type | Value
+  | Condition | Remove`, type and condition cycle on click), an add field for
+  ID/name, an unconditional flat/percent adder, the Smart % field with its
+  `Not learned` / `Learned for this target (+X%)` status and a live reference
+  card (base CD, flat total, percent total with sources and stacks, effective
+  now and the potential with every configured modifier active).
+- The typed Add/Edit form, mirror gating, Record logs and the per-frame
+  overlay are unchanged.
+
 ### 1.27.0
 
 - **The Record buff journal accumulates in the background.** While `Debug: ON`
@@ -1049,7 +1087,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.27.0
+**Current Version:** 1.28.0
 
 ## Credits
 

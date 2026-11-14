@@ -385,10 +385,39 @@ function defaultSettings.migrate(settings)
 
     -- 1.22.0: тип кастомной записи (buff/skill/mana) хранится в kind.
     -- У записей 1.21 и раньше поля нет — выводим один раз из данных записи.
+    -- 1.28.0: эффективные КД цели — флаг, smart % и список модификаторов.
     if type(settings.customBuffs) == "table" then
         for _, cb in ipairs(settings.customBuffs) do
             if type(cb) == "table" then
                 cb.kind = entryKind(cb)
+                if cb.effectiveCDs == nil then cb.effectiveCDs = false end
+                local smart = tonumber(cb.smartPct)
+                if smart == nil or smart ~= smart then smart = 0 end
+                if smart < 0 then smart = 0 end
+                if smart > 100 then smart = 100 end
+                cb.smartPct = smart
+                if type(cb.cdMods) ~= "table" then
+                    cb.cdMods = {}
+                else
+                    -- Чистим мусор из ручных/импортированных конфигов
+                    for i = #cb.cdMods, 1, -1 do
+                        local mod = cb.cdMods[i]
+                        if type(mod) ~= "table" then
+                            table.remove(cb.cdMods, i)
+                        else
+                            if mod.kind ~= "flat" and mod.kind ~= "percent" and mod.kind ~= "reset" then
+                                mod.kind = "flat"
+                            end
+                            if mod.kind == "reset" then
+                                mod.value = nil
+                            else
+                                mod.value = tonumber(mod.value) or 0
+                                if mod.value < 0 then mod.value = 0 end
+                            end
+                            if mod.condition ~= "always" then mod.condition = "target" end
+                        end
+                    end
+                end
             end
         end
     end
