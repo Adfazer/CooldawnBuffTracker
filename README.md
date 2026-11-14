@@ -120,20 +120,38 @@ shows only the fields of that type.
   mana entry has no aura on the target to mirror.
 - Long lists are paginated; all entries are saved automatically.
 
-### Skill icon library (1.34.0 — DDS)
+### Skill icon library (1.35.0 — PNG on an ImageDrawable)
 
 - **323 skill icons from the ten class trees** — every active skill (including
   its morph variants) and every passive shown on the AA Classic wiki:
   Battlerage, Witchcraft, Defense, Auramancy, Occultism, Archery, Sorcery,
   Shadowplay, Songcraft and Vitalism. 245 active + 78 passive entries in 321
   unique icons.
-- The icons are packaged inside the addon as **64×64 DDS** files
-  (`skill_icons/<name>.dds`, uncompressed ARGB8888 with alpha) and merged into
-  the same pool as the buff dump. **1.34.0 replaced the 48×48 wiki PNGs**: the
-  item-icon slot paints through the native texture loader
-  (`F_SLOT.SetIconBackGround` → `AddTexture`), which is a DDS/TGA path, so the
-  loose PNGs showed as empty slots in game. The PNG originals are kept outside
-  the runtime folder in `skill_icons_src/` (not shipped in the zip).
+- The icons ship as the original **48×48 wiki PNGs** in `skill_icons/` and are
+  merged into the same pool as the buff dump. **The item-icon slot cannot paint
+  a loose PNG through `F_SLOT.SetIconBackGround`** — that call feeds the slot's
+  native `AddTexture`, which only reads DDS/TGA, so the tile stayed an empty
+  slot with the 48×48 PNGs *and* with the 64×64 DDS copies 1.34.0 converted to.
+  The working path in this client is the one BetterBars uses for its own art: an
+  `ImageDrawable` with `SetTgaTexture('../Addon/CooldawnBuffTracker/skill_icons/<file>.png')`.
+  `util/cbt_icon.lua` (`CbtIcon.Paint`) now draws every skill icon that way on
+  every slot the addon owns: HUD icon grids, frame-attached target rows, the
+  icon-search rows, the record window and all settings previews.
+  - The drawable is created **once per slot** (layer `artwork`: above the slot's
+    own background art, below the HUD's `overlay` status tint and borders),
+    anchored `TOPLEFT`/`BOTTOMRIGHT` with a 1 px inset, `SetSRGB(false)` so the
+    engine does not colour-shift the PNG, and cached on the slot — a repaint
+    with the same icon issues no texture call and creates no widget.
+  - Normal buff/game icons keep the native `F_SLOT.SetIconBackGround` path
+    unchanged; the overlay is hidden as soon as a non-skill icon is painted.
+  - Path resolution tries the dump-relative
+    `../Addon/CooldawnBuffTracker/skill_icons/<file>.png` first, then
+    `api.baseDir`-anchored forms. If no candidate loads, the slot falls back to
+    the native 64×64 DDS copy that ships next to each PNG and a single warning
+    (`skill icon paint failed: <file>`) is written to chat, so a broken install
+    is visible instead of silently blank.
+  - `Debug: ON` logs `skill icon paint: <file> -> <resolved path>` for each icon
+    that is painted (state changes only, never per frame).
 - The **Icon search** window finds skills by English name exactly like buff
   icons ("Charge", "Triple Slash", "Weapon Maneuvers", "Radiant Terrifying
   Roar"), previews them in the same item-icon slot, and the `Spell: ON` option
@@ -151,7 +169,10 @@ shows only the fields of that type.
   re-merges into the pool after saving. If the file is missing the scan logs a
   warning (skill icons stay out of the pool) instead of failing.
 - `skill_icons/manifest.tsv` lists tree, type, id, English and raw name, file,
-  source page and icon URL for maintenance (the `file` column names the DDS).
+  source page and icon URL for maintenance (the `file` column names the PNG).
+- `skill_icons_src/` keeps the wiki originals and is **not** shipped in the zip;
+  the runtime folder holds the PNG pool, the 64×64 DDS fallback copies and
+  `manifest.tsv`.
 
 ### Target tracking
 - Real-time monitoring of buffs/debuffs on the current target.
@@ -244,6 +265,60 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.35.0
+
+- **Skill icons are painted from the loose PNG on an `ImageDrawable`.** Every
+  skill tile in game was still an empty slot: `F_SLOT.SetIconBackGround` feeds
+  the slot's native `AddTexture`, which only loads DDS/TGA from the client
+  archives, so neither the 48×48 wiki PNGs nor the 64×64 DDS copies 1.34.0
+  generated ever reached the slot. The client's working route for addon-local
+  art is the one BetterBars uses — an `ImageDrawable` with
+  `SetTgaTexture('../Addon/CooldawnBuffTracker/skill_icons/<file>.png')`.
+  New module `util/cbt_icon.lua` (`CbtIcon.Paint(slot, path)`):
+  - detects a skill path (`/skill_icons/` + `.png`/`.dds`) and derives the file
+    name; a game icon or a buff path takes the native `F_SLOT` branch unchanged;
+  - creates the drawable **once per slot** on layer `artwork` (above the slot's
+    `background` art, below the HUD's `overlay` status tint and borders),
+    anchored `TOPLEFT`/`BOTTOMRIGHT` with a 1 px inset, `SetSRGB(false)`, then
+    `SetTgaTexture` and `SetVisible(true)` when a candidate loads;
+  - tries `../Addon/CooldawnBuffTracker/skill_icons/<file>.png` (the form the
+    dump already stores and BetterBars proved in this client) first, then
+    `api.baseDir/CooldawnBuffTracker/skill_icons/<file>.png` and
+    `api.baseDir/skill_icons/<file>.png`; the path that loaded is cached, so a
+    repaint with the same icon does no texture call and creates no widget;
+  - clears the slot background once per skill icon so the empty-slot texture
+    does not show through soft PNG edges, hides the overlay on every non-skill
+    path, and falls back to the native 64×64 DDS copy with a single
+    `skill icon paint failed: <file>` chat warning if nothing loads;
+  - `Debug: ON` logs `skill icon paint: <file> -> <path>` on state changes only.
+- **Every icon slot now routes through it** (11 call sites): the HUD grid
+  (`main.lua`, floating canvas) and the frame-attached target rows
+  (`renderAttachedIcons`), the icon-search rows (`icon_search_window.lua`), the
+  record window rows (`record_window.lua`), and in `settings_page.lua` the
+  add-form preview, the entry editor preview, the tracked-list rows, the
+  custom-entry rows and both preview resets. Normal buff/game icons behave
+  exactly as before.
+- **The runtime pool references PNG again**: `skill_dump.tbl` (323 rows) and
+  `skill_icons/manifest.tsv` are back on
+  `../Addon/CooldawnBuffTracker/skill_icons/<name>.png`, and the 321 PNGs are
+  shipped in `skill_icons/` (byte-identical to `skill_icons_src/`). The 64×64
+  DDS copies stay next to them as the native fallback path only. Still 323
+  entries / 321 unique files / 10 trees / unique ids.
+- **Scan safety unchanged and re-asserted.** `processBuffIconScan` has exactly
+  one file write (`buff_dump.tbl`), never touches `skill_dump.tbl`, and
+  re-merges the skill pool after saving; the harness proves it statically, by a
+  simulated completed scan in the sandbox, and by hashing `skill_dump.tbl`
+  before and after the run.
+- Tests: `tests/skill_icons_harness.py` now validates the PNG pool (magic,
+  IHDR, 28/48/64 px, byte-identity with the sources, one DDS fallback per icon,
+  manifest/dump 1:1 on `.png` paths) and, against a mock slot, the real
+  `CbtIcon.Paint`: layer `artwork`, both 1 px anchors, drawable shown, the
+  dump-relative path tried first, the `api.baseDir` candidates as fallbacks, one
+  drawable per slot, no `SetTgaTexture` call or widget on 30 repaints and 5
+  `UPDATE` frames, the native path for game icons, and the DDS fallback plus a
+  single chat warning when no candidate loads. Plus the merged loader, the
+  buff-only legacy run and the scan-safety checks.
 
 ### 1.34.0
 
@@ -1344,7 +1419,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.34.0
+**Current Version:** 1.35.0
 
 ## Credits
 

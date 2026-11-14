@@ -3,6 +3,7 @@
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
+local CbtIcon = require("CooldawnBuffTracker/util/cbt_icon")
 local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
@@ -101,7 +102,7 @@ local function refresh()
                     row.nameLabel:SetText(title)
                 end
                 if row.icon then
-                    F_SLOT.SetIconBackGround(row.icon, item.icon or "game/ui/icon/icon_buff_debuff.dds")
+                    CbtIcon.Paint(row.icon, item.icon or "game/ui/icon/icon_buff_debuff.dds")
                 end
                 if row.nameLabel then
                     -- Активные записи — золотом, снятые — серым; журнал навыков

@@ -518,6 +518,8 @@ parsed: spellId=%s spellName=%s	разбор: spellId=%s spellName=%s
 saved to buff_dump.tbl	сохранено в buff_dump.tbl
 settings window rebuild failed: %s	не удалось пересобрать окно настроек: %s
 show	показать
+skill icon paint failed: %s	не удалось нарисовать иконку навыка: %s
+skill icon paint: %s -> %s	иконка навыка: %s -> %s
 skill icon: %s	иконка навыка: %s
 skill log	журнал навыков
 timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s	таймер %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s
@@ -1013,6 +1015,8 @@ parsed: spellId=%s spellName=%s	ayrıştırma: spellId=%s spellName=%s
 saved to buff_dump.tbl	buff_dump.tbl dosyasına kaydedildi
 settings window rebuild failed: %s	ayarlar penceresi yeniden kurulamadı: %s
 show	göster
+skill icon paint failed: %s	beceri simgesi çizilemedi: %s
+skill icon paint: %s -> %s	beceri simgesi: %s -> %s
 skill icon: %s	beceri simgesi: %s
 skill log	beceri kaydı
 timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s	zamanlayıcı %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s
@@ -1507,6 +1511,8 @@ parsed: spellId=%s spellName=%s	파싱: spellId=%s spellName=%s
 saved to buff_dump.tbl	buff_dump.tbl에 저장됨
 settings window rebuild failed: %s	설정 창을 다시 만들지 못했습니다: %s
 show	표시
+skill icon paint failed: %s	스킬 아이콘을 그리지 못했습니다: %s
+skill icon paint: %s -> %s	스킬 아이콘: %s -> %s
 skill icon: %s	스킬 아이콘: %s
 skill log	스킬 기록
 timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s	타이머 %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s

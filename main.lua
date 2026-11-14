@@ -7,6 +7,7 @@ local settingsPage = require("CooldawnBuffTracker/settings_page")
 local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
 local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
 local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
+local CbtIcon = require("CooldawnBuffTracker/util/cbt_icon")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
@@ -77,7 +78,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.34.0"
+  version = "1.35.0"
 }
 
 local buffData = {}
@@ -1712,8 +1713,8 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
           icon:SetExtent(us.iconSize, us.iconSize)
           -- Позиция иконки в сетке (слева направо, сверху вниз)
           anchorIconInGrid(icon, canvas, i, us)
-          -- Устанавливаем изображение для иконки
-          F_SLOT.SetIconBackGround(icon, buff.icon)
+          -- Устанавливаем изображение для иконки (skill_icons/*.png -> PNG-дравейбл)
+          CbtIcon.Paint(icon, buff.icon)
           -- Явно устанавливаем иконку видимой
           icon:Show(true)
         end
@@ -2219,7 +2220,7 @@ local function renderAttachedIcons(holder, unitType, namespace, buffs, cfg)
         if relayout then
           icon:SetExtent(cfg.iconSize, cfg.iconSize)
           anchorIconInGrid(icon, holder.wnd, i, cfg)
-          F_SLOT.SetIconBackGround(icon, buff.icon)
+          CbtIcon.Paint(icon, buff.icon)
           if icon.nameLabel then icon.nameLabel:Show(false) end
           if icon.timerLabel then
             icon.timerLabel.style:SetFontSize(cfg.timerFontSize or 14)

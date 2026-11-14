@@ -3,6 +3,7 @@ local helpers = require('CooldawnBuffTracker/helpers')
 local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local iconSearch = require('CooldawnBuffTracker/icon_search_window')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
+local CbtIcon = require('CooldawnBuffTracker/util/cbt_icon')
 local CbtLog = require('CooldawnBuffTracker/util/cbt_log')
 local locale = require('CooldawnBuffTracker/locale')
 local recordWindow = require('CooldawnBuffTracker/record_window')
@@ -89,7 +90,7 @@ end
 local function onSkillIconFound(name, id, path)
     newEntryIcon = path or ""
     if settingsControls.customBuffIconPreview then
-        F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
+        CbtIcon.Paint(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
     end
     CbtLog.info("skill icon: %s", CbtLog.hl(path or "?"))
 end
@@ -865,7 +866,7 @@ local function addCustomBuff()
     end
     newEntryIcon = ""
     if settingsControls.customBuffIconPreview then
-        F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, DEFAULT_ENTRY_ICON)
+        CbtIcon.Paint(settingsControls.customBuffIconPreview, DEFAULT_ENTRY_ICON)
     end
     if settingsControls.customBuffErrorPanel then
         settingsControls.customBuffErrorPanel:Show(false)
@@ -1196,7 +1197,7 @@ local function openCddDialog(buffId)
         if not iconPreview then return end
         local p = editIcon
         if not p or p == "" then p = DEFAULT_ENTRY_ICON end
-        pcall(function() F_SLOT.SetIconBackGround(iconPreview, p) end)
+        pcall(function() CbtIcon.Paint(iconPreview, p) end)
     end
     refreshEditIcon()
 
@@ -2569,7 +2570,7 @@ local function buildTrackedBuffsSection()
                 if iconBtn then
                     iconBtn:SetExtent(18, 18)
                     iconBtn:AddAnchor("LEFT", buffRow, 0, 0)
-                    pcall(function() F_SLOT.SetIconBackGround(iconBtn, BuffList.GetBuffIcon(buffId)) end)
+                    pcall(function() CbtIcon.Paint(iconBtn, BuffList.GetBuffIcon(buffId)) end)
                     iconBtn:Show(true)
                 end
             end
@@ -3051,7 +3052,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 if iconBtn then
                     iconBtn:SetExtent(18, 18)
                     iconBtn:AddAnchor("LEFT", buffRow, 0, 0)
-                    pcall(function() F_SLOT.SetIconBackGround(iconBtn, BuffList.GetBuffIcon(buffData.id)) end)
+                    pcall(function() CbtIcon.Paint(iconBtn, BuffList.GetBuffIcon(buffData.id)) end)
                     iconBtn:Show(true)
                 end
             end
@@ -3416,7 +3417,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     if iconPreview then
         iconPreview:SetExtent(28, 28)
         iconPreview:AddAnchor("TOPLEFT", customBuffInputsLabel, 440, 51)
-        pcall(function() F_SLOT.SetIconBackGround(iconPreview, DEFAULT_ENTRY_ICON) end)
+        pcall(function() CbtIcon.Paint(iconPreview, DEFAULT_ENTRY_ICON) end)
         if iconPreview.RegisterForClicks then
             pcall(function() iconPreview:RegisterForClicks("LeftButton") end)
         end
@@ -3432,7 +3433,7 @@ local function buildCustomBuffInputs(customBuffsListContainer)
             p = BuffList.GetBuffIcon(idEdit:GetText() or "")
         end
         if not p or p == "" then p = DEFAULT_ENTRY_ICON end
-        pcall(function() F_SLOT.SetIconBackGround(iconPreview, p) end)
+        pcall(function() CbtIcon.Paint(iconPreview, p) end)
     end
 
     if iconPreview then
