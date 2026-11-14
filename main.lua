@@ -2722,12 +2722,14 @@ local function updateBuffIcons(unitType)
 
   if unitType == "target" and settings and settings.debugBuffId then
     local now = getCurrentTime()
-    if not lastRuntimeError.targetDrawAt or (now - lastRuntimeError.targetDrawAt) >= 2 then
+    if not lastRuntimeError.targetDrawAt or (now - lastRuntimeError.targetDrawAt) >= 0.5 then
       lastRuntimeError.targetDrawAt = now
       local parts = {}
       for _, info in ipairs(activeBuffs) do
         local b = info.buff
+        local calc = b.fixedTime and checkBuffStatus(b, now) or b.status
         parts[#parts + 1] = tostring(info.id) .. ":status=" .. tostring(b.status)
+          .. ":calc=" .. tostring(calc)
           .. ":fixed=" .. tostring(b.fixedTime) .. ":ready=" .. tostring(b.readyAt)
           .. ":synthetic=" .. tostring(b.synthetic)
       end
