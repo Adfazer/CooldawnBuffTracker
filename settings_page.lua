@@ -1525,6 +1525,84 @@ local function openCddDialog(buffId)
             setEffVisible(true)
         end)
 
+        -- Live search for the modifier source: the same ID/name lookup as the
+        -- main Add entry field. Without it the player had to type the exact
+        -- buff name because the effective-CD window had no suggestions.
+        local srcAcPanel = api.Interface:CreateWidget('window', 'cbtCddEffAcPanel', srcEdit)
+        pcall(function() srcAcPanel:SetUILayer("dialog") end)
+        srcAcPanel:SetExtent(300, 22)
+        srcAcPanel:RemoveAllAnchors()
+        srcAcPanel:AddAnchor("TOPLEFT", srcEdit, "BOTTOMLEFT", 0, 3)
+        srcAcPanel:Show(false)
+        local srcAcBg = srcAcPanel:CreateColorDrawable(0.05, 0.06, 0.07, 0.98, "background")
+        srcAcBg:AddAnchor("TOPLEFT", srcAcPanel, 0, 0)
+        srcAcBg:AddAnchor("BOTTOMRIGHT", srcAcPanel, 0, 0)
+        local srcAcRows = {}
+        local SRC_AC_MAX_ROWS = 4
+
+        local function hideSrcAc()
+            srcAcPanel:Show(false)
+        end
+
+        local function ensureSrcAcRow(index)
+            if srcAcRows[index] then return srcAcRows[index] end
+            local row = helpers.createButton('cbtCddEffAcRow' .. index, srcAcPanel, '', 0, (index - 1) * 22)
+            row:SetExtent(300, 22)
+            row:Show(false)
+            row:SetHandler("OnClick", function(self)
+                if self.acValue ~= nil then
+                    srcEdit:SetText(tostring(self.acValue))
+                end
+                hideSrcAc()
+            end)
+            srcAcRows[index] = row
+            return row
+        end
+
+        local function updateSrcAc()
+            local q = srcEdit:GetText() or ""
+            q = q:gsub("^%s+", ""):gsub("%s+$", "")
+            if q == "" then hideSrcAc(); return end
+            local lq = string.lower(q)
+            local matches, seen = {}, {}
+            local s = helpers.getSettings()
+            for _, item in ipairs(s and s.customBuffs or {}) do
+                local nm = tostring(item.name or item.spellName or "")
+                local idv = tostring(item.id or "")
+                local hit = (nm ~= "" and string.lower(nm):find(lq, 1, true) ~= nil)
+                    or string.lower(idv):find(lq, 1, true) ~= nil
+                if hit and idv ~= "" and not seen[idv] then
+                    seen[idv] = true
+                    matches[#matches + 1] = {
+                        value = item.id,
+                        text = (nm ~= "" and nm or idv) .. "  [" .. idv .. "]",
+                    }
+                end
+                if #matches >= SRC_AC_MAX_ROWS then break end
+            end
+            if #matches == 0 then hideSrcAc(); return end
+            for i = 1, SRC_AC_MAX_ROWS do
+                local item = matches[i]
+                local row = srcAcRows[i]
+                if item then
+                    row = ensureSrcAcRow(i)
+                    row.acValue = item.value
+                    row:SetText(item.text)
+                    row:Show(true)
+                elseif row then
+                    row:Show(false)
+                end
+            end
+            srcAcPanel:SetExtent(300, math.min(#matches, SRC_AC_MAX_ROWS) * 22)
+            srcAcPanel:Show(true)
+        end
+
+        srcEdit:SetHandler("OnTextChanged", updateSrcAc)
+        srcEdit:SetHandler("OnEnterPressed", function(self)
+            if self and self.ClearFocus then self:ClearFocus() end
+            hideSrcAc()
+        end)
+
         local alwaysLabel = helpers.createLabel('cbtCddEffAlwaysLabel', wnd, 'Always:', 308, 278, 12)
         alwaysLabel:SetWidth(50)
         pcall(function() alwaysLabel.style:SetColor(0.72, 0.74, 0.80, 1) end)
