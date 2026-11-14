@@ -118,6 +118,31 @@ shows only the fields of that type.
   mana entry has no aura on the target to mirror.
 - Long lists are paginated; all entries are saved automatically.
 
+### Skill icon library (1.32.0)
+
+- **323 skill icons from the ten class trees** — every active skill (including
+  its morph variants) and every passive shown on the AA Classic wiki:
+  Battlerage, Witchcraft, Defense, Auramancy, Occultism, Archery, Sorcery,
+  Shadowplay, Songcraft and Vitalism. 245 active + 78 passive entries in 321
+  unique PNG files.
+- The PNGs are packaged inside the addon (`skill_icons/`) and merged into the
+  same pool as the buff dump. The **Icon search** window finds them by English
+  name exactly like buff icons ("Charge", "Triple Slash", "Weapon Maneuvers",
+  "Radiant Terrifying Roar"), and the `Spell: ON` option fills the Spell field
+  for them too.
+- Names are the base English names: the wiki's `(Rank N)` suffix is stripped, so
+  one query returns every morph icon of a skill. Entries are deduplicated by
+  (name, icon); the shared abyssal "Rising Hatred" icon is stored once.
+- Every row has a stable unique id: the numeric skill id from the wiki when it
+  does not already exist in `buff_dump.tbl`, otherwise a synthetic id from
+  9,000,000 up.
+- `skill_dump.tbl` is optional at runtime: an installation without it keeps the
+  old buff-only behaviour unchanged.
+- `skill_icons/manifest.tsv` lists tree, type, id, English and raw name, file,
+  source page and icon URL for maintenance. The wiki serves these icons at
+  48×48 (a few legacy files are 28×28 or 64×64); the client scales them, so no
+  conversion is needed.
+
 ### Target tracking
 - Real-time monitoring of buffs/debuffs on the current target.
 - Smart caching: when you switch targets, buff state is preserved and restored if
@@ -209,6 +234,32 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.32.0
+
+- **323 skill icons from the ten class-tree wiki pages.** 245 active skills
+  (including morph variants such as Radiant Terrifying Roar and Hollow Frenzy)
+  and 78 passives from Battlerage, Witchcraft, Defense, Auramancy, Occultism,
+  Archery, Sorcery, Shadowplay, Songcraft and Vitalism. Sources:
+  `https://wiki.aa-classic.com/<Tree>`; every individual icon URL is recorded in
+  `skill_icons/manifest.tsv`.
+- PNGs ship inside the addon in `skill_icons/` (321 unique files, 2.8 MB). No
+  DDS conversion — the client loads PNG via
+  `../Addon/CooldawnBuffTracker/skill_icons/<file>.png`.
+- `skill_dump.tbl` (`id<TAB>name<TAB>path`, wrapped as `{ dump = "..." }` like
+  `buff_dump.tbl`) is merged into the same `buffDump` pool: the icon search
+  finds skills by English name and applying a row works exactly like a buff
+  icon. Startup log: `buff dump: N buffs, M skill icons`.
+- `(Rank N)` is stripped from the pool names; dedupe is by (name, icon path).
+  Ids are unique across both dumps: the wiki's numeric skill id when free,
+  otherwise 9,000,000+.
+- Existing installs are unaffected: without `skill_dump.tbl` the loader behaves
+  exactly as before, and a client buff rescan keeps the skill rows in the pool.
+- Tests: `tests/skill_icons_harness.py` validates the assets (10 trees,
+  per-tree counts, PNG signature/dimensions, path prefix, unique ids, no
+  buff-id collisions, 1:1 manifest/dump) and drives the real loader and search
+  provider in the patch-293 sandbox with both dumps preloaded, plus a buff-only
+  legacy run.
 
 ### 1.31.0
 
@@ -1213,7 +1264,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.31.0
+**Current Version:** 1.32.0
 
 ## Credits
 

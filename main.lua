@@ -77,7 +77,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.31.0"
+  version = "1.32.0"
 }
 
 local buffData = {}
@@ -3338,16 +3338,16 @@ local function buildDumpList(entries)
   return list
 end
 
-local function loadBuffDump()
-  if not (api.File and api.File.Read) then return end
-  -- дамп живёт в папке аддона; корень Addon читаем только как наследие старых версий
-  local data, usedPath = readDumpFile("CooldawnBuffTracker/buff_dump.tbl")
+-- 1.32.0: иконки навыков с wiki-страниц классов (skill_dump.tbl) живут в том же
+-- пуле, что и иконки баффов: одна таблица byName/list на поиск и авто-подстановку.
+-- Формат строки тот же: id \t имя \t путь. Дамп навыков необязателен — старые
+-- установки без него грузятся как раньше.
+local function loadSkillDump(byName, entries)
+  local data = readDumpFile("CooldawnBuffTracker/skill_dump.tbl")
   if not data then
-    data, usedPath = readDumpFile("buff_dump.tbl")
+    data = readDumpFile("skill_dump.tbl")
   end
-  if not data then return end
-  local byName = {}
-  local entries = {}
+  if not data then return 0 end
   local n = 0
   for line in data.dump:gmatch("[^\n]+") do
     local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
@@ -3357,9 +3357,33 @@ local function loadBuffDump()
       entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
     end
   end
-  if n > 0 then
-    buffDump = { byName = byName, list = buildDumpList(entries), count = n }
-    CbtLog.info("buff dump: %s buffs loaded from %s", n, tostring(usedPath))
+  return n
+end
+
+local function loadBuffDump()
+  if not (api.File and api.File.Read) then return end
+  -- дамп живёт в папке аддона; корень Addon читаем только как наследие старых версий
+  local data = readDumpFile("CooldawnBuffTracker/buff_dump.tbl")
+  if not data then
+    data = readDumpFile("buff_dump.tbl")
+  end
+  local byName = {}
+  local entries = {}
+  local buffN = 0
+  if data then
+    for line in data.dump:gmatch("[^\n]+") do
+      local id, name, path = line:match("^(%d+)\t([^\t]*)\t(.*)$")
+      if id and name and path and path ~= "" then
+        buffN = buffN + 1
+        addDumpEntry(byName, id, name, path)
+        entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
+      end
+    end
+  end
+  local skillN = loadSkillDump(byName, entries)
+  if buffN + skillN > 0 then
+    buffDump = { byName = byName, list = buildDumpList(entries), count = buffN + skillN }
+    CbtLog.info("buff dump: %s buffs, %s skill icons", buffN, skillN)
   end
 end
 
@@ -3693,12 +3717,16 @@ local function processBuffIconScan()
         entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
       end
     end
-    buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries }
+    local skillN = loadSkillDump(byName, entries)
+    buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries + skillN }
     CbtLog.info("buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s",
       #st.entries,
       saved and locale.L("saved to buff_dump.tbl") or locale.L("NOT saved (api.File unavailable)"),
       tostring(st.tables), tostring(st.named), tostring(st.errors),
       (st.firstError and locale.L(" | first error: %s", st.firstError)) or "")
+    if skillN > 0 then
+      CbtLog.info("buff dump: %s buffs, %s skill icons", #st.entries, skillN)
+    end
     if st.target ~= "" then
       local e = byName[st.target]
       if e then

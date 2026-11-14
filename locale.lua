@@ -486,6 +486,7 @@ always value must be a number >= 0	значение always должно быть
 aura dump -> %s	дамп аур -> %s
 aura dump: write failed	дамп аур: запись не удалась
 buff dump: %s buffs loaded from %s	дамп баффов: загружено %s баффов из %s
+buff dump: %s buffs, %s skill icons	дамп баффов: %s баффов, %s иконок навыков
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	дамп баффов: %s баффов, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	дамп баффов: '%s' -> id=%s path=%s (обновлено записей: %s)
 buff dump: '%s' not found	дамп баффов: '%s' не найден
@@ -977,6 +978,7 @@ always value must be a number >= 0	always 值必须是不小于 0 的数字
 aura dump -> %s	光环转储 -> %s
 aura dump: write failed	光环转储: 写入失败
 buff dump: %s buffs loaded from %s	增益转储: 已从 %s 加载 %s 个增益
+buff dump: %s buffs, %s skill icons	增益转储: %s 个增益，%s 个技能图标
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	增益转储: %s 个增益，%s；tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	增益转储: '%s' -> id=%s path=%s (已更新条目: %s)
 buff dump: '%s' not found	增益转储: 未找到 '%s'
@@ -1468,6 +1470,7 @@ always value must be a number >= 0	always değeri 0 veya daha büyük bir sayı 
 aura dump -> %s	aura dökümü -> %s
 aura dump: write failed	aura dökümü: yazma başarısız
 buff dump: %s buffs loaded from %s	buff dökümü: %s bufflar %s kaynağından yüklendi
+buff dump: %s buffs, %s skill icons	buff dökümü: %s buff, %s yetenek simgesi
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	buff dökümü: %s buff, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	buff dökümü: '%s' -> id=%s path=%s (güncellenen kayıt: %s)
 buff dump: '%s' not found	buff dökümü: '%s' bulunamadı
@@ -1959,6 +1962,7 @@ always value must be a number >= 0	always 값은 0 이상의 숫자여야 합니
 aura dump -> %s	오라 덤프 -> %s
 aura dump: write failed	오라 덤프: 쓰기 실패
 buff dump: %s buffs loaded from %s	버프 덤프: %s개 버프를 %s에서 불러왔습니다
+buff dump: %s buffs, %s skill icons	버프 덤프: %s개 버프, %s개 기술 아이콘
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	버프 덤프: %s개 버프, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	버프 덤프: '%s' -> id=%s path=%s (업데이트된 항목: %s)
 buff dump: '%s' not found	버프 덤프: '%s'을(를) 찾을 수 없습니다
