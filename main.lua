@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.25.0"
+  version = "1.26.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -90,9 +90,9 @@ local playerBuffData = {}
 -- живой виджет i-го канваса; раскладка лежит в settings[unitType].canvases[i].
 local unitCanvases = { playerpet = {}, player = {}, target = {} }
 local UNIT_TYPES = { "playerpet", "player", "target" }
--- 1.23.0: режимы у нативных фреймов (строка под HP/MP, оверлей цели).
--- Объявлены заранее, потому что hideUnitCanvases() должна гасить и их;
--- присваиваются ниже, после функций отрисовки.
+-- 1.23.0: режим у нативного фрейма — оверлей цели. Объявлен заранее, потому
+-- что hideUnitCanvases() должна гасить и его; присваивается ниже, после
+-- функций отрисовки.
 local hideFrameModesForUnit
 local frameModeEnabled
 -- 1.25.0: настройки TTP читает refreshFrameCache (кэш 500 мс), поэтому нужна
@@ -487,25 +487,63 @@ end
 local unitIdByName = {}
 local pendingBySource = {}
 
--- Журнал навыков из боевого лога (для окна Record)
-local loggedSpellOrder = {}
-local loggedSpellMap = {}
+-- Журналы навыков из боевого лога — отдельные на каждый юнит (окно Record).
+-- 1.26.0: навык пишется в журнал юнита, чьё имя совпало с источником события;
+-- при совпадении имён приоритет player -> mount (playerpet) -> target.
+local LOGGED_SPELL_CAP = 200
+local loggedSpells = {
+  player = { order = {}, map = {} },
+  playerpet = { order = {}, map = {} },
+  target = { order = {}, map = {} },
+}
 
-local function recordLoggedSpell(name, now)
-  if not name or name == "" then return end
-  local e = loggedSpellMap[name]
+-- Имя юнита для сверки с источником боевого лога: UnitName, иначе по id.
+-- Сравнение точное: string.lower не складывает кириллицу.
+local function unitSourceName(unitType)
+  local name = nil
+  local ok, value = pcall(function() return api.Unit:UnitName(unitType) end)
+  if ok then name = value end
+  if type(name) ~= "string" or name == "" then
+    local id = nil
+    local okId, idValue = pcall(function() return api.Unit:GetUnitId(unitType) end)
+    if okId then id = idValue end
+    if id then
+      local okName, byId = pcall(function() return api.Unit:GetUnitNameById(id) end)
+      if okName then name = byId end
+    end
+  end
+  if type(name) ~= "string" or name == "" then return nil end
+  return name
+end
+
+-- Юнит, в журнал которого писать событие с источником sourceName, или nil:
+-- источник должен совпасть с именем юнита, иначе событие не логируется.
+local function loggedSpellUnitFor(sourceName)
+  if type(sourceName) ~= "string" or sourceName == "" then return nil end
+  if sourceName == unitSourceName("player") then return "player" end
+  if sourceName == unitSourceName("playerpet") then return "playerpet" end
+  if sourceName == unitSourceName("target") then return "target" end
+  return nil
+end
+
+local function recordLoggedSpell(unitType, name, now)
+  if not unitType or not name or name == "" then return end
+  local store = loggedSpells[unitType]
+  if not store then return end
+  local e = store.map[name]
   if not e then
     e = { name = name, count = 0 }
-    loggedSpellMap[name] = e
-    loggedSpellOrder[#loggedSpellOrder + 1] = name
-    if #loggedSpellOrder > 200 then
-      local old = table.remove(loggedSpellOrder, 1)
-      loggedSpellMap[old] = nil
+    store.map[name] = e
+    store.order[#store.order + 1] = name
+    if #store.order > LOGGED_SPELL_CAP then
+      local old = table.remove(store.order, 1)
+      store.map[old] = nil
     end
   end
   e.count = (e.count or 0) + 1
   e.last = now or getCurrentTime()
 end
+
 -- Анти-дребезг триггеров по боевому логу: DoT-тики не должны перезапускать КД
 local lastTriggerTimes = {}
 local myNameExact = nil   -- мой ник ровно как в игре (string.lower не работает с кириллицей)
@@ -1295,7 +1333,7 @@ local function hideUnitCanvases(unitType)
       end
     end
   end
-  -- Привязанные к фрейму строка/оверлеи — часть показа этого юнита.
+  -- Привязанные к фрейму оверлеи — часть показа этого юнита.
   if hideFrameModesForUnit then
     pcall(hideFrameModesForUnit, unitType)
   end
@@ -1339,8 +1377,8 @@ local function ensureUnitCanvases(unitType)
 end
 
 -- Единый цветовой статус иконки: зелёный = активен, красный = кулдаун,
--- прозрачный = готов. Вынесено из renderCanvas, чтобы строка под HP/MP и
--- оверлей цели красились точно так же, как плавающий канвас.
+-- прозрачный = готов. Вынесено из renderCanvas, чтобы оверлей цели красился
+-- точно так же, как плавающий канвас.
 local function applyIconStatus(icon, status)
   if not icon then return end
   if status == "ready" then
@@ -1585,44 +1623,31 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
 end
 
 -- =====================================================================
--- 1.23.0: режимы показа, привязанные к юниту (1.25.0 — только у цели).
---   * Target "Under HP/MP bar" — все канвасы цели сливаются в ОДНУ строку:
---     сначала записи канваса 1 в их порядке, затем канваса 2 и т.д.
---     Максимум 9 иконок в ряд, без имён, сетка канваса игнорируется,
---     лишние иконки уходят вниз следующими рядами.
+-- 1.23.0: режим показа, привязанный к цели (1.26.0 — оверлей, единственный).
 --   * Target "Overlay" — каждый канвас рисуется у цели в экранных
 --     координатах (api.Unit:GetUnitScreenPosition), как это делает
 --     TrackThatPlease; при загруженном TTP строка ставится над его рядом.
 --     Позиция пересчитывается КАЖДЫЙ кадр; якорь меняется только при
 --     сдвиге на >= 1 px (см. updateTargetOverlayPositions).
--- Плавающие канвасы при включённом режиме скрыты; выключение возвращает их
+-- Плавающие канвасы при включённом оверлее скрыты; выключение возвращает их
 -- на прежнее место (позиция в настройках не меняется).
--- Player-режим "Under MP bar" убран в 1.25.0: у игрока только плавающие
--- канвасы.
+-- Player-режим "Under MP bar" убран в 1.25.0, слитая строка под HP/MP у цели —
+-- в 1.26.0: у обоих юнитов только плавающие канвасы, у цели ещё оверлей.
 -- =====================================================================
-local MAX_STRIP_ICONS = 9
 local FRAME_CACHE_MS = 500      -- проверка фрейма/цели/настроек TTP ~2 раза в секунду
 local TTP_ADDON_ID = "TrackThatPlease"
 local FRAME_ANCHOR_MAX_DIST = 100
 local MAX_ANCHOR_COORD = 20000  -- защита от вырожденной проекции у камеры
 
-local frameStrips = {}    -- [unitType] = { wnd, icons, sig, bar, offset }
 local frameOverlays = {}  -- [index] = { wnd, icons, sig, ax, ay, shown }
-local frameCache = {}     -- [unitType] = { frame, bar, visible, screenX/Y/z, ttpOffset/Size, at }
+local frameCache = {}     -- [unitType] = { frame, visible, screenX/Y/z, ttpOffset/Size, at }
 
+-- 1.26.0: у цели два независимых переключателя показа — оверлей у цели и
+-- скрытие плавающих канвасов. Режимов у player/playerpet нет.
 frameModeEnabled = function(unitType)
   local us = settings and settings[unitType]
   if not us then return false end
-  if unitType == "target" then
-    return us.underBars == true or us.overlay == true
-  end
-  return false
-end
-
-local function underBarModeFor(unitType)
-  local us = settings and settings[unitType]
-  if not us then return false end
-  if unitType == "target" then return us.underBars == true end
+  if unitType == "target" then return us.overlay == true end
   return false
 end
 
@@ -1638,23 +1663,12 @@ local function getUnitFrame(unitType)
   return frame
 end
 
--- Ошибка чтения не должна гасить строку: считаем виджет видимым.
+-- Ошибка чтения не должна гасить оверлей: считаем виджет видимым.
 local function widgetVisible(widget)
   if not widget then return false end
   local ok, vis = pcall(function() return widget:IsVisible() end)
   if not ok then return true end
   return vis and true or false
-end
-
--- Полоса, под которую ставим строку: MP, иначе HP (у существ без маны),
--- иначе сама рамка — mpBar/hpBar могут быть nil в другой сборке клиента.
-local function unitBarOf(frame)
-  if not frame then return nil end
-  local mp = frame.mpBar
-  if mp and widgetVisible(mp) then return mp end
-  local hp = frame.hpBar
-  if hp then return hp end
-  return frame
 end
 
 -- Кэш тяжёлых проверок: ~2 проверки в секунду, а не каждый кадр.
@@ -1671,11 +1685,10 @@ local function refreshFrameCache(unitType, nowMs)
   local frame = getUnitFrame(unitType)
   cache.frame = frame
   cache.visible = frame ~= nil and widgetVisible(frame)
-  cache.bar = unitBarOf(frame)
 
   if unitType == "target" then
     -- Настройки TTP (приватный файл) читаются вместе с рамкой — раз в 500 мс,
-    -- а не на каждом кадре: избегать его ряда нужно и в оверлее, и в строке.
+    -- а не на каждом кадре: по ним оверлей встаёт над рядом TrackThatPlease.
     cache.ttpOffset, cache.ttpSize = ttpTargetBounds()
   end
   return cache
@@ -1768,18 +1781,8 @@ ttpTargetBounds = function()
   return offset, size
 end
 
--- Размер иконок строки: первый канвас юнита, зажатый в 16..40.
-local function stripIconSize(unitType)
-  local us = settings and settings[unitType]
-  local first = us and us.canvases and us.canvases[1]
-  local size = math.floor(tonumber(first and first.iconSize) or 40)
-  if size < 16 then size = 16 end
-  if size > 40 then size = 40 end
-  return size
-end
-
--- Раскладка строки/оверлея. Сетка канваса не используется: только
--- perRow иконок в ряд, без имён, таймер в оформлении первого канваса.
+-- Раскладка оверлея. Сетка канваса не используется: только perRow иконок в
+-- ряд, без имён, таймер в оформлении первого канваса.
 local function attachedCfg(unitType, perRow, size, count)
   local us = settings and settings[unitType]
   local first = (us and us.canvases and us.canvases[1]) or {}
@@ -1830,7 +1833,7 @@ local function attachedSig(cfg, buffs, count)
   return table.concat(parts, "|")
 end
 
--- Создаёт окно-строку/оверлей с прозрачным фоном и без перехвата мыши.
+-- Создаёт окно-оверлей с прозрачным фоном и без перехвата мыши.
 local function createAttachedWindow(id)
   local wnd = api.Interface:CreateEmptyWindow(id)
   if not wnd then return nil end
@@ -1839,22 +1842,6 @@ local function createAttachedWindow(id)
   pcall(function() wnd:EnablePick(false) end)
   wnd:Show(false)
   return wnd
-end
-
-local function ensureFrameStrip(unitType)
-  -- 1.25.0: строка под полосой HP/MP есть только у цели; Player-режим убран.
-  if unitType ~= "target" then return nil end
-  local holder = frameStrips[unitType]
-  if holder and holder.wnd then return holder end
-  holder = { icons = {} }
-  frameStrips[unitType] = holder
-  holder.wnd = createAttachedWindow("CBTFrameStrip_" .. tostring(unitType))
-  if not holder.wnd then return nil end
-  holder.sig = nil
-  holder.bar = nil
-  holder.offset = nil
-  holder.shown = false
-  return holder
 end
 
 local function ensureFrameOverlay(index)
@@ -1871,7 +1858,7 @@ local function ensureFrameOverlay(index)
   return holder
 end
 
--- Show(true/false) только при смене состояния: строка перерисовывается
+-- Show(true/false) только при смене состояния: оверлей перерисовывается
 -- каждые 50 мс, лишние вызовы движка здесь не нужны.
 local function setHolderShown(holder, shown)
   if not holder or not holder.wnd then return end
@@ -1894,15 +1881,6 @@ local function destroyFrameOverlay(index)
 end
 
 local function destroyFrameModes()
-  for unitType, holder in pairs(frameStrips) do
-    if holder.wnd then
-      pcall(function() holder.wnd:Show(false) end)
-      pcall(function() api.Interface:Free(holder.wnd) end)
-      holder.wnd = nil
-    end
-    holder.icons = {}
-    frameStrips[unitType] = nil
-  end
   local idx = 1
   while frameOverlays[idx] do
     destroyFrameOverlay(idx)
@@ -1913,7 +1891,6 @@ local function destroyFrameModes()
 end
 
 hideFrameModesForUnit = function(unitType)
-  setHolderShown(frameStrips[unitType], false)
   if unitType == "target" then
     for _, oh in pairs(frameOverlays) do
       setHolderShown(oh, false)
@@ -2013,68 +1990,6 @@ local function renderAttachedIcons(holder, unitType, namespace, buffs, cfg)
     holder.wnd:SetExtent(width, height)
     holder.sig = sig
   end
-end
-
--- Ставит строку под полосой. AddAnchor на обёртке полосы может не сработать
--- в другой сборке клиента — тогда пробуем её statusBar и саму рамку.
-local function anchorStripUnder(holder, bar, frame, offset)
-  local candidates = {}
-  if bar then candidates[#candidates + 1] = bar end
-  if bar and bar.statusBar then candidates[#candidates + 1] = bar.statusBar end
-  if frame then candidates[#candidates + 1] = frame end
-  for _, target in ipairs(candidates) do
-    local ok = pcall(function()
-      holder.wnd:RemoveAllAnchors()
-      holder.wnd:AddAnchor("TOPLEFT", target, "BOTTOMLEFT", 0, -offset)
-    end)
-    if ok then
-      holder.anchorTarget = target
-      return true
-    end
-  end
-  holder.anchorTarget = nil
-  return false
-end
-
--- Строка под полосой MP/HP нативной рамки.
-local function renderUnderBarStrip(unitType, merged)
-  local holder = frameStrips[unitType]
-  if not underBarModeFor(unitType) then
-    setHolderShown(holder, false)
-    return
-  end
-
-  local cache = frameCache[unitType]
-  if not (cache and cache.visible and cache.bar) then
-    setHolderShown(holder, false)
-    return
-  end
-  if unitType == "target" and getCurrentTargetId() == nil then
-    setHolderShown(holder, false)
-    return
-  end
-
-  if not holder then holder = ensureFrameStrip(unitType) end
-  if not holder or not holder.wnd then return end
-  if #merged == 0 then
-    setHolderShown(holder, false)
-    return
-  end
-
-  local us = settings[unitType]
-  local reserved = tonumber(us and us.stripOffsetY) or 0
-  local offset = 2 + reserved
-  local cfg = attachedCfg(unitType, MAX_STRIP_ICONS, stripIconSize(unitType), #merged)
-
-  if holder.bar ~= cache.bar or holder.offset ~= offset then
-    holder.bar = cache.bar
-    holder.offset = offset
-    holder.sig = nil
-    anchorStripUnder(holder, cache.bar, cache.frame, offset)
-  end
-
-  renderAttachedIcons(holder, unitType, 90, merged, cfg)
-  setHolderShown(holder, true)
 end
 
 -- Экранная позиция оверлея: x и НИЖНЯЯ граница ряда (якорь BOTTOM).
@@ -2209,7 +2124,7 @@ local function renderTargetOverlays(activeBuffs)
   end
 end
 
--- Точка входа из updateBuffIcons: обновляет привязанный к юниту показ.
+-- Точка входа из updateBuffIcons: обновляет оверлей цели.
 local function renderFrameModes(unitType, activeBuffs)
   if not settings then return end
   local nowMs = 0
@@ -2220,28 +2135,13 @@ local function renderFrameModes(unitType, activeBuffs)
   if unitType == "target" then
     renderTargetOverlays(activeBuffs)
   end
+end
 
-  if underBarModeFor(unitType) then
-    local us = settings[unitType]
-    local canvasCount = (us and us.canvases and #us.canvases) or 1
-    if canvasCount < 1 then canvasCount = 1 end
-    local merged = {}
-    for idx = 1, canvasCount do
-      for _, info in ipairs(activeBuffs) do
-        if canvasIndexFor(us, info.id) == idx then
-          merged[#merged + 1] = info
-        end
-      end
-    end
-    if #merged > MAX_GRID_ICONS then
-      local trimmed = {}
-      for i = 1, MAX_GRID_ICONS do trimmed[i] = merged[i] end
-      merged = trimmed
-    end
-    renderUnderBarStrip(unitType, merged)
-  else
-    setHolderShown(frameStrips[unitType], false)
-  end
+-- 1.26.0: Hide target canvas — плавающие канвасы цели не рисуются совсем.
+-- Данные при этом собираются как обычно (checkBuffs), а оверлей, если включён,
+-- продолжает рисоваться из renderFrameModes.
+local function floatingCanvasesHidden(unitType, unitSettings)
+  return unitType == "target" and unitSettings.hideCanvas == true
 end
 
 local function updateBuffIcons(unitType)
@@ -2395,9 +2295,10 @@ local function updateBuffIcons(unitType)
     end
   end
 
-  -- 1.23.0: включённый режим у нативного фрейма заменяет плавающую панель.
-  local underBarMode = underBarModeFor(unitType)
+  -- 1.26.0: единственный привязанный к юниту режим — оверлей цели; он
+  -- заменяет плавающие панели. Hide target canvas убирает их и без оверлея.
   local overlayMode = (unitType == "target") and (unitSettings.overlay == true)
+  local hideFloating = floatingCanvasesHidden(unitType, unitSettings)
 
   -- Рисуем каждый канвас своим подмножеством записей (canvasOf).
   for idx = 1, #canvasesForUnit do
@@ -2410,8 +2311,9 @@ local function updateBuffIcons(unitType)
           canvasBuffs[#canvasBuffs + 1] = buffInfo
         end
       end
-      if underBarMode or overlayMode then
-        -- Строка под HP/MP и оверлей цели показывают записи канваса сами.
+      if overlayMode or hideFloating then
+        -- Оверлей цели рисует записи канваса сам; Hide target canvas просто
+        -- прячет плавающую панель, данные продолжают собираться.
         if canvas.IsVisible and canvas:IsVisible() then canvas:Show(false) end
       elseif #canvasBuffs == 0 then
         canvas:Show(false)
@@ -3203,21 +3105,25 @@ local function getActiveBuffs(unitType)
   return out
 end
 
--- Очистка журнала навыков (кнопка Clear log в окне Record)
-local function clearLoggedSpells()
-  for i = #loggedSpellOrder, 1, -1 do
-    loggedSpellOrder[i] = nil
+-- Очистка журнала навыков выбранного юнита (кнопка Clear log в окне Record)
+local function clearLoggedSpells(unitType)
+  local store = loggedSpells[unitType]
+  if not store then return end
+  for i = #store.order, 1, -1 do
+    store.order[i] = nil
   end
-  for k in pairs(loggedSpellMap) do
-    loggedSpellMap[k] = nil
+  for name in pairs(store.map) do
+    store.map[name] = nil
   end
 end
 
--- Навыки из боевого лога (свежие сверху) для окна Record
-local function getLoggedSpells(limit)
+-- Навыки из боевого лога выбранного юнита (свежие сверху) для окна Record
+local function getLoggedSpells(unitType, limit)
   local out = {}
-  for i = #loggedSpellOrder, 1, -1 do
-    local e = loggedSpellMap[loggedSpellOrder[i]]
+  local store = loggedSpells[unitType]
+  if not store then return out end
+  for i = #store.order, 1, -1 do
+    local e = store.map[store.order[i]]
     if e then
       out[#out + 1] = { name = e.name, count = e.count, last = e.last }
     end
@@ -3672,7 +3578,11 @@ local function onCombatMessage(event, ...)
       tostring(parsed.spellName), tostring(parsed.spellId)))
   end
   if parsed.spellName then
-    recordLoggedSpell(parsed.spellName, getCurrentTime())
+    -- Журнал Record: только если источник совпал с именем player/mount/target.
+    local logUnit = loggedSpellUnitFor(args[3])
+    if logUnit then
+      recordLoggedSpell(logUnit, parsed.spellName, getCurrentTime())
+    end
     triggerSpell(parsed.spellName, args[3], parsed.spellId, args, combatEvent)
   end
 end

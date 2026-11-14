@@ -44,10 +44,11 @@ local CANVAS_LAYOUT_DEFAULT = {
 }
 
 -- 1.23.0: режимы показа, привязанные к нативным фреймам юнита. Живут на
--- уровне юнита, а не канваса: под полосой HP/MP все канвасы сливаются в одну
--- строку, поэтому отдельных раскладок у них быть не может.
+-- уровне юнита, а не канваса: это переключатели показа всех канвасов юнита.
 -- 1.25.0: Player-режим "Under MP bar" убран — DISPLAY_FIELDS только у цели.
-local DISPLAY_FIELDS = { "overlay", "underBars", "stripOffsetY", "avoidTTP", "ttpGap" }
+-- 1.26.0: строка под HP/MP убрана совсем; остались оверлей цели и скрытие
+-- её плавающих канвасов.
+local DISPLAY_FIELDS = { "overlay", "hideCanvas", "avoidTTP", "ttpGap" }
 
 local function clampNumber(value, minValue, maxValue, fallback)
     local n = tonumber(value)
@@ -108,8 +109,7 @@ local defaultSettings = {
         mirror = {},
         cacheTimeout = 300,     -- 5 минут в секундах - время очистки кэша target
         overlay = false,        -- 1.23.0: оверлей каждого канваса вокруг фрейма
-        underBars = false,      -- 1.23.0: слить канвасы в строку под HP/MP
-        stripOffsetY = 0,
+        hideCanvas = false,     -- 1.26.0: не рисовать плавающие канвасы цели
         avoidTTP = true,        -- ставить оверлей над рядом TrackThatPlease
         ttpGap = 4,             -- зазор между нашим рядом и рядом TTP, px
     },
@@ -281,17 +281,20 @@ local function migrateUnit(unit, unitType)
         changed = true
     end
 
-    -- 1.25.0: Player-режим "Under MP bar" убран — его ключи (underMp и запас
+    -- 1.26.0: строка под HP/MP убрана полностью — её ключи (underBars и запас
     -- под чужой строкой) больше не читаются, чистим их из сохранений.
-    if unitType == "player" then
-        if unit.underMp ~= nil then
-            unit.underMp = nil
-            changed = true
-        end
-        if unit.stripOffsetY ~= nil then
-            unit.stripOffsetY = nil
-            changed = true
-        end
+    -- 1.25.0: Player-режим "Under MP bar" убран вместе с underMp.
+    if unit.underBars ~= nil then
+        unit.underBars = nil
+        changed = true
+    end
+    if unit.stripOffsetY ~= nil then
+        unit.stripOffsetY = nil
+        changed = true
+    end
+    if unitType == "player" and unit.underMp ~= nil then
+        unit.underMp = nil
+        changed = true
     end
 
     -- 1.23.0: режимы у нативных фреймов. У старых сохранений полей нет —
@@ -304,13 +307,6 @@ local function migrateUnit(unit, unitType)
                 unit[field] = unitDefaults[field]
                 changed = true
             end
-        end
-    end
-    if unit.stripOffsetY ~= nil then
-        local offset = clampNumber(unit.stripOffsetY, -50, 300, 0)
-        if unit.stripOffsetY ~= offset then
-            unit.stripOffsetY = offset
-            changed = true
         end
     end
     if unit.ttpGap ~= nil then

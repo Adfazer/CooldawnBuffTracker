@@ -296,11 +296,11 @@ local function buildConfigTable()
             trackedBuffs = unit.trackedBuffs or {},
             mirror = unit.mirror or {},
             enabled = unit.enabled ~= false,
-            -- 1.23.0: режимы у нативных фреймов юнита (строка под HP/MP,
-            -- оверлей цели). Старые версии аддона просто игнорируют ключи.
+            -- 1.23.0: режимы у нативных фреймов юнита (оверлей цели).
+            -- 1.26.0: строка под HP/MP убрана, добавлено скрытие канваса.
+            -- Старые версии аддона просто игнорируют неизвестные ключи.
             overlay = unit.overlay == true,
-            underBars = unit.underBars == true,
-            stripOffsetY = tonumber(unit.stripOffsetY) or 0,
+            hideCanvas = unit.hideCanvas == true,
             avoidTTP = unit.avoidTTP ~= false,
             ttpGap = tonumber(unit.ttpGap) or 4,
         }
@@ -461,12 +461,14 @@ local function importConfiguration(configString, errorMsgLabel)
             if src.enabled ~= nil then unit.enabled = src.enabled ~= false end
             unit.trackedBuffs = type(src.trackedBuffs) == "table" and src.trackedBuffs or config.trackedBuffs[unitType]
             -- 1.23.0: режимы у нативных фреймов (в старом конфиге ключей нет —
-            -- их добьёт migrate ниже). underMp убран в 1.25.0.
+            -- их добьёт migrate ниже). underMp убран в 1.25.0, строка под HP/MP
+            -- (underBars/stripOffsetY) — в 1.26.0; hideCanvas добавлен там же.
             if src.overlay ~= nil then unit.overlay = src.overlay == true end
-            if src.underBars ~= nil then unit.underBars = src.underBars == true end
-            if src.stripOffsetY ~= nil then unit.stripOffsetY = tonumber(src.stripOffsetY) or 0 end
+            if src.hideCanvas ~= nil then unit.hideCanvas = src.hideCanvas == true end
             if src.avoidTTP ~= nil then unit.avoidTTP = src.avoidTTP ~= false end
             if src.ttpGap ~= nil then unit.ttpGap = tonumber(src.ttpGap) or 4 end
+            unit.underBars = nil
+            unit.stripOffsetY = nil
         else
             -- Плоский (старый) конфиг: все записи на первый канвас.
             unit.trackedBuffs = config.trackedBuffs[unitType]

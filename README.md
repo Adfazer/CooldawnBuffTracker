@@ -97,37 +97,50 @@ shows only the fields of that type.
   you return to a unit; stale cache is cleared after 5 minutes.
 - Independent position/size/display settings.
 
-### Native frame display (1.23.0, target only since 1.25.0)
-Two optional target display modes attach the target panels to the game's own
-target frame or to the target itself. They are off by default; turning one off
-restores the floating canvas with its saved position. Configure them in the
-settings window, left column, right under the
-`Unit: Mount / Player / Target` buttons — the block shows only for **Target**
-(**Native frame display**); Mount and Player keep their floating panels.
+### Native frame display (1.23.0, target only)
 
-- **Under HP/MP bar (Target)** — all target canvases merge into one icon strip
-  anchored under the target frame's MP bar (HP for mana-less targets). Canvas 1
-  entries come first, then canvas 2 and so on; **9 icons per row**, no name
-  labels, the canvas grid settings are ignored. Extra icons wrap downwards.
+Two optional target switches attach the target panels to the game's own target
+frame. They are off by default; turning them off restores the floating canvas
+with its saved position. Configure them in the settings window, left column,
+right under the `Unit: Mount / Player / Target` buttons — the block shows only
+for **Target** (**Native frame display**); Mount and Player keep their floating
+panels and have no frame-attached options.
+
 - **Overlay around target** — each target canvas is drawn as its own compact
   overlay at the target's screen position (the same projection
   TrackThatPlease uses), with its own `X`, `Y`, `Size` and `Per row` fields in
   that canvas's layout. The position is re-read **every frame**, so the overlay
   follows a moving target; it is re-anchored only when the rounded position
   moved by a pixel, and hides when the target is lost or the projection is
-  invalid. Overlay replaces the floating panel of that canvas; it can be on
-  together with **Under HP/MP bar** (both rows render).
+  invalid. Overlay replaces the floating panel of that canvas.
+- **Hide target canvas** — hides every floating target canvas. Buff data keeps
+  running (timers are still tracked) and **Overlay** still draws when it is
+  enabled. With Overlay off, nothing target-related is drawn — that is the
+  chosen state, not a bug.
 - **Avoid TrackThatPlease** (default ON) — when TrackThatPlease is loaded, the
   overlay row is placed **above** its target row, using TTP's own
   `targetBuffVerticalOffset` and `targetIconSize` (and the client UI scale).
   `Gap` sets the space between the rows (default 4 px). With TTP absent the
   overlay uses the canvas `X`/`Y` offsets from the target's screen position.
-- **Reserved Y** — extra space below the bar before the strip starts, for another
-  addon's row. The frame visibility and the target are re-checked twice a second;
-  the strip hides with the frame and with no target.
+  Frame visibility and the target are re-checked twice a second; the overlay
+  hides with the frame and with no target.
+
+The merged under-bar strip (`Under HP/MP bar`) and its `Reserved Y` field were
+removed in 1.26.0: the target overlay is the only frame-attached display mode,
+and floating canvases stay exactly where the user put them.
 
 ### Debugging
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
+- **Record (Debug)** window (Debug mode ON) — one journal per unit, switched
+  with `Player / Mount / Target`:
+  - **Buff log** — every buff/debuff seen since the last `Clear log`, one row
+    per buff: `name [id] (xN)`. `xN` counts how many times the buff appeared;
+    a buff that fades and returns increases the counter instead of adding a
+    second row. Active rows are gold, faded rows grey; `Add` works on both.
+  - **Log skills** — spells from the combat log, grouped by source name: your
+    own casts go to Player, the mount/pet casts to Mount, casts by the current
+    target to Target. Duplicates are counted (`xN`), each log keeps the last 200
+    spells, and `Clear log` clears only the selected unit.
 
 ## How the timers work
 
@@ -161,13 +174,41 @@ mount and target.
 
 ## Changelog
 
+### 1.26.0
+
+- **Target `Under HP/MP bar` mode removed completely.** The merged strip
+  renderer, its strip holder windows, `target.underBars` / `target.stripOffsetY`,
+  the `Under HP/MP bar` checkbox and label, the `Reserved Y` field and every
+  Import/Export/preset mention are gone. The target overlay is the only
+  frame-attached display mode; old saves drop the keys on load and old configs
+  import without them.
+- **New target switch `Hide target canvas`.** Hides all floating target
+  canvases while buff scanning and timers keep running; the overlay still
+  renders when it is on, and with Overlay off nothing target-related is drawn.
+  Persisted in `target.hideCanvas` (default off), carried by presets and
+  Import/Export, migrated for existing configurations.
+- **Record buff log has no duplicates.** The buff tab keeps one row per buff,
+  `name [id] (xN)`. The counter grows only when a buff appears again after it
+  faded — while it stays active there are no repeated rows and no growth.
+  `Clear log` resets the map of the selected unit. Active rows stay gold, faded
+  rows grey.
+- **Record skill log is per unit.** Combat-log spells are recorded into the
+  Player, Mount or Target log by **source name**: a spell under your
+  character's name goes to Player, under the mount/pet name to Mount, under the
+  current target's name to Target (priority player → mount → target when names
+  collide; a source that matches none is not logged). Each log keeps up to 200
+  entries with a hit counter, `Clear log` clears only the selected unit, and the
+  unit switch in the Record window now drives both tabs. Names are compared
+  exactly (no `string.lower`, which does not fold Cyrillic).
+
 ### 1.25.0
 
 - **Player `Under MP bar` display mode removed.** The player no longer has a
   frame-attached mode: `player.underMp`, its checkbox and label, the player
-  `Reserved Y` (the field exists only for the target strip now) and the merged
-  player strip renderer are gone. Old saves drop the keys on load, Import/Export
-  no longer carries them, and presets saved earlier simply ignore them.
+  `Reserved Y` and the merged player strip renderer are gone. Old saves drop the
+  keys on load, Import/Export no longer carries them, and presets saved earlier
+  simply ignore them. *(1.26.0 also removed the target `Under HP/MP bar` strip
+  and the remaining `Reserved Y` field.)*
   **Native frame display** therefore shows nothing for Mount, nothing for
   Player, and only the target options for Target.
 - **Target overlay follows the target at frame rate.** `GetUnitScreenPosition
@@ -190,7 +231,8 @@ mount and target.
   (the Player row was dropped in 1.25.0, so only Target has controls now):
   Mount — nothing; Target — `Overlay around
   target`, `Under HP/MP bar`, `Avoid TrackThatPlease` + `Gap`, `Reserved Y`, and the
-  per-canvas overlay `X` / `Y` / `Size` / `Per row` fields while Overlay is on.
+  per-canvas overlay `X` / `Y` / `Size` / `Per row` fields while Overlay is on
+  (the strip and `Reserved Y` were removed in 1.26.0, the rest stays).
   `Tracked entries` moves down by exactly the height of the block (one anchor), the
   list is 208 px (9 rows) and the ID/name form with its pagination stays above the
   footer.
@@ -208,6 +250,10 @@ mount and target.
   overlaps the `Under HP/MP bar` label.
 
 ### 1.23.0
+
+*(The under-bar strip this version added — player and target — was removed
+again in 1.25.0 / 1.26.0; the target overlay described below is the part that
+remains.)*
 
 - **Native frame display modes** (all optional, off by default; floating
   canvases return when a mode is off):
@@ -985,7 +1031,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.25.0
+**Current Version:** 1.26.0
 
 ## Credits
 

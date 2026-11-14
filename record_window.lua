@@ -17,8 +17,8 @@ local modeButtons = {}
 local PER_PAGE = 8
 local page = 1
 local results = {}
-local buffLogs = {}   -- [unit] = newest-first list of buffs seen since Clear
-local buffSeen = {}   -- [unit] = { [id] = true } currently active
+local buffLogs = {}   -- [unit] = { order = {...}, map = { [id] = entry } } seen since Clear
+local buffSeen = {}   -- [unit] = { [id] = true } active on the previous refresh
 
 local providerActive
 local providerLog
@@ -39,6 +39,13 @@ local function setColor(widget, c)
     end
 end
 
+-- Время последнего появления баффа в журнале (монотонные мс).
+local function nowMsec()
+    local ok, ms = pcall(function() return api.Time:GetUiMsec() end)
+    if ok and type(ms) == "number" then return ms end
+    return 0
+end
+
 local function refresh()
     if not win or not win:IsVisible() then return end
     results = {}
@@ -49,6 +56,10 @@ local function refresh()
             local ok, l = pcall(providerActive, unit)
             if ok and type(l) == "table" then list = l end
         end
+        -- Журнал — одна строка на бафф (map по id), счётчик растёт только при
+        -- новом появлении: пока бафф висит, повторных строк нет.
+        local log = buffLogs[unit]
+        if not log then log = { order = {}, map = {} }; buffLogs[unit] = log end
         local seen = buffSeen[unit]
         if not seen then seen = {}; buffSeen[unit] = seen end
         local active = {}
@@ -56,20 +67,50 @@ local function refresh()
             local key = tostring(it.id)
             active[key] = true
             activeCount = activeCount + 1
-            if not seen[key] then
-                seen[key] = true
-                local log = buffLogs[unit]
-                if not log then log = {}; buffLogs[unit] = log end
-                table.insert(log, 1, { id = it.id, name = it.name, icon = it.icon, unit = unit })
-                if #log > 300 then log[#log] = nil end
+            local e = log.map[key]
+            if not e then
+                e = { id = it.id, name = it.name, icon = it.icon, count = 0 }
+                log.map[key] = e
+                table.insert(log.order, 1, key)
+                if #log.order > 300 then
+                    local old = log.order[#log.order]
+                    log.order[#log.order] = nil
+                    log.map[old] = nil
+                end
             end
+            if not seen[key] then
+                e.count = (e.count or 0) + 1
+                e.last = nowMsec()
+                -- Новое появление — наверх (свежие сверху, как в журнале навыков).
+                for i = #log.order, 1, -1 do
+                    if log.order[i] == key then
+                        table.remove(log.order, i)
+                        break
+                    end
+                end
+                table.insert(log.order, 1, key)
+            end
+            e.name = it.name or e.name
+            e.icon = it.icon or e.icon
+            e.active = true
         end
-        -- снятый бафф снова попадёт в лог при повторном появлении
-        for key in pairs(seen) do if not active[key] then seen[key] = nil end end
-        results = buffLogs[unit] or {}
+        -- Снятый бафф остаётся в журнале (серым) и снова попадёт в счётчик
+        -- при следующем появлении.
+        for key, e in pairs(log.map) do
+            if not active[key] then e.active = false end
+        end
+        -- Снимок активных для следующего тика: «не видели раньше» = нет в снимке.
+        for key in pairs(seen) do seen[key] = nil end
+        for key in pairs(active) do seen[key] = true end
+        results = {}
+        for i = 1, #log.order do
+            local e = log.map[log.order[i]]
+            if e then results[#results + 1] = e end
+        end
     else
+        -- Журнал навыков боевого лога — свой на каждый юнит (Player/Mount/Target).
         if providerLog then
-            local ok, list = pcall(providerLog, 60)
+            local ok, list = pcall(providerLog, unit, 60)
             if ok and type(list) == "table" then results = list end
         end
     end
@@ -96,9 +137,15 @@ local function refresh()
                 row.item = item
                 if row.nameLabel then
                     local title = tostring(item.name or item.id or "")
-                    if mode == "buff" and item.id and item.name ~= item.id then
-                        title = title .. " [" .. tostring(item.id) .. "]"
-                    elseif mode == "log" and item.count then
+                    if mode == "buff" then
+                        -- name [id] (xN) — как строка журнала навыков.
+                        if item.id ~= nil and item.name ~= item.id then
+                            title = title .. " [" .. tostring(item.id) .. "]"
+                        end
+                        if item.count then
+                            title = title .. "  (x" .. tostring(item.count) .. ")"
+                        end
+                    elseif item.count then
                         title = title .. "  (x" .. tostring(item.count) .. ")"
                     end
                     row.nameLabel:SetText(title)
@@ -106,8 +153,10 @@ local function refresh()
                 if row.icon then
                     F_SLOT.SetIconBackGround(row.icon, item.icon or "game/ui/icon/icon_buff_debuff.dds")
                 end
-                if mode == "buff" and row.nameLabel then
-                    local live = buffSeen[unit] and buffSeen[unit][tostring(item.id)]
+                if row.nameLabel then
+                    -- Активные записи — золотом, снятые — серым; журнал навыков
+                    -- всегда обычным цветом (строка переиспользуется между вкладками).
+                    local live = (mode ~= "buff") or item.active
                     setColor(row.nameLabel, live and COLORS.text or COLORS.muted)
                 end
                 row:Show(true)
@@ -243,11 +292,11 @@ local function build()
     clearBtn:Show(true)
     clearBtn:SetHandler("OnClick", function()
         if mode == "buff" then
-            buffLogs[unit] = {}
+            buffLogs[unit] = { order = {}, map = {} }
             buffSeen[unit] = {}
             if statusLabel then statusLabel:SetText("Buff log cleared") end
         else
-            if clearLog then clearLog() end
+            if clearLog then clearLog(unit) end
             if statusLabel then statusLabel:SetText("Skill log cleared") end
         end
         page = 1

@@ -363,15 +363,11 @@ local function saveSettings()
     -- 1.23.0: режимы у нативных фреймов. Пишем только значения ВИДИМЫХ
     -- контролов: скрытая секция другого юнита иначе затирала бы его поля.
     -- 1.25.0: Player-режим убран, блок есть только у цели.
+    -- 1.26.0: строки под HP/MP нет, hideCanvas сохраняется сразу по клику.
     if currentUnitType == "target" then
         if settings.target then
-            settings.target.stripOffsetY = clampIntText(
-                settingsControls.stripOffsetY and settingsControls.stripOffsetY:GetText(), -50, 300, 0)
             settings.target.ttpGap = clampIntText(
                 settingsControls.ttpGap and settingsControls.ttpGap:GetText(), 0, 200, 4)
-            if settingsControls.stripOffsetY then
-                settingsControls.stripOffsetY:SetText(tostring(settings.target.stripOffsetY))
-            end
             if settingsControls.ttpGap then
                 settingsControls.ttpGap:SetText(tostring(settings.target.ttpGap))
             end
@@ -1769,10 +1765,10 @@ local function buildTrackedBuffsSection()
     recordButton:SetHandler("OnClick", function()
         recordWindow.setProviders(
             function(u) return M.getActiveBuffs and M.getActiveBuffs(u or currentUnitType) or {} end,
-            function(lim) return M.getLoggedSpells and M.getLoggedSpells(lim) or {} end,
+            function(u, lim) return M.getLoggedSpells and M.getLoggedSpells(u or currentUnitType, lim) or {} end,
             function(id) return addBuffFromSearch(id, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
             function(name) return addCustomFromSpell(name, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
-            function() if M.clearLoggedSpells then M.clearLoggedSpells() end end)
+            function(u) if M.clearLoggedSpells then M.clearLoggedSpells(u or currentUnitType) end end)
         recordWindow.scanStarter = function() if M.startScan then M.startScan("") end end
         recordWindow.open()
     end)
@@ -3126,9 +3122,11 @@ end
 -- =====================================================================
 -- "Native frame display" — режимы, привязанные к юниту.
 --   Player: ничего — Player-режим "Under MP bar" убран в 1.25.0.
---   Target: Overlay around target, Under HP/MP bar, Avoid TrackThatPlease
---           (+ Gap), Reserved Y и поля оверлея выбранного канваса.
+--   Target: Overlay around target, Hide target canvas, Avoid TrackThatPlease
+--           (+ Gap) и поля оверлея выбранного канваса.
 --   Mount:  ничего — блок скрыт.
+-- 1.26.0: слитая строка под HP/MP убрана совсем — у цели остались оверлей
+-- вокруг неё и скрытие плавающих канвасов.
 -- 1.24.0: блок переехал в ЛЕВУЮ колонку под кнопки Unit (x 20..355): ряд
 -- Canvas сдвинут на y=44, поэтому под ним освободилось место. Один набор
 -- контролов на выбранный юнит: syncFrameModeControls() прячет лишние,
@@ -3208,20 +3206,21 @@ local function buildFrameModeSection()
     overlayLabel:Show(false)
     settingsControls.overlayLabel = overlayLabel
 
-    -- Target: строка под HP/MP — ряд 2.
-    local underBarsCheck = CbtWindow.CheckButton('cbtTargetUnderBars', settingsWindow, onToggle("target", "underBars"))
-    if underBarsCheck then
-        underBarsCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + FRAME_ROW_STEP)
-        underBarsCheck:Show(false)
-        CbtWindow.Tooltip(underBarsCheck,
-            "Merge every target canvas into one icon strip under the target frame's MP bar (HP for mana-less targets). 9 icons per row, no names; the canvas grid is ignored. Works together with Overlay.")
+    -- 1.26.0: Hide target canvas — ряд 2. Прячет плавающие канвасы цели;
+    -- оверлей, если он включён, продолжает рисоваться.
+    local hideCanvasCheck = CbtWindow.CheckButton('cbtTargetHideCanvas', settingsWindow, onToggle("target", "hideCanvas"))
+    if hideCanvasCheck then
+        hideCanvasCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + FRAME_ROW_STEP)
+        hideCanvasCheck:Show(false)
+        CbtWindow.Tooltip(hideCanvasCheck,
+            "Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.")
     end
-    settingsControls.underBarsCheck = underBarsCheck
+    settingsControls.hideCanvasCheck = hideCanvasCheck
 
-    local underBarsLabel = helpers.createLabel('cbtTargetUnderBarsLabel', settingsWindow, 'Under HP/MP bar', 42, FRAME_ROW_1 + FRAME_ROW_STEP - 1, 13)
-    underBarsLabel:SetWidth(170)
-    underBarsLabel:Show(false)
-    settingsControls.underBarsLabel = underBarsLabel
+    local hideCanvasLabel = helpers.createLabel('cbtTargetHideCanvasLabel', settingsWindow, 'Hide target canvas', 42, FRAME_ROW_1 + FRAME_ROW_STEP - 1, 13)
+    hideCanvasLabel:SetWidth(170)
+    hideCanvasLabel:Show(false)
+    settingsControls.hideCanvasLabel = hideCanvasLabel
 
     -- Target: не наезжать на ряд TrackThatPlease — ряд 3 (+ поле Gap справа).
     local avoidTTPCheck = CbtWindow.CheckButton('cbtAvoidTTP', settingsWindow, onToggle("target", "avoidTTP"))
@@ -3253,27 +3252,9 @@ local function buildFrameModeSection()
     settingsControls.ttpGap = ttpGap
     bindApplyOnEnter(ttpGap)
 
-    -- "Reserved Y" под строкой (место под чужими рядами) — только у цели,
-    -- ряд 4: y проставляет syncFrameModeControls().
-    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 20, FRAME_ROW_1 + 3 * FRAME_ROW_STEP, 13)
-    stripOffsetLabel:SetWidth(84)
-    stripOffsetLabel:Show(false)
-    settingsControls.stripOffsetLabel = stripOffsetLabel
-    CbtWindow.Tooltip(stripOffsetLabel,
-        "Extra space below the bar before the strip starts, px. Use it to clear another addon's row (for example TrackWhatPlease) without moving the native frame.")
-
-    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 104, FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
-    if stripOffsetY then
-        stripOffsetY:SetMaxTextLength(4)
-        stripOffsetY:SetWidth(45)
-        stripOffsetY:Show(false)
-    end
-    settingsControls.stripOffsetY = stripOffsetY
-    bindApplyOnEnter(stripOffsetY)
-
-    -- Поля оверлея выбранного target-канваса (видны только при Overlay) — ряд 5.
+    -- Поля оверлея выбранного target-канваса (видны только при Overlay) — ряд 4.
     -- Вся строка умещается в левую колонку (20..332), не заходя под ряд Canvas.
-    local overlayRowY = FRAME_ROW_1 + 4 * FRAME_ROW_STEP
+    local overlayRowY = FRAME_ROW_1 + 3 * FRAME_ROW_STEP
 
     local overlayXLabel = helpers.createLabel('cbtOverlayXLabel', settingsWindow, 'X:', 20, overlayRowY, 13)
     overlayXLabel:SetWidth(14)
@@ -3345,15 +3326,12 @@ local function buildFrameModeSection()
 
         showControl(settingsControls.overlayCheck, isTarget)
         showControl(settingsControls.overlayLabel, isTarget)
-        showControl(settingsControls.underBarsCheck, isTarget)
-        showControl(settingsControls.underBarsLabel, isTarget)
+        showControl(settingsControls.hideCanvasCheck, isTarget)
+        showControl(settingsControls.hideCanvasLabel, isTarget)
         showControl(settingsControls.avoidTTPCheck, isTarget)
         showControl(settingsControls.avoidTTPLabel, isTarget)
         showControl(settingsControls.ttpGapLabel, isTarget)
         showControl(settingsControls.ttpGap, isTarget)
-
-        showControl(settingsControls.stripOffsetLabel, show)
-        showControl(settingsControls.stripOffsetY, show)
 
         local overlayFields = isTarget and settings.target and settings.target.overlay == true
         showControl(settingsControls.overlayXLabel, overlayFields)
@@ -3365,28 +3343,20 @@ local function buildFrameModeSection()
         showControl(settingsControls.overlayPerRowLabel, overlayFields)
         showControl(settingsControls.overlayPerRow, overlayFields)
 
-        -- "Reserved Y" — ряд 4 у Target (над ним три ряда: Overlay, Under HP/MP,
-        -- Avoid TrackThatPlease). У Player поля больше нет.
-        anchorControl(settingsControls.stripOffsetLabel, 20,
-            FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
-        anchorControl(settingsControls.stripOffsetY, 104,
-            FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
-
         -- "Tracked entries" уезжает вниз ровно на высоту блока: у Mount и Player
-        -- блока нет, у Target — четыре ряда (пять, когда Overlay ON и видны поля
+        -- блока нет, у Target — три ряда (четыре, когда Overlay ON и видны поля
         -- оверлея). Двигается один якорь группы, остальная левая колонка висит
         -- на нём.
         local rows = 0
         if isTarget then
-            rows = overlayFields and 5 or 4
+            rows = overlayFields and 4 or 3
         end
         if settingsControls.trackedBuffsGroupLabel then
             anchorControl(settingsControls.trackedBuffsGroupLabel, 34, trackedGroupY(rows))
         end
 
-        -- Подсказка поля ID/name не должна вылезать за нижний край окна: у
-        -- Target с полями оверлея форма стоит ниже, поэтому рядов на один меньше.
-        settingsControls.acMaxRows = (isTarget and overlayFields) and 3 or 4
+        -- Подсказка поля ID/name не должна вылезать за нижний край окна.
+        settingsControls.acMaxRows = 4
 
         if not show then return end
 
@@ -3397,9 +3367,9 @@ local function buildFrameModeSection()
                     settingsControls.overlayCheck:SetChecked(settings.target.overlay == true)
                 end)
             end
-            if settingsControls.underBarsCheck then
+            if settingsControls.hideCanvasCheck then
                 pcall(function()
-                    settingsControls.underBarsCheck:SetChecked(settings.target.underBars == true)
+                    settingsControls.hideCanvasCheck:SetChecked(settings.target.hideCanvas == true)
                 end)
             end
             if settingsControls.avoidTTPCheck then
@@ -3409,9 +3379,6 @@ local function buildFrameModeSection()
             end
             if settingsControls.ttpGap then
                 settingsControls.ttpGap:SetText(tostring(settings.target.ttpGap or 4))
-            end
-            if settingsControls.stripOffsetY then
-                settingsControls.stripOffsetY:SetText(tostring(settings.target.stripOffsetY or 0))
             end
             local cfg = selectedCanvasCfg() or {}
             if settingsControls.overlayX then settingsControls.overlayX:SetText(tostring(cfg.overlayX or 0)) end
