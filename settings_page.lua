@@ -1086,28 +1086,26 @@ local function openCddDialog(buffId)
     -- Переключатель типа: только для кастомных записей. У обычного
     -- отслеживаемого id есть лишь CD/D (settings.buffOverrides).
     ---------------------------------------------------------------
-    local typeButtons = {}
     local applyType
     if cb then
+        -- Тип задаётся однократно при создании записи и здесь только показывается.
+        local kindText = (editKind == 'skill' and 'Skill')
+            or (editKind == 'mana' and 'Mana skill') or 'Buff/Debuff'
         local typeLabel = helpers.createLabel('cbtCddTypeLabel', wnd, 'Type:', 15, 70, 13)
         typeLabel:SetWidth(38)
         pcall(function() typeLabel.style:SetColor(0.72, 0.74, 0.80, 1) end)
         typeLabel:Show(true)
 
-        local specs = {
-            { kind = 'buff',  text = 'Buff/Debuff', x = 55,  w = 100 },
-            { kind = 'skill', text = 'Skill',       x = 159, w = 66  },
-            { kind = 'mana',  text = 'Mana skill',  x = 229, w = 92  },
-        }
-        for _, spec in ipairs(specs) do
-            local b = helpers.createButton('cbtCddType_' .. spec.kind, wnd, spec.text, spec.x, 66)
-            b:SetExtent(spec.w, 24)
-            b:Show(true)
-            b:SetHandler("OnClick", function()
-                if applyType then applyType(spec.kind) end
-            end)
-            typeButtons[spec.kind] = b
-        end
+        local typeValue = helpers.createLabel('cbtCddTypeValue', wnd, kindText, 55, 70, 13)
+        typeValue:SetWidth(180)
+        pcall(function() typeValue.style:SetColor(0.95, 0.80, 0.25, 1) end)
+        typeValue:Show(true)
+
+        local typeNote = helpers.createLabel('cbtCddTypeNote', wnd,
+            '(set at creation, cannot be changed)', 240, 70, 11)
+        typeNote:SetWidth(320)
+        pcall(function() typeNote.style:SetColor(0.60, 0.62, 0.68, 1) end)
+        typeNote:Show(true)
     end
 
     local function makeFieldEdit(id, text, labelW, editW, y)
@@ -1627,16 +1625,6 @@ local function openCddDialog(buffId)
 
     applyType = function(kind)
         editKind = kind
-        for k, b in pairs(typeButtons) do
-            if b.textLabel then
-                if k == kind then
-                    pcall(function() b.textLabel.style:SetColor(0.95, 0.80, 0.25, 1) end)
-                else
-                    pcall(function() b.textLabel.style:SetColor(0.60, 0.62, 0.68, 1) end)
-                end
-            end
-        end
-
         local isBuff = (kind == 'buff')
         local isSkill = (kind == 'skill')
         local isMana = (kind == 'mana')

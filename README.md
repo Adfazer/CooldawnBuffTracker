@@ -177,6 +177,12 @@ mount and target.
 
 ## Changelog
 
+### 1.28.1
+
+- The entry type (Buff/Debuff, Skill, Mana skill) is now fixed at creation: the Edit
+  window shows it as a read-only label with a note «set at creation, cannot be changed»
+  instead of the type buttons. Fields and validation follow the stored kind.
+
 ### 1.28.0
 
 - **Effective CDs for target entries.** A buff/debuff or skill custom entry can
@@ -1087,7 +1093,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.28.0
+**Current Version:** 1.28.1
 
 ## Credits
 
