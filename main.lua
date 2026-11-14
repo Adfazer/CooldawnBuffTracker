@@ -4,8 +4,6 @@ local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
 local helpers = require("CooldawnBuffTracker/helpers")
 local settingsPage = require("CooldawnBuffTracker/settings_page")
 local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
-local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
-local EffectivePicker = require("CooldawnBuffTracker/effective_cd_window")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
@@ -76,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.21.8"
+  version = "1.22.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -121,15 +119,6 @@ local combatEventWnd = nil
 -- Mirror: id буффа -> id цели, на которую он был «прикреплён» в момент появления
 local mirrorTargetByBuff = {}
 
-
--- Компактное число для debug-строк (30, 21.5 — без хвостовых нулей)
-local function fmtNum(v)
-  v = tonumber(v) or 0
-  if math.abs(v - math.floor(v + 0.5)) < 0.05 then
-    return string.format("%.0f", v)
-  end
-  return string.format("%.2f", v)
-end
 
 local function formatTimerSeconds(seconds)
   if not seconds or seconds <= 0 then return "" end
@@ -183,6 +172,15 @@ local function findCustomBuffByName(name)
     end
   end
   return nil
+end
+
+-- Mirror допустим только для баффов/дебаффов: у навыка и мана-навыка нет ауры
+-- на цели, зеркалить нечего. Для трекнутых id без кастомной записи — можно.
+local function mirrorAllowed(buffId)
+  local cb = findCustomBuff(buffId)
+  if not cb then return true end
+  local kind = helpers.entryKind and helpers.entryKind(cb) or cb.kind or "buff"
+  return kind == "buff"
 end
 
 -- Пользовательские CD/D для обычного баффа (settings.buffOverrides)
@@ -249,63 +247,6 @@ local function applyCustomBuffOverrides()
       end
     end
   end
-end
-
--- ===== Effective cooldowns: дескриптор записи и сброс ветви (1.21.0) =====
-
--- Всё, что нужно модулю effective_cd, чтобы найти ветвь/базу/тип навыка.
-local function effectiveDescriptor(buffId, name, cd, cb)
-  local s = api.GetSettings("CooldawnBuffTracker") or settings or {}
-  local ov = s.buffOverrides and s.buffOverrides[tostring(buffId)] or nil
-  return {
-    id = buffId,
-    name = name or (cb and cb.name) or BuffList.GetBuffName(buffId),
-    spell = cb and cb.spellName or nil,
-    tree = (cb and cb.tree) or (ov and ov.tree) or nil,
-    kind = cb and cb.kind or nil,
-    cd = tonumber(cd) or 0,
-    -- CD записи авторитетен только если он задан вручную (custom/override)
-    custom = (cb ~= nil and tonumber(cb.cooldown or 0) > 0) or (ov ~= nil),
-  }
-end
-
--- Reset-прок ветви: все записи этой ветви становятся готовыми (таймеры не трогаем).
-local function markTargetTreeReady(targetId, tree, reason)
-  if not targetId or not tree or tree == "" then return 0 end
-  local now = getCurrentTime()
-  local count = 0
-
-  local function clearTable(tbl)
-    if type(tbl) ~= "table" then return end
-    for buffId, rec in pairs(tbl) do
-      if type(rec) == "table" then
-        local cb = findCustomBuff(buffId)
-        local desc = effectiveDescriptor(buffId, rec.name, rec.cooldown, cb)
-        local recTree = EffectiveCD.TreeOf(desc)
-        if recTree and string.lower(tostring(recTree)) == string.lower(tostring(tree)) then
-          rec.status = "ready"
-          rec.fixedTime = nil
-          rec.activeUntil = nil
-          rec.readyAt = now
-          rec.missingCount = 0
-          rec.effCooldown = nil
-          rec.effInfo = nil
-          count = count + 1
-        end
-      end
-    end
-  end
-
-  clearTable(targetBuffData)
-  clearTable(cachedTargetDisplayData)
-  local cache = targetCache[targetId]
-  if cache then clearTable(cache.buffStates) end
-
-  if count > 0 then
-    safeLog("[CBT] effCD: reset " .. tostring(tree) .. " timers=" .. tostring(count)
-      .. " target=" .. tostring(targetId) .. (reason and (" (" .. tostring(reason) .. ")") or ""))
-  end
-  return count
 end
 
 local function initBuffData()
@@ -454,32 +395,13 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
   buff.status = status
 
   local timeOfAction = tonumber(buff.timeOfAction) or 0
-  local cooldown = tonumber(buff.cooldown) or 0
-
-  -- 1.21.0: эффективный КД только для панели Target. База остаётся в buff.cooldown
-  -- (её видно в Edit), в readyAt уходит eff. Пересчитывается на каждой активации.
-  local cdUsed = cooldown
-  local effInfo = nil
-  local isMirrored = settings and settings.target and settings.target.mirror
-    and settings.target.mirror[tostring(buffId)]
-  if unitType == "target" and settings and settings.effectiveCd and status == "active"
-    and not isMirrored then
-    local cbEff = findCustomBuff(buffId) or findCustomBuffByName(buff.name)
-    local desc = effectiveDescriptor(buffId, buff.name, cooldown, cbEff)
-    local targetKey = currentTargetId or api.Unit:GetUnitId("target")
-    local eff, info = EffectiveCD.Effective(desc, targetKey)
-    if eff and info then
-      cdUsed = eff
-      effInfo = info
-    end
-  end
+  local cdUsed = tonumber(buff.cooldown) or 0
 
   if status == "active" then
     if anchorTime then
       -- Явный якорь: начало каста навыка (SPELLCAST_START), а не момент ауры
       buff.fixedTime = anchorTime
       buff.activeUntil = anchorTime + timeOfAction
-      buff.permanent = false
     elseif remainingTime ~= nil then
       -- remainingTime (мс) — серверный остаток баффа. Отсчёт ведём прямо от него,
       -- поэтому таймер не зависит от точности введённой длительности и одинаково
@@ -498,14 +420,12 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
       -- больше неё (долгая аура, а способность мгновенная), зелёная подсветка
       -- не висит всё время ауры.
       buff.activeUntil = buff.fixedTime + timeOfAction
-      buff.permanent = false
     else
       -- API не отдаёт timeLeft (у предмета/навыка нет длительности):
       -- берём длительность из настроек, как в 1.5.0. Это важно для бафов вещей,
       -- у которых есть только навык с кулдауном и нет собственного таймера.
       buff.fixedTime = currentTime
       buff.activeUntil = currentTime + timeOfAction
-      buff.permanent = false
     end
     buff.readyAt = buff.fixedTime + cdUsed
     -- Активная фаза (зелёный) всегда равна длительности баффа. Если кулдаун
@@ -518,16 +438,6 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
     buff.fixedTime = currentTime
     buff.activeUntil = currentTime
     buff.readyAt = currentTime + cdUsed
-  end
-
-  -- Значение эффективного КД записи (Edit показывает базу, таймер — eff)
-  buff.effCooldown = effInfo and cdUsed or nil
-  buff.effInfo = effInfo
-  if effInfo and settings and settings.debugBuffId then
-    safeLog(string.format("[CBT] effCD: skill %s base=%s flat=%s pct=%s eff=%s tree=%s target=%s",
-      tostring(buff.name), fmtNum(effInfo.base), fmtNum(effInfo.flat), fmtNum(effInfo.pct),
-      fmtNum(cdUsed), tostring(effInfo.tree),
-      tostring(effInfo.cls or currentTargetId or "?")))
   end
 
   buff.statusChangeTime = currentTime
@@ -609,53 +519,20 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
   -- устаревшее событие (кулдаун уже прошёл) не показываем
   if now - startedAt >= cd then return end
 
-  -- Наблюдение фактического интервала повторного применения этого навыка
-  -- (обучение коэффициентов ветви; сбросы ловятся отдельно от соотношения).
-  local prevCache = targetCache[sourceId]
-  local prevRec = prevCache and prevCache.buffStates and prevCache.buffStates[buffId]
-  if prevRec and prevRec.fixedTime and settings and settings.effectiveCd then
-    local interval = startedAt - (tonumber(prevRec.fixedTime) or startedAt)
-    if interval > 1.5 then
-      local obsDesc = effectiveDescriptor(buffId, BuffList.GetBuffName(buffId), cd, cb)
-      local res, tree = EffectiveCD.Observe(obsDesc, sourceId, interval)
-      if res == "reset" then
-        markTargetTreeReady(sourceId, tree, string.format("early reuse %.1fs", interval))
-      end
-    end
-  end
-
-  -- Эффективный КД для цели (база записи остаётся в cooldown)
   local cdUsed = cd
-  local effInfo = nil
-  if settings and settings.effectiveCd and BuffsToTrack.ShouldTrackBuff(buffId, "target") then
-    local desc = effectiveDescriptor(buffId, BuffList.GetBuffName(buffId), cd, cb)
-    local eff, info = EffectiveCD.Effective(desc, sourceId)
-    if eff and info then
-      cdUsed = eff
-      effInfo = info
-    end
-  end
 
   local rec = {
     fixedTime = startedAt,
     activeUntil = startedAt + toa,
     readyAt = startedAt + cdUsed,
-    permanent = false,
     synthetic = true,   -- нет ауры: пропажа не должна обрывать активную фазу
     status = "active",
     missingCount = 0,
     timeOfAction = toa,
     cooldown = cd,
-    effCooldown = effInfo and cdUsed or nil,
-    effInfo = effInfo,
     name = BuffList.GetBuffName(buffId),
     icon = BuffList.GetBuffIcon(buffId)
   }
-  if effInfo and settings and settings.debugBuffId then
-    safeLog(string.format("[CBT] effCD: skill %s base=%s flat=%s pct=%s eff=%s tree=%s target=%s",
-      tostring(rec.name), fmtNum(effInfo.base), fmtNum(effInfo.flat), fmtNum(effInfo.pct),
-      fmtNum(cdUsed), tostring(effInfo.tree), tostring(effInfo.cls or sourceId or "?")))
-  end
 
   local cache = targetCache[sourceId]
   if not cache then
@@ -680,11 +557,8 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
       fixedTime = startedAt,
       activeUntil = startedAt + toa,
       readyAt = startedAt + cdUsed,
-      permanent = false,
       synthetic = true,
-      status = "active",
-      effCooldown = effInfo and cdUsed or nil,
-      effInfo = effInfo
+      status = "active"
     }
   end
 end
@@ -1948,7 +1822,6 @@ local function checkBuffs(unitType)
             fixedTime = buffInfo.fixedTime,
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
-            permanent = buffInfo.permanent,
             synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
@@ -1988,7 +1861,6 @@ local function checkBuffs(unitType)
             fixedTime = cachedBuff.fixedTime,
             activeUntil = cachedBuff.activeUntil,
             readyAt = cachedBuff.readyAt,
-            permanent = cachedBuff.permanent,
             synthetic = cachedBuff.synthetic,
             missingCount = 0,
             status = cachedBuff.status
@@ -2022,7 +1894,6 @@ local function checkBuffs(unitType)
         fixedTime = buffInfo.fixedTime,
         activeUntil = buffInfo.activeUntil,
         readyAt = buffInfo.readyAt,
-        permanent = buffInfo.permanent,
         status = buffInfo.status
       }
     end
@@ -2194,22 +2065,16 @@ local function checkBuffs(unitType)
     end
   end
 
-  -- Эффективные КД: снимок видимых модификаторов + reset-проки по аурам цели
-  if unitType == "target" and auraNow and settings and settings.effectiveCd then
-    local resets = EffectiveCD.OnTargetAuras(currentTargetId, auraNow)
-    for _, r in ipairs(resets or {}) do
-      markTargetTreeReady(currentTargetId, r.tree,
-        "proc " .. tostring(r.name) .. " (" .. tostring(r.id) .. ")")
-    end
-  end
-
   -- ===== Mirror: ауру читаем с player, показываем на текущем target =====
   -- Включено кнопкой Mir у записи в Tracked entries (список Target).
   -- Лог не используем: атрибуция — тот, кто является целью в момент наложения.
   local mirrorCfg = (settings and settings.target) and settings.target.mirror or nil
   local hasMirror = false
   if type(mirrorCfg) == "table" then
-    for _ in pairs(mirrorCfg) do hasMirror = true break end
+    -- только баффы/дебаффы: флаги у skill/mana-записей игнорируем
+    for k in pairs(mirrorCfg) do
+      if mirrorAllowed(k) then hasMirror = true break end
+    end
   end
   if unitType == "target" and hasMirror then
     local pById, pByName = {}, {}
@@ -2235,7 +2100,8 @@ local function checkBuffs(unitType)
 
     for _, mirrorId in ipairs(trackedBuffIds) do
       local key = tostring(mirrorId)
-      if settings.target.mirror[key] and not activeBuffsOnUnit[mirrorId] then
+      if settings.target.mirror[key] and not activeBuffsOnUnit[mirrorId]
+        and mirrorAllowed(mirrorId) then
         local aura = pById[key]
         if not aura then
           local cb = findCustomBuff and findCustomBuff(mirrorId)
@@ -2332,7 +2198,6 @@ local function checkBuffs(unitType)
           -- Досрочное снятие (диспел/смерть) или конец действия:
           -- активная фаза заканчивается СЕЙЧАС, а кулдаун считается от старта баффа.
           buffInfo.activeUntil = currentTime
-          buffInfo.permanent = false
           buffInfo.status = checkBuffStatus(buffInfo, currentTime)
           buffInfo.statusChangeTime = currentTime
           hasChanges = true
@@ -2379,7 +2244,6 @@ local function checkBuffs(unitType)
             fixedTime = buffInfo.fixedTime,
             activeUntil = buffInfo.activeUntil,
             readyAt = buffInfo.readyAt,
-            permanent = buffInfo.permanent,
             synthetic = buffInfo.synthetic,
             status = buffInfo.status,
             timeOfAction = buffInfo.timeOfAction,
@@ -2401,7 +2265,6 @@ local function checkBuffs(unitType)
           fixedTime = buffInfo.fixedTime,
           activeUntil = buffInfo.activeUntil,
           readyAt = buffInfo.readyAt,
-          permanent = buffInfo.permanent,
           status = buffInfo.status
         }
       end
@@ -2685,138 +2548,6 @@ local function findIconByName(name)
   return nil
 end
 
--- ===== Effective CDs: перманентные записи пикера (1.21.0) =====
--- Отметка навыка в окне Effective CDs создаёт постоянную запись customBuffs
--- (CD/иконка/ветвь из skillsets.tbl) и сразу ставит её на выбранный Target-канвас.
--- Снятие отметки — единственный способ удалить такую запись.
-
-local function isSkillPicked(name)
-  local key = tostring(name or "")
-  if key == "" then return false end
-  local s = api.GetSettings("CooldawnBuffTracker") or settings or {}
-  for _, cb in ipairs(s.customBuffs or {}) do
-    if cb and tostring(cb.id) == key and cb.permanent then return true end
-  end
-  return false
-end
-
-local function pickEffectiveSkill(skill)
-  if type(skill) ~= "table" or not skill.name or skill.name == "" then
-    return false, "Invalid skill"
-  end
-  local s = api.GetSettings("CooldawnBuffTracker") or settings or {}
-  s.customBuffs = s.customBuffs or {}
-  local id = tostring(skill.name)
-
-  local entry = nil
-  for _, cb in ipairs(s.customBuffs) do
-    if tostring(cb.id) == id then entry = cb; break end
-  end
-  if not entry then
-    entry = {
-      id = id,
-      name = skill.name,
-      spellName = skill.name,
-      cooldown = tonumber(skill.cd) or 0,
-      timeOfAction = 0,
-      iconFile = skill.icon,
-      tree = skill.tree,
-      permanent = true,
-      effective = true,
-    }
-    table.insert(s.customBuffs, entry)
-  else
-    entry.permanent = true
-    entry.effective = true
-    entry.cooldown = tonumber(skill.cd) or entry.cooldown or 0
-    if skill.tree and skill.tree ~= "" then entry.tree = skill.tree end
-    if skill.icon and skill.icon ~= "" then entry.iconFile = skill.icon end
-    if not entry.spellName or entry.spellName == "" then entry.spellName = skill.name end
-  end
-
-  -- Сразу в трекинг Target на выбранный канвас (эффективный КД только для цели)
-  local tgt = s.target
-  if tgt then
-    tgt.trackedBuffs = tgt.trackedBuffs or {}
-    tgt.canvasOf = tgt.canvasOf or {}
-    local found = false
-    for _, v in ipairs(tgt.trackedBuffs) do
-      if tostring(v) == id then found = true; break end
-    end
-    if not found then table.insert(tgt.trackedBuffs, id) end
-    tgt.canvasOf[id] = tonumber(tgt.selectedCanvas) or 1
-    -- панель Target должна быть включена, иначе выбранный навык негде показать
-    tgt.enabled = true
-  end
-
-  api.SaveSettings()
-  initBuffData()
-  api:Emit("ADDON_CBT_BUFFS_CHANGED")
-  if settingsPage and settingsPage.refreshFromExternal then
-    pcall(settingsPage.refreshFromExternal)
-  end
-  safeLog("[CBT] effCD: picked " .. id .. " (" .. tostring(skill.tree) .. ", CD "
-    .. tostring(entry.cooldown) .. ")")
-  return true, "Tracking " .. id
-end
-
-local function unpickEffectiveSkill(name)
-  local id = tostring(name or "")
-  if id == "" then return false, "Invalid skill" end
-  local s = api.GetSettings("CooldawnBuffTracker") or settings or {}
-  local removed = false
-  if type(s.customBuffs) == "table" then
-    for i = #s.customBuffs, 1, -1 do
-      local cb = s.customBuffs[i]
-      if cb and tostring(cb.id) == id and cb.permanent then
-        table.remove(s.customBuffs, i)
-        removed = true
-      end
-    end
-  end
-  if not removed then return false, "Not a permanent entry" end
-
-  for _, unitType in ipairs(UNIT_TYPES) do
-    local u = s[unitType]
-    if type(u) == "table" then
-      if type(u.trackedBuffs) == "table" then
-        for i = #u.trackedBuffs, 1, -1 do
-          if tostring(u.trackedBuffs[i]) == id then table.remove(u.trackedBuffs, i) end
-        end
-      end
-      if type(u.canvasOf) == "table" then u.canvasOf[id] = nil end
-      if type(u.mirror) == "table" then u.mirror[id] = nil end
-    end
-  end
-  targetBuffData[id] = nil
-  playerBuffData[id] = nil
-  buffData[id] = nil
-  for _, cache in pairs(targetCache) do
-    if cache.buffStates then cache.buffStates[id] = nil end
-  end
-
-  api.SaveSettings()
-  initBuffData()
-  api:Emit("ADDON_CBT_BUFFS_CHANGED")
-  if settingsPage and settingsPage.refreshFromExternal then
-    pcall(settingsPage.refreshFromExternal)
-  end
-  safeLog("[CBT] effCD: unpicked " .. id)
-  return true, "Removed " .. id
-end
-
-local function toggleEffectiveSkill(skill, checked)
-  if checked then
-    return pickEffectiveSkill(skill)
-  end
-  return unpickEffectiveSkill(skill and skill.name)
-end
-
-local function reloadEffectiveTables()
-  local c, s, m = EffectiveCD.LoadTables()
-  return string.format("Tables reloaded: %d classes, %d skills, %d mods", c or 0, s or 0, m or 0)
-end
-
 if settingsPage then
   settingsPage.searchIcons = searchIcons
   settingsPage.applyBuffOverride = applyBuffOverride
@@ -2824,21 +2555,7 @@ if settingsPage then
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
   settingsPage.findIconByName = findIconByName
-  settingsPage.openEffectiveCdWindow = function() EffectivePicker.open() end
-  settingsPage.resetEffectiveLearning = function()
-    return EffectiveCD.ResetLearning()
-  end
-  settingsPage.skillInfo = function(name) return EffectiveCD.SkillInfo(name) end
 end
-
-EffectivePicker.setHooks({
-  trees = function() return EffectiveCD.TreeList() end,
-  skillsForTree = function(tree) return EffectiveCD.SkillsForTree(tree) end,
-  isPicked = isSkillPicked,
-  onToggle = toggleEffectiveSkill,
-  onReload = reloadEffectiveTables,
-  onResetLearning = function() return EffectiveCD.ResetLearning() end,
-})
 
 local function processBuffIconScan()
   if not buffIconScan then return end
@@ -3319,17 +3036,6 @@ local function OnLoad()
   loadBuffDump()
   applyDumpToCustomBuffs()
 
-  -- Эффективные КД: классы/навыки/модификаторы из плоских таблиц аддона.
-  -- Инициализация после дампа: иконки навыков без своей колонки берутся из него.
-  EffectiveCD.Initialize({
-    log = safeLog,
-    nameOf = function(id)
-      local cb = findCustomBuff(id) or findCustomBuffByName(BuffList.GetBuffName(id))
-      return (cb and cb.name) or BuffList.GetBuffName(id)
-    end,
-    dumpIcon = findIconByName,
-  })
-
   -- Диагностика кастомных баффов: видно, чем они ключуются и какие CD/D у них
   if settings and settings.debugBuffId then
     for _, cb in ipairs(settings.customBuffs or {}) do
@@ -3502,11 +3208,6 @@ local function OnUnload()
   -- Очищаем все канвасы всех юнитов
   for _, unitType in ipairs(UNIT_TYPES) do
     destroyUnitCanvases(unitType)
-  end
-
-  -- Окно выбора навыков для эффективных КД
-  if EffectivePicker and EffectivePicker.Unload then
-    pcall(EffectivePicker.Unload)
   end
 
   -- Выгружаем страницу настроек, если модуль загружен

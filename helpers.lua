@@ -44,6 +44,16 @@ function helpers.formatBuffId(buffId)
     end
 end
 
+-- Тип кастомной записи: "buff" (бафф/дебафф), "skill" (навык по боевому логу)
+-- или "mana" (навык маунта с маной). Для записей без kind — эвристика.
+function helpers.entryKind(cb)
+    if defaultSettings and defaultSettings.entryKind then
+        return defaultSettings.entryKind(cb)
+    end
+    if type(cb) ~= "table" then return "buff" end
+    return cb.kind or "buff"
+end
+
 -- Main functions for working with settings
 function helpers.getSettings(cnv, playerCnv, targetCnv)
     local settings = api.GetSettings("CooldawnBuffTracker")

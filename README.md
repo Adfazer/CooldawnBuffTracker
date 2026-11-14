@@ -34,8 +34,8 @@ settings storage and all `require` paths.
   panels at once. Each canvas has its own layout, position and tracked entries;
   the **Canvas** selector above the tracked list adds, renames, deletes and
   switches them. Existing configurations migrate into a canvas named "Main".
-- **Custom buff system** — track any buff by its numeric ID, even if it is not
-  in the default list.
+- **Typed custom entries** — add a buff/debuff by its numeric ID, a skill by its
+  combat-log spell name, or a mount mana skill, all from one form.
 - **Real-time timers** — remaining buff duration and cooldown, shown on the icon.
 - **Color-coded status** — green = active, red = on cooldown, white = ready.
 
@@ -62,63 +62,40 @@ settings storage and all `require` paths.
     into the `CooldawnBuffTracker` addon folder.
   - **Import** loads such a file by name (the `.txt` extension is optional).
 
-### Custom buffs
-- Add a buff by ID with name, cooldown and time-of-action.
-- **Spell trigger** — optional spell name from the combat log (exact, as shown in
-  the log). When another player hits you with that spell, its cooldown is stored
-  for that player: target him and the target panel shows the remaining cooldown.
-  If you have not targeted him yet, the hit is remembered by name and applied
-  when you first target him (if the cooldown has not expired). Your own casts
-  restart your player/mount panels. Useful for instant skills with no cast bar
-  and no trackable aura.
-- **Icon** — for a spell trigger the skill icon is learned automatically from the
-  game the first time the spell is seen in the combat log (by its spell id); if
-  the id is unknown you can leave the ID field empty and the spell name becomes
-  the key. The tracked-buff ID field also accepts the buff name or the spell
-  name instead of the numeric id. If the game reports no icon, type a file name
-  from the icon gallery (`cbt_icons.html` next to the addon) into the **Icon**
-  field — Enter previews it.
+### Custom entries (typed)
+The **Add custom entry** form has a type switch: **Buff/Debuff**, **Skill** or
+**Mana skill**. The selected type is gold, the other two are muted, and the form
+shows only the fields of that type.
+
+- **Buff/Debuff** — `ID`, `Name`, `Cooldown`, `Duration`. The numeric buff id is
+  the key; the icon comes from the buff table unless you pick one.
+- **Skill** — `Name` (optional, used as the canvas label), `Cooldown`, `Spell`
+  (exact name from the combat log — it becomes the key), `Icon`. When another
+  player hits you with that spell, its cooldown is stored for that player: target
+  him and the target panel shows the remaining cooldown. If you have not targeted
+  him yet, the hit is remembered by name and applied when you first target him
+  (if the cooldown has not expired). Your own casts restart your player/mount
+  panels. Useful for instant skills with no cast bar and no trackable aura.
+- **Mana skill** — `Name`, `Cooldown`, `Mana`, `Mount`, `Icon`: a mount skill
+  tracked by the mana it spends (`UnitMana("playerpet")`).
+- **Icon is optional for every type.** Click the icon preview to open the icon
+  search (it opens with the current Spell/Name as the query); picking a row fills
+  the path and closes the search. Without a picked icon the entry uses the icon
+  of its id/name, else a neutral placeholder. The icon gallery
+  (`cbt_icons.html` next to the addon) lists every file for manual reference.
 - Each entry has **Add** (start tracking it for the currently selected unit type)
-  and **Remove** buttons.
-- Long lists are paginated; all custom buffs are saved automatically.
+  and **Remove** buttons; **Edit** opens the same typed form and can change the
+  type of an existing entry (older entries get their type derived from their
+  data: mana cost → Mana skill, spell name → Skill, else Buff/Debuff).
+- **Mirror** in the Target list is available for buffs/debuffs only — a skill or
+  mana entry has no aura on the target to mirror.
+- Long lists are paginated; all entries are saved automatically.
 
 ### Target tracking
 - Real-time monitoring of buffs/debuffs on the current target.
 - Smart caching: when you switch targets, buff state is preserved and restored if
   you return to a unit; stale cache is cleared after 5 minutes.
 - Independent position/size/display settings.
-
-### Effective cooldowns (Target only)
-- **Effective CD (Target)** checkbox in the settings window turns the feature on
-  (`effectiveCd`, off by default). It only changes the Target panel; player and
-  mount keep the configured cooldown.
-- **Effective CDs** opens a picker with the ten skillsets (Battlerage, Witchcraft,
-  Defense, Auramancy, Occultism, Archery, Sorcery, Shadowplay, Songcraft,
-  Vitalism). It lists every skill that has a base cooldown, with icon, CD and a
-  checkbox. Checking a skill creates a permanent entry (id, name, cooldown, spell
-  name, icon and tree from `skillsets.tbl`) and tracks it on the selected Target
-  canvas. Unchecking is the only way to remove such an entry; permanent entries
-  have no Remove/Edit buttons in the custom list.
-- **Formula:** `eff = max(0, base - sumFlat) * (1 - sumPct/100)`; flat seconds are
-  subtracted first and percentages add up (10% + 20% = 30%).
-- **Target class** comes from `GetUnitClassName` mapped through `classes.tbl`;
-  mobs return `Pending` and rely on learning only.
-- **Visible buffs** apply while they are on the target: Battle Focus rank 2 (id
-  7651, -35%) and rank 3 (id 13612, -40%) to Battlerage, buff 9000610 (-10% to
-  everything), Rhythm (-0.4 s per stack), Mana Fountain (-2% per stack),
-  Inspired (-0.6/-2.1/-1.2 s) and Exploitation (-10% per stack).
-- **Learning:** no passive is assumed up front. Repeated casts of a tracked skill
-  are compared with its base CD, the observed ratio is snapped to a known
-  candidate (0.90, 0.86, 0.80, 0.76, 0.65, ...) and after two consistent
-  observations it is applied to every tracked skill of that tree for that target
-  only. Learned state expires 30 minutes after the target was last seen, and
-  **Reset learning** clears it.
-- **Reset procs** are handled separately: Deflect and Retaliate (id 2611, ICD
-  12 s) readies all Battlerage timers, Quick Recovery (by name, ICD 12 s) readies
-  Vitalism; a single far-too-early re-use also reads the tree as reset without
-  changing the learned ratio.
-- All game numbers live in `classes.tbl`, `skillsets.tbl` and `cdmods.tbl` next to
-  the addon and can be edited (the picker's **Reload tables** re-reads them).
 
 ### Debugging
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
@@ -154,6 +131,37 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.22.0
+
+- **Effective cooldowns removed completely.** The `effectiveCd` switch, the
+  Effective CDs picker window, the per-target learning of skillset passives and
+  the reset-proc handling are gone: the Target panel shows the configured
+  cooldown again, like the player and mount panels. `effective_cd.lua`,
+  `effective_cd_window.lua`, `classes.tbl`, `skillsets.tbl` and `cdmods.tbl`
+  were deleted, together with the `permanent` custom-entry flag, so every
+  custom entry is a normal entry with Remove/Edit again.
+- **Typed Add form.** The Add custom entry block now has a type switch —
+  **Buff/Debuff**, **Skill**, **Mana skill** — and shows only that type's fields
+  with full labels (`ID:`, `Name:`, `Cooldown:`, `Duration:`, `Spell:`, `Mana:`,
+  `Mount:` instead of the old NM/CD/D abbreviations). Buff: ID/Name/Cooldown/
+  Duration on the first row. Skill: Name/Cooldown, with Spell on the second row.
+  Mana: Name/Cooldown, with Mana+Mount on the second row. The icon preview sits
+  at the right of the second row and **Add entry** on the third. Validation is
+  per type (buff: id+name+cooldown+duration, skill: spell+cooldown, mana:
+  name+cooldown+mana+mount) and the created entry carries
+  `kind = "buff" | "skill" | "mana"`.
+- **Icon picking from the preview.** The separate **Icon search** button is gone:
+  clicking the icon preview opens the search with the current Spell/Name already
+  typed, and picking a row fills the path and closes the search. The icon stays
+  optional for every type (id/name lookup, then a neutral placeholder).
+- **Typed Edit dialog** (`Cooldown / Duration`): same type switch, same fields,
+  type detected from the entry when it opens (`manaCost > 0` → Mana skill,
+  `spellName` set → Skill, else Buff/Debuff), validation on Save and `kind` saved
+  back into `customBuffs`. The buff id is shown read-only because it is the key.
+- **Mirror is buffs/debuffs only.** The Mir button is hidden for skill and mana
+  entries, the mirror scan skips them, and switching an entry to Skill/Mana in
+  Edit clears its `mirror` flag on every unit.
 
 ### 1.21.8
 
@@ -872,7 +880,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.21.8
+**Current Version:** 1.22.0
 
 ## Credits
 

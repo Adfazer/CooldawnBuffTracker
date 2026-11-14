@@ -88,10 +88,6 @@ local defaultSettings = {
     },
     customBuffs = {},           -- Таблица для хранения пользовательских баффов
     debugBuffId = false,        -- Флаг режима отладки баффов (отключен по умолчанию)
-    -- 1.21.0: эффективные КД только для панели Target (мастер-включение).
-    -- Список навыков выбирается в окне Effective CDs и хранится в customBuffs
-    -- как permanent-записи; выключено = показывается настроенный CD.
-    effectiveCd = false,
 }
 
 -- Добивает недостающие поля одного канваса, не затирая сохранённые значения.
@@ -119,6 +115,18 @@ local function normalizeCanvas(canvas, index, fallbackPosY)
         if canvas.name == "" then canvas.name = "Canvas " .. tostring(index) end
     end
     return canvas
+end
+
+-- Тип кастомной записи: "buff" (бафф/дебафф), "skill" (навык по боевому логу)
+-- или "mana" (навык маунта, который тратит ману). У записей до 1.22.0 поля
+-- kind нет — выводим тип из данных записи.
+local function entryKind(cb)
+    if type(cb) ~= "table" then return "buff" end
+    local k = cb.kind
+    if k == "buff" or k == "skill" or k == "mana" then return k end
+    if (tonumber(cb.manaCost) or 0) > 0 then return "mana" end
+    if type(cb.spellName) == "string" and cb.spellName ~= "" then return "skill" end
+    return "buff"
 end
 
 -- Старая (1.19 и раньше) плоская раскладка -> canvases[1] с именем "Main".
@@ -258,11 +266,6 @@ function defaultSettings.migrate(settings)
         settings.presets = {}
     end
 
-    -- 1.21.0: эффективные КД (мастер-включение, по умолчанию выключено)
-    if settings.effectiveCd == nil then
-        settings.effectiveCd = false
-    end
-
     -- activePresetName остаётся nil, пока пользователь не загрузит пресет
     -- (специально не присваиваем значение, чтобы не перетереть существующее)
 
@@ -303,11 +306,22 @@ function defaultSettings.migrate(settings)
         end
     end
 
+    -- 1.22.0: тип кастомной записи (buff/skill/mana) хранится в kind.
+    -- У записей 1.21 и раньше поля нет — выводим один раз из данных записи.
+    if type(settings.customBuffs) == "table" then
+        for _, cb in ipairs(settings.customBuffs) do
+            if type(cb) == "table" then
+                cb.kind = entryKind(cb)
+            end
+        end
+    end
+
     return settings
 end
 
 -- Публичные утилиты для страницы настроек/импорта.
 defaultSettings.unitTypes = UNIT_TYPES
+defaultSettings.entryKind = entryKind
 defaultSettings.layoutFields = LAYOUT_FIELDS
 defaultSettings.cloneValue = cloneValue
 defaultSettings.newCanvas = newCanvas
