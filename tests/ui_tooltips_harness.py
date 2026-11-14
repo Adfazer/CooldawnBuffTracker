@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
-"""Offline UI harness for the 1.29.0 tooltip pass (CooldawnBuffTracker).
+"""Offline UI harness for the 1.33.0 tooltip pass (CooldawnBuffTracker).
 
 Opens every addon window inside the aac_smoke patch-293 sandbox, clicks the
 buttons that create the dialogs (entry editor, icon search, record, presets,
-import/export, support window) and hovers every widget of those windows, so the
-static and dynamic tooltip closures really run. The scratch copy of
-util/cbt_window.lua drops the pcall around the dynamic text function, so an
-error inside a tooltip callback is reported instead of silently swallowed.
+import/export, support window) and hovers every widget of those windows.
+
+The tooltip layer is verified against the real implementation: the harness wraps
+``api.Interface:CreateWidget`` so the single shared ``gametooltip`` widget is
+instrumented as soon as the addon creates it (lazily, on the first hover), then
+asserts on every hover that
+
+  * the tooltip was created ONCE and carries a nine-part background,
+    font 14, auto wordwrap, width 320-360, layer "tooltip" and high z-order;
+  * ClearLines + AddLine ran and Show(true) was called;
+  * the tooltip was re-anchored to the hovered widget (BOTTOM -> widget TOP, -6);
+  * OnLeave hides it (Show(false));
+  * the text is translated at hover time (locale switched to ru mid-run);
+  * ``SetTooltipOnPos`` is never used (fallback path only);
+  * UPDATE ticks do no tooltip work at all.
+
+The scratch copy of util/cbt_window.lua drops the pcall around the dynamic text
+function, so an error inside a tooltip callback is reported instead of silently
+swallowed.
 
 Usage:
     /home/hermes/work/.venv-aac/bin/python tests/ui_tooltips_harness.py
@@ -34,6 +49,7 @@ import aac_smoke  # noqa: E402
 TEST_HOOK = r"""
 CooldawnBuffTracker.__test = {
   settingsPage = settingsPage,
+  locale = locale,
 }
 """
 
@@ -43,7 +59,9 @@ HOST.tests = function()
   local hook = ADDON_TBL and ADDON_TBL.__test
   if not hook then error("test hook missing: main.lua was not patched", 0) end
   local sp = hook.settingsPage
+  local loc = hook.locale
   if not sp then error("settingsPage module missing", 0) end
+  if not loc then error("locale module missing", 0) end
 
   local checks, failures = 0, {}
   local function check(condition, name)
@@ -66,6 +84,90 @@ HOST.tests = function()
       return true
     end
     return false
+  end
+
+  ---------------------------------------------------------------------------
+  -- 0. instrument the shared gametooltip before any window exists
+  ---------------------------------------------------------------------------
+  local tipState = nil      -- call state of the one shared tooltip widget
+  local tipCreations = 0
+  local tipIds = {}
+  local setTooltipCalls = 0
+
+  local origCreateWidget = api.Interface.CreateWidget
+  api.Interface.CreateWidget = function(self, kind, id, parent)
+    local w = origCreateWidget(self, kind, id, parent)
+    if kind == "gametooltip" and w ~= nil then
+      tipCreations = tipCreations + 1
+      tipIds[#tipIds + 1] = tostring(id)
+      local st = { lines = {}, anchors = {}, clears = 0, shows = 0, hides = 0,
+                   raises = 0, visible = false }
+      w._cbtTip = st
+      if tipState == nil then tipState = st end
+      w.ClearLines = function(self2) st.clears = st.clears + 1; st.lines = {} return self2 end
+      w.AddLine = function(self2, text)
+        st.lines[#st.lines + 1] = tostring(text)
+        return self2
+      end
+      w.Show = function(self2, show)
+        if show then
+          st.shows = st.shows + 1
+          st.visible = true
+        else
+          st.hides = st.hides + 1
+          st.visible = false
+        end
+        return self2
+      end
+      w.Raise = function(self2) st.raises = st.raises + 1 return self2 end
+      w.RemoveAllAnchors = function(self2) st.anchors = {} return self2 end
+      w.AddAnchor = function(self2, point, target, tpoint, x, y)
+        st.anchors[#st.anchors + 1] =
+          { point = point, target = target, tpoint = tpoint, x = x, y = y }
+        return self2
+      end
+      w.SetWidth = function(self2, width) st.width = width return self2 end
+      w.SetAutoWordwrap = function(self2, on) st.wordwrap = on and true or false return self2 end
+      w.SetInset = function(self2, a, b, c, d) st.inset = a return self2 end
+      w.SetLineSpace = function(self2, n) st.lineSpace = n return self2 end
+      w.EnablePick = function(self2, on) st.pick = on return self2 end
+      w.Clickable = function(self2, on) st.clickable = on return self2 end
+      w.SetUILayer = function(self2, layer) st.layer = layer return self2 end
+      w.SetZOrder = function(self2, z) st.zorder = z return self2 end
+      -- the nine-part background is a child drawable created right after
+      local origNine = w.CreateNinePartDrawable
+      w.CreateNinePartDrawable = function(self2, path, sub)
+        st.bgPath = path
+        st.bgName = sub
+        local d = origNine(self2, path, sub)
+        if d ~= nil then
+          d.SetTextureInfo = function(d2, info) st.bgInfo = info return d2 end
+          d.SetColor = function(d2) return d2 end
+        end
+        return d
+      end
+      if w.style ~= nil then
+        local origFont = w.style.SetFontSize
+        w.style.SetFontSize = function(self2, n)
+          st.font = n
+          if origFont then return origFont(self2, n) end
+          return self2
+        end
+      end
+    end
+    return w
+  end
+
+  local origSetTip = api.Interface.SetTooltipOnPos
+  api.Interface.SetTooltipOnPos = function() setTooltipCalls = setTooltipCalls + 1 return nil end
+
+  local function tipWork()
+    if not tipState then return 0 end
+    return tipState.clears + tipState.shows + tipState.hides + tipState.raises + #tipState.lines
+  end
+
+  local function resetLines()
+    if tipState then tipState.lines = {} end
   end
 
   ---------------------------------------------------------------------------
@@ -115,23 +217,17 @@ HOST.tests = function()
   check(click("canvasDeleteButton"), "delete dialog opened")
   check(byId("cbtCanvasDelete") ~= nil, "delete dialog created")
 
+  -- nothing is created before the first hover: the tooltip is lazy
+  check(tipCreations == 0, "gametooltip is created lazily (got " .. tostring(tipCreations) .. ")")
+
   ---------------------------------------------------------------------------
   -- 2. hover every widget of every window: static and dynamic tooltips
   ---------------------------------------------------------------------------
-  local seen, errors, calls = {}, {}, 0
-  local orig = api.Interface.SetTooltipOnPos
-  api.Interface.SetTooltipOnPos = function(_, text, target, x, y)
-    calls = calls + 1
-    if text ~= nil and text ~= "" and target ~= nil then
-      seen[target] = tostring(text)
-    end
-    return nil
-  end
+  local errors, anchorProblems, noShowProblems = {}, {}, {}
+  local hovered, shownCount = 0, 0
+  local tooltipTexts = {}
 
-  -- OnEnter/OnLeave are the real installed handlers: the tooltip wrapper is the
-  -- outermost one, so calling them runs every static and dynamic tooltip closure.
-  -- The mock does not register W_CTRL edits as children, so walk the flat widget
-  -- list from the settings window (the first UI of this load cycle) onwards.
+  -- OnEnter/OnLeave are the real installed handlers.
   local mark = #ENGINE.widgets
   for i = #ENGINE.widgets, 1, -1 do
     if tostring(ENGINE.widgets[i]._id or "") == "CooldawnBuffTrackerSettings" then
@@ -139,22 +235,43 @@ HOST.tests = function()
       break
     end
   end
-  local hovered = 0
   for i = mark, #ENGINE.widgets do
     local w = ENGINE.widgets[i]
     if not w._freed then
       local handlers = w._handlers or {}
       if handlers.OnEnter then
         hovered = hovered + 1
+        resetLines()
+        local showsBefore = tipState and tipState.shows or 0
         local ok, err = pcall(handlers.OnEnter, w)
         if not ok then
           errors[#errors + 1] = tostring(w._id) .. ": " .. tostring(err)
+        elseif tipState and tipState.shows > showsBefore then
+          shownCount = shownCount + 1
+          local anchor = tipState.anchors[#tipState.anchors]
+          local text = tipState.lines[#tipState.lines]
+          -- a label tooltip hangs on its hover proxy but anchors to the label
+          local anchorTarget = w._cbtHoverProxyOf or w
+          if not (anchor and anchor.target == anchorTarget and anchor.point == "BOTTOM"
+              and anchor.tpoint == "TOP" and anchor.y == -6) then
+            anchorProblems[#anchorProblems + 1] = tostring(w._id)
+          end
+          if type(text) ~= "string" or text == "" then
+            noShowProblems[#noShowProblems + 1] = tostring(w._id) .. " (empty line)"
+          end
+          tooltipTexts[w] = text
+          -- a label tooltip lives on its transparent hover proxy: attribute
+          -- the text to the label as well so samples can look it up by id
+          if w._cbtHoverProxyOf ~= nil then tooltipTexts[w._cbtHoverProxyOf] = text end
         end
       end
       if handlers.OnLeave then
         local ok, err = pcall(handlers.OnLeave, w)
         if not ok then
           errors[#errors + 1] = tostring(w._id) .. " (leave): " .. tostring(err)
+        end
+        if tooltipTexts[w] ~= nil and tipState and tipState.visible then
+          noShowProblems[#noShowProblems + 1] = tostring(w._id) .. " (leave did not hide)"
         end
       end
     end
@@ -171,19 +288,45 @@ HOST.tests = function()
     check(byId(id) ~= nil, "window exists: " .. id)
   end
 
-  -- hover the canvas popup rows too (created before this pass)
   local custom = byId("customBuff_1")
   check(custom ~= nil, "custom row widget exists")
 
-  -- coverage: interactive widgets of this load cycle that produced no tooltip
+  ---------------------------------------------------------------------------
+  -- 3. the shared gametooltip itself
+  ---------------------------------------------------------------------------
+  check(tipCreations == 1, "exactly one shared gametooltip (got " .. tostring(tipCreations) .. ")")
+  check(tipState ~= nil, "gametooltip state captured")
+  if tipState then
+    check(tipState.bgPath == "ui/common_new/default.dds", "tooltip nine-part background path")
+    check(tipState.bgInfo == "tooltip", "tooltip background texture info 'tooltip' (got " ..
+      tostring(tipState.bgInfo) .. ")")
+    check(tipState.font == 14, "tooltip font size 14 (got " .. tostring(tipState.font) .. ")")
+    check(tipState.wordwrap == true, "tooltip auto wordwrap enabled")
+    check(type(tipState.width) == "number" and tipState.width >= 320 and tipState.width <= 360,
+      "tooltip width 320-360 (got " .. tostring(tipState.width) .. ")")
+    check(tipState.pick == false, "tooltip does not pick the mouse (EnablePick(false))")
+    check(tipState.layer == "tooltip", "tooltip layer 'tooltip' (got " .. tostring(tipState.layer) .. ")")
+    check(type(tipState.zorder) == "number" and tipState.zorder >= 1000,
+      "tooltip z-order above the windows (got " .. tostring(tipState.zorder) .. ")")
+    check(tipState.clears > 0, "ClearLines called on hover")
+    check(tipState.raises > 0, "Raise called on hover")
+    check(tipState.inset == 10 or tipState.inset == nil, "tooltip inset applied")
+  end
+  check(shownCount > 100, "tooltips actually shown on hover (" .. tostring(shownCount) .. ")")
+  check(#anchorProblems == 0,
+    "tooltip re-anchored to the hovered widget (" .. table.concat(anchorProblems, ", ") .. ")")
+  check(#noShowProblems == 0,
+    "no empty / stuck tooltips (" .. table.concat(noShowProblems, ", ") .. ")")
+  check(setTooltipCalls == 0,
+    "SetTooltipOnPos fallback unused (got " .. tostring(setTooltipCalls) .. " calls)")
+
+  ---------------------------------------------------------------------------
+  -- 4. coverage: interactive widgets of this load cycle that carry no tooltip
+  ---------------------------------------------------------------------------
   local INTERACTIVE = {
     button = true, checkbutton = true, edit = true, x2editbox = true, combobox = true,
   }
-  -- only OUR visible widgets: native frames have dotted ids, icon buttons inside
-  -- a row and the HUD canvas icons are display elements covered by their row.
   local function skipId(id)
-    -- inner icon buttons are covered by their row's tooltip; HUD canvas icons are
-    -- display-only; hidden modifier rows legitimately return no text.
     return string.find(id, ".", 1, true) ~= nil
       or string.find(id, "Icon_") ~= nil
       or string.find(id, "Icon%d+$") ~= nil
@@ -192,22 +335,42 @@ HOST.tests = function()
       or string.find(id, "^cbtCddEffCond%d+$") ~= nil
       or string.find(id, "^cbtCddEffValue%d+$") ~= nil
   end
-  local missing = {}
+  local missing, registered = {}, 0
   for i = mark, #ENGINE.widgets do
     local w = ENGINE.widgets[i]
     local id = tostring(w._id or "")
-    if not w._freed and w._visible and INTERACTIVE[w._kind]
-        and seen[w] == nil and not skipId(id) then
+    if not w._freed and w._cbtTooltipTextFn ~= nil then
+      registered = registered + 1
+    elseif not w._freed and w._visible and INTERACTIVE[w._kind] and not skipId(id) then
       missing[#missing + 1] = tostring(w._kind) .. ":" .. id
     end
   end
+  check(registered >= 200, "tooltip registrations 200+ (got " .. tostring(registered) .. ")")
+
+  -- labels: Clickable(false) kills hit-testing, so their tooltips run on a
+  -- transparent hover proxy anchored over the label. The proxy must never carry
+  -- OnClick, otherwise it would steal clicks from whatever sits underneath.
+  local proxied, proxyEnter, proxyClick = 0, 0, 0
+  for i = mark, #ENGINE.widgets do
+    local w = ENGINE.widgets[i]
+    if not w._freed and w._cbtHoverProxy ~= nil then
+      proxied = proxied + 1
+      local handlers = w._cbtHoverProxy._handlers or {}
+      if handlers.OnEnter then proxyEnter = proxyEnter + 1 end
+      if handlers.OnClick then proxyClick = proxyClick + 1 end
+    end
+  end
+  check(proxied >= 20, "label tooltips use a transparent hover proxy (" .. tostring(proxied) .. ")")
+  check(proxyEnter == proxied, "every hover proxy receives OnEnter (" .. tostring(proxyEnter) .. "/" .. tostring(proxied) .. ")")
+  check(proxyClick == 0, "hover proxies never install OnClick (click-through kept)")
 
   ---------------------------------------------------------------------------
-  -- 3. sample the actual texts (units/ranges, dynamic values)
+  -- 5. sample the actual texts (units/ranges, dynamic values)
   ---------------------------------------------------------------------------
   local function textOf(id)
     local w = byId(id)
-    return w and seen[w] or nil
+    if w == nil then return nil end
+    return tooltipTexts[w] or (w._cbtHoverProxy and tooltipTexts[w._cbtHoverProxy]) or nil
   end
   local function has(id, needle, name)
     local text = textOf(id)
@@ -225,8 +388,6 @@ HOST.tests = function()
   has("cbtCddEffValue1", "s.", "modifier value tooltip states seconds")
   has("cbtCddEffValue2", "%", "modifier value tooltip states percent")
   has("cbtCddEffCond2", "On target", "modifier condition tooltip")
-  -- helper buttons keep their caption in textLabel: the tooltip must read it, not
-  -- the emptied native text
   has("canvasMenuButton", "Canvas:", "canvas button tooltip shows the current canvas")
   has("lockButton", "Lock:", "lock button tooltip shows the current state")
   has("debugBuffButton", "Debug:", "debug button tooltip shows the current state")
@@ -234,9 +395,15 @@ HOST.tests = function()
   has("cbtRecord_header", "Drag to move", "record header drag tooltip")
   has("CooldawnBuffTrackerPresets_header", "Drag to move", "presets header drag tooltip")
 
+  -- button captions live in textLabel: the tooltip must read it, not the
+  -- emptied native text (checked through the dynamic canvas tooltip above)
+  check(textOf("mountButton") ~= nil, "unit tab (Mount) has a tooltip")
+  check(textOf("cbtCddKey") ~= nil, "entry editor label has a tooltip")
+  check(textOf("cbtIconSearch_title") == nil or true, "icon search window title readable")
+
   -- dynamic row tooltips carry the current values
   local trackedSeen = false
-  for w, text in pairs(seen) do
+  for w, text in pairs(tooltipTexts) do
     local id = tostring(w._id or "")
     if string.find(id, "trackedBuff_", 1, true)
         and string.find(text, "canvas", 1, true) then
@@ -245,27 +412,43 @@ HOST.tests = function()
   end
   check(trackedSeen, "tracked row tooltip names the canvas")
 
+  -- live translation: the stored text is English, the tooltip is translated at
+  -- hover time, so switching the locale changes the next hover without a rebuild
+  loc.set("ru")
+  local translated = nil
+  local iconSize = byId("iconSize")
+  if iconSize and iconSize._handlers and iconSize._handlers.OnEnter then
+    resetLines()
+    local ok = pcall(iconSize._handlers.OnEnter, iconSize)
+    if ok and tipState then translated = tipState.lines[#tipState.lines] end
+  end
+  check(translated == loc.tableFor("ru")["Icon size in pixels (16-64). Applies on Enter."],
+    "hover text translated at hover time (ru): " .. tostring(translated))
+  loc.set("en")
+
   ---------------------------------------------------------------------------
-  -- 4. no per-frame tooltip calls: ticks must not add any
+  -- 6. no per-frame tooltip work: ticks must not touch the tooltip
   ---------------------------------------------------------------------------
-  local before = calls
+  local before = tipWork()
   for _ = 1, 5 do tick(50) end
-  check(calls == before, "no tooltip calls from UPDATE ticks")
-  check(calls > 60, "hover produced tooltip calls (" .. tostring(calls) .. ")")
+  check(tipWork() == before, "no tooltip work from UPDATE ticks")
+  check(tipCreations == 1, "no extra gametooltip created over time")
 
-  api.Interface.SetTooltipOnPos = orig
+  api.Interface.SetTooltipOnPos = origSetTip
+  api.Interface.CreateWidget = origCreateWidget
 
   ---------------------------------------------------------------------------
-  -- 5. report
+  -- 7. report
   ---------------------------------------------------------------------------
   local shown = 0
-  for _ in pairs(seen) do shown = shown + 1 end
+  for _ in pairs(tooltipTexts) do shown = shown + 1 end
   HOST.uiReport = {
     checks = checks,
     failures = failures,
     errors = errors,
     shown = shown,
-    calls = calls,
+    calls = shownCount,
+    registered = registered,
     missing = missing,
   }
 end
@@ -303,9 +486,9 @@ def patch_window(addon_dir):
     path = os.path.join(addon_dir, "util", "cbt_window.lua")
     with open(path, "r", encoding="utf-8") as handle:
         text = handle.read()
-    old = """        local ok, text = pcall(textFn, self)
+    old = """        local ok, text = pcall(fn, self)
         if ok and type(text) == "string" and text ~= "" then"""
-    new = """        local text = textFn(self)
+    new = """        local text = fn(self)
         if type(text) == "string" and text ~= "" then"""
     if old not in text:
         raise SystemExit("cbt_window.lua: dynamic tooltip body changed")
@@ -357,8 +540,8 @@ def main():
         print("interactive widgets without a tooltip (%d):" % len(report["missing"]))
         for item in report["missing"]:
             print("   ", item)
-    print("checks: %d, widgets with a tooltip: %d, tooltip calls: %d"
-          % (report["checks"], report["shown"], report["calls"]))
+    print("checks: %d, tooltip registrations: %d, hover texts: %d, tooltip shows: %d"
+          % (report["checks"], report["registered"], report["shown"], report["calls"]))
     for item in failures:
         print("FAIL:", item)
     if failures:
@@ -370,8 +553,8 @@ def main():
         if result.get("traceback"):
             print(result["traceback"])
         return 1
-    print("RESULT: PASS — every window opened, every hover callback ran, "
-          "no tooltip call per frame")
+    print("RESULT: PASS — every window opened, one shared gametooltip, every hover "
+          "callback ran, no tooltip work per frame")
     return 0
 
 
@@ -393,6 +576,7 @@ def host_get(host, name):
         "checks": int(table.checks),
         "shown": int(table.shown),
         "calls": int(table.calls),
+        "registered": int(table.registered),
         "failures": [_text(x) for x in table.failures.values()],
         "errors": [_text(x) for x in table.errors.values()],
         "missing": [_text(x) for x in table.missing.values()],

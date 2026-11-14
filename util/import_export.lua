@@ -9,6 +9,13 @@ local L = locale.L
 
 -- Переменная для хранения ссылки на окно
 local importExportWindow = nil
+-- Язык, на котором построено окно. Окно переиспользуется, но после смены
+-- языка его подписи устаревают (1.33.0): тогда его уничтожают и строят заново.
+local importExportLang = nil
+
+-- Предобъявление: openImportExportWindow зовёт Destroy при смене языка,
+-- а определён он ниже (иначе имя уйдёт в глобал и останется nil).
+local openImportExportWindow, destroyImportExportWindow
 -- Виджеты окна, которые нужно сбрасывать при повторном открытии (окно
 -- создаётся один раз и переиспользуется, чтобы не плодить виджеты в памяти)
 local ieWidgets = {}
@@ -599,6 +606,10 @@ local function openImportExportWindow(onImportSuccess)
         importExportWindow:Show(false)
         return
     end
+    -- Смена языка: кэш окна построен на старом языке — уничтожаем и строим заново.
+    if importExportWindow and importExportLang ~= locale.current() then
+        destroyImportExportWindow()
+    end
     -- Окно уже создано — сбрасываем поля и показываем заново (без пересоздания)
     if importExportWindow then
         if ieWidgets.fileStatus then ieWidgets.fileStatus:SetText("") end
@@ -615,6 +626,7 @@ local function openImportExportWindow(onImportSuccess)
                                               if importExportWindow then importExportWindow:Show(false) end
                                           end)
     if not importExportWindow then return end
+    importExportLang = locale.current()
 
     -- Секция EXPORT
     local exportLabel = api.Interface:CreateWidget('label', 'exportLabel', importExportWindow)
@@ -742,10 +754,22 @@ local function closeImportExportWindow()
     end
 end
 
+-- Полное уничтожение окна: нужно при смене языка и при выгрузке аддона,
+-- иначе следующее открытие покажет подписи старого языка из кэша.
+destroyImportExportWindow = function()
+    if importExportWindow then
+        pcall(function() CbtWindow.Destroy(importExportWindow) end)
+        importExportWindow = nil
+    end
+    ieWidgets = {}
+    importExportLang = nil
+end
+
 -- Экспортируем функции для использования в других модулях
 return {
     openImportExportWindow = openImportExportWindow,
     closeImportExportWindow = closeImportExportWindow,
+    destroyImportExportWindow = destroyImportExportWindow,
     exportConfiguration = exportConfiguration,
     importConfiguration = importConfiguration,
     exportConfigurationToFile = exportConfigurationToFile,

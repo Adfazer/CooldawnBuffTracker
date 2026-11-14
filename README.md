@@ -65,10 +65,11 @@ settings storage and all `require` paths.
   red for errors and grey for `Debug`-only diagnostics. Key values (ids, names,
   numbers) are highlighted.
 
-### Language (1.30.0)
-- **Five languages** — English (default), Русский, 中文, Türkçe and 한국어. The
-  `Language: English` control in the settings header opens a popup with the five
-  options; the active one is highlighted green.
+### Language (1.33.0)
+- **Four languages** — English (default), Русский, Türkçe and 한국어. The
+  `Language: English` control in the settings header opens a popup with the four
+  options; the active one is highlighted green. Chinese (中文) was removed in
+  1.33.0: the client font has no CJK glyphs and rendered it as squares.
 - **Switches everything at once** — window titles, labels, buttons, checkboxes,
   error and confirmation texts, every hover tooltip and every chat line follow
   the selected language. A switch rebuilds the settings window (child dialogs
@@ -77,9 +78,10 @@ settings storage and all `require` paths.
 - **Fallback** — `locale.L(text)` looks a string up by its English source. A
   missing entry (or user data: buff names, ids, preset names, paths) is shown
   unchanged, so an untranslated string degrades to English instead of breaking.
-- **CJK caveat** — the client font may not contain Chinese or Korean glyphs; both
-  are implemented and can be removed later if they render as boxes in game.
-- Existing configurations migrate to `language = "en"`.
+- **CJK caveat** — the client font may not contain Korean glyphs; Korean is kept
+  as an option and can be removed the same way if it renders as boxes in game.
+- Existing configurations migrate to `language = "en"`; a stored `zh` (or any
+  unknown code) is rewritten to `en` on the first settings read.
 
 ### Configuration management
 - **Settings presets** — save the full layout (position, size, colors, grid, and
@@ -234,6 +236,48 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.33.0
+
+- **Visible hover tooltips (real `gametooltip`).** The old implementation called
+  `api.Interface:SetTooltipOnPos`, which shows nothing for the addon's own
+  controls in game. Tooltips now use one shared `gametooltip` widget owned by
+  `UIParent` (layer `tooltip`, high z-order, so it draws above the settings and
+  dialog windows), with the TrackThatPlease pattern: nine-part
+  `ui/common_new/default.dds` + `SetTextureInfo("tooltip")` background, font 14,
+  auto wordwrap, width 340. On hover it clears its lines, adds the text,
+  re-anchors to the hovered widget (`BOTTOM` → widget `TOP`, -6), raises and
+  shows; on leave it hides. No per-frame work at all.
+  - Text is still translated at hover time, so a language switch shows on the
+    next hover without recreating the widget.
+  - `CbtWindow.Hover` and `CbtWindow.Tooltip` share one self-preserving handler
+    chain: installing a hover highlight after a tooltip (or the reverse) no
+    longer drops the previous handler.
+  - Labels are `Clickable(false)` (hit-testing off), so their tooltips run on a
+    transparent `emptywidget` hover proxy anchored over the label; the proxy has
+    no `OnClick`, so click-through is unchanged. Buttons, checkboxes, edit
+    boxes, list rows, icon previews, tabs and window headers keep their handlers
+    directly.
+  - The shared tooltip is freed in `OnUnload`; `SetTooltipOnPos` remains only as
+    a fallback when `gametooltip` creation fails.
+- **Chinese removed from the language popup.** The 中文 option rendered as
+  squares in the client font, so it is gone: `locale.LANGS`, the `zh`
+  dictionary and the popup option were deleted, and English, Russian, Turkish
+  and Korean remain. A stored `settings.language = "zh"` (or any unknown code)
+  is migrated to `en` on the first settings read.
+- **Child windows follow a language switch.** Import/Export and Presets used to
+  be created once and only hidden, so after switching the language they reopened
+  with the old language's captions. Both are now destroyed on unload/language
+  rebuild (and recreated on demand); reopening without a language change still
+  reuses the cached window. The support window is freed instead of only being
+  hidden, and its close path no longer leaks the widget.
+- Tests: `tests/ui_tooltips_harness.py` instruments the real shared tooltip
+  (created once, lazily), asserts `ClearLines`/`AddLine`/`Raise`/`Show(true)` and
+  the re-anchor on every hover, `Show(false)` on leave, translated hover text,
+  200+ registrations and zero tooltip work in `UPDATE` ticks;
+  `tests/locale_harness.py` now checks four languages, the `zh`/unknown-code
+  migration, a representative label of every child window in every language, and
+  that Import/Export and Presets reopened after a switch are in the new language.
 
 ### 1.32.0
 
@@ -1264,7 +1308,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.32.0
+**Current Version:** 1.33.0
 
 ## Credits
 

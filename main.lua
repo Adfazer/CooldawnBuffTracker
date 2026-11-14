@@ -77,7 +77,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.32.0"
+  version = "1.33.0"
 }
 
 local buffData = {}
@@ -4383,6 +4383,14 @@ local function OnUnload()
   if settingsPage and settingsPage.Unload then
     settingsPage.Unload()
   end
+
+  -- Общий gametooltip (1.33.0) живёт на UIParent: освобождаем вместе с аддоном.
+  pcall(function()
+    local CbtWindowModule = require("CooldawnBuffTracker/util/cbt_window")
+    if CbtWindowModule and CbtWindowModule.DestroyTooltip then
+      CbtWindowModule.DestroyTooltip()
+    end
+  end)
 
 end
 

@@ -9,13 +9,15 @@ local locale = require('CooldawnBuffTracker/locale')
 local L = locale.L
 
 local presetWindow = nil
+-- Язык, на котором построено окно: после смены языка кэш уничтожается (1.33.0).
+local presetLang = nil
 local presetControls = {}
 local presetListWidgets = {}
 local presetListPage = 1
 local presetsPerPage = 7
 
 -- Предварительное объявление локальных функций (Lua 5.1 требует порядка)
-local openPresetWindow, closePresetWindow
+local openPresetWindow, closePresetWindow, destroyPresetWindow
 local createPresetWindowUI, updatePresetList, updateActivePresetLabel
 local showError, hideError
 
@@ -227,6 +229,7 @@ end
 createPresetWindowUI = function()
     presetWindow = CbtWindow.Create("CooldawnBuffTrackerPresets", "Presets", 520, 470, closePresetWindow)
     if not presetWindow then return end
+    presetLang = locale.current()
 
     -- Надпись об активном пресете
     local activeLabel = helpers.createLabel('cbtPresetActive', presetWindow, 'Active preset: None', 15, 38, 16)
@@ -363,6 +366,11 @@ openPresetWindow = function()
         return
     end
 
+    -- Смена языка: подписи кэша устарели — уничтожаем окно и строим заново.
+    if presetWindow and presetLang ~= locale.current() then
+        destroyPresetWindow()
+    end
+
     if not presetWindow then
         createPresetWindowUI()
     end
@@ -379,7 +387,20 @@ closePresetWindow = function()
     end
 end
 
+-- Полное уничтожение окна (смена языка, выгрузка аддона): кэш виджетов
+-- иначе показывает подписи языка, на котором окно было построено.
+destroyPresetWindow = function()
+    if presetWindow then
+        pcall(function() CbtWindow.Destroy(presetWindow) end)
+        presetWindow = nil
+    end
+    presetControls = {}
+    presetListWidgets = {}
+    presetLang = nil
+end
+
 return {
     openPresetWindow = openPresetWindow,
-    closePresetWindow = closePresetWindow
+    closePresetWindow = closePresetWindow,
+    destroyPresetWindow = destroyPresetWindow
 }

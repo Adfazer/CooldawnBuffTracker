@@ -191,7 +191,11 @@ function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     
     label.style:SetAlign(ALIGN.LEFT)
     label.style:SetFontSize(fontSize or 18)
+    -- Clickable(false) отключает hit-testing: сама подпись OnEnter не получит.
+    -- Помечаем её, чтобы CbtWindow.Tooltip поставил прозрачный hover-прокси
+    -- над подписью (кликов у подписей нет, click-through не страдает).
     if label.Clickable then label:Clickable(false) end
+    if CbtWindow.MarkNoHover then CbtWindow.MarkNoHover(label) end
 
     return label
 end

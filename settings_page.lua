@@ -4384,13 +4384,20 @@ local function Unload()
         F_ETC.HidePallet()
     end
 
-    -- Close Import/Export window if it's open
-    if importExport and importExport.closeImportExportWindow then
+    -- Import/Export и Presets уничтожаем, а не только скрываем (1.33.0):
+    -- Unload зовётся и при смене языка, а кэш окна хранит подписи языка, на
+    -- котором он был построен. Обычное переоткрытие без смены языка по-прежнему
+    -- переиспользует окно (destroy зовётся только здесь и в своей open-ветке).
+    if importExport and importExport.destroyImportExportWindow then
+        pcall(importExport.destroyImportExportWindow)
+    elseif importExport and importExport.closeImportExportWindow then
         importExport.closeImportExportWindow()
     end
 
     -- Close Presets window if it's open
-    if presetWindowModule and presetWindowModule.closePresetWindow then
+    if presetWindowModule and presetWindowModule.destroyPresetWindow then
+        pcall(presetWindowModule.destroyPresetWindow)
+    elseif presetWindowModule and presetWindowModule.closePresetWindow then
         presetWindowModule.closePresetWindow()
     end
 end

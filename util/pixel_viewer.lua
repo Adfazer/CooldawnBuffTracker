@@ -25,9 +25,15 @@ local USDT_ERC20_ADDRESS = "0xe192951a6291030ce075f24D74e964891afA8958"
 
 -- Функция для открытия окна поддержки
 local function openPixelWindow()
-    -- Если окно уже открыто, закрываем и выходим
+    -- Если окно уже открыто, закрываем и выходим (виджет освобождаем: иначе
+    -- окно утекает, а его подписи остаются на старом языке после переключения).
     if supportWindow and supportWindow:IsVisible() then
-        supportWindow:Show(false)
+        if CbtWindow.Destroy then
+            pcall(function() CbtWindow.Destroy(supportWindow) end)
+        else
+            pcall(function() supportWindow:Show(false) end)
+            pcall(function() api.Interface:Free(supportWindow) end)
+        end
         supportWindow = nil
         return
     end
@@ -37,7 +43,7 @@ local function openPixelWindow()
                                      "Support the Addon Developer", 450, 500,
                                      function()
                                          if supportWindow then
-                                             supportWindow:Show(false)
+                                             CbtWindow.Destroy(supportWindow)
                                              supportWindow = nil
                                          end
                                      end)
@@ -167,7 +173,9 @@ end
 -- Функция для закрытия окна, если оно открыто
 local function closePixelWindow()
     if supportWindow then
-        supportWindow:Show(false)
+        -- Destroy, а не только Show(false): кэш виджета после смены языка
+        -- показывал бы подписи старого языка.
+        pcall(function() CbtWindow.Destroy(supportWindow) end)
         supportWindow = nil
     end
 end

@@ -5,6 +5,7 @@ local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
 local flatSeq = 0
+local hideTooltip
 
 -- 1.31.0: оверлей цели живёт на слое normal с z-order 1000. Каждое окно
 -- аддона должно рисоваться ВЫШЕ него: тот же слой, z-order 1100 и Raise,
@@ -68,6 +69,9 @@ function M.Create(id, title, w, h, onClose)
     -- подпись не должна перехватывать мышь: иначе за заголовок окно не тянется
     if titleLabel.Clickable then titleLabel:Clickable(false) end
     pcall(function() titleLabel:EnablePick(false) end)
+    -- Оба флага вместе = виджет не получает OnEnter; помечаем, чтобы
+    -- CbtWindow.Tooltip на такой подписи ставил hover-прокси, а не молчал.
+    if M.MarkNoHover then M.MarkNoHover(titleLabel) end
 
     local closeBtn = header:CreateChildWidget("button", id .. "_close", 0, true)
     closeBtn:SetExtent(20, 20)
@@ -119,6 +123,8 @@ end
 
 function M.Destroy(win)
     if win == nil then return end
+    -- Подсказка могла быть привязана к виджету этого окна: гасим до освобождения.
+    if hideTooltip then hideTooltip() end
     if win.header then
         pcall(function() win.header:ReleaseHandler("OnDragStop") end)
         pcall(function() win.header:ReleaseHandler("OnDragStart") end)
@@ -165,51 +171,188 @@ function M.CheckButton(id, parent, onChanged)
     return w
 end
 
--- Всплывающая подсказка на ховере (SetTooltipOnPos: nil очищает).
--- SetHandler заменяет обработчик, поэтому фабрики кнопок и строк списков
--- кладут свой ховер-обработчик в поля _cbtHoverOnEnter/_cbtHoverOnLeave:
--- тултип вызывает его первым и не гасит подсветку ховера.
+-- =========================================================================
+-- Всплывающие подсказки (1.33.0)
+--
+-- api.Interface:SetTooltipOnPos в игре не показывает подсказку для наших
+-- контролов (ховер есть, подсказки нет). Поэтому подсказка — настоящий
+-- gametooltip по проверенному паттерну TrackThatPlease
+-- (TrackThatPlease/util/helpers.lua:214-261):
+--   * ОДИН общий tooltip, создаётся лениво и кэшируется; владелец — UIParent,
+--     слой "tooltip" и высокий z-order, чтобы рисоваться ВЫШЕ окон аддона;
+--   * ninepart-фон ui/common_new/default.dds + SetTextureInfo("tooltip");
+--   * шрифт 14, автоперенос, ширина 340;
+--   * OnEnter: ClearLines -> AddLine -> пере-анкор на виджет -> Raise -> Show(true);
+--   * OnLeave: Show(false). В OnUpdate подсказка не трогается вообще.
+-- Текст переводится в момент наведения (locale.L), поэтому смена языка видна
+-- на следующем ховере; сам виджет не пересоздаётся.
+-- =========================================================================
+local TOOLTIP_ID = "cbtGameTooltip"
+local TOOLTIP_WIDTH = 340
+local TOOLTIP_GAP = -6
+
+local tooltip = nil
+
+local function ensureTooltip()
+    if tooltip then return tooltip end
+    local ok, tip = pcall(function()
+        -- Владелец — строка "UIParent": глобал UIParent в песочнице nil.
+        return api.Interface:CreateWidget("gametooltip", TOOLTIP_ID, "UIParent")
+    end)
+    if not ok or not tip then return nil end
+    tooltip = tip
+    pcall(function() tip:SetUILayer("tooltip") end)
+    pcall(function() if tip.SetZOrder then tip:SetZOrder(5000) end end)
+    -- Не перехватывать мышь: иначе подсказка сама гасит ховер, который её держит.
+    pcall(function() tip:EnablePick(false) end)
+    pcall(function() tip:Clickable(false) end)
+    pcall(function() tip:SetInset(10, 10, 10, 10) end)
+    pcall(function() tip:SetLineSpace(4) end)
+    pcall(function() tip:SetAutoWordwrap(true) end)
+    pcall(function() tip:SetWidth(TOOLTIP_WIDTH) end)
+    pcall(function() tip.style:SetFontSize(14) end)
+    pcall(function() tip.style:SetSnap(true) end)
+    local bg = tip:CreateNinePartDrawable("ui/common_new/default.dds", "background")
+    if bg then
+        pcall(function() bg:SetTextureInfo("tooltip") end)
+        bg:AddAnchor("TOPLEFT", tip, 0, 0)
+        bg:AddAnchor("BOTTOMRIGHT", tip, 0, 0)
+        pcall(function() bg:SetColor(1, 1, 1, 0.85) end)
+    end
+    pcall(function() tip:ClearLines() end)
+    pcall(function() tip:Show(false) end)
+    return tip
+end
+
+-- Скрыть общий tooltip (перед Destroy окна, чей виджет был якорем).
+hideTooltip = function()
+    if tooltip then
+        pcall(function() tooltip:Show(false) end)
+    end
+end
+
+-- Показать подсказку над конкретным виджетом. Анкор переставляется на каждом
+-- показе: один общий tooltip переезжает между контролами.
+local function showTooltip(widget, text)
+    local tip = ensureTooltip()
+    if not tip then
+        -- Страховка на случай, если gametooltip не создался.
+        pcall(function() api.Interface:SetTooltipOnPos(text, widget, 0, -22) end)
+        return
+    end
+    pcall(function()
+        tip:ClearLines()
+        tip:AddLine(text, "", 0, "left", ALIGN.LEFT, 0)
+        tip:RemoveAllAnchors()
+        tip:AddAnchor("BOTTOM", widget, "TOP", 0, TOOLTIP_GAP)
+        tip:Raise()
+        tip:Show(true)
+    end)
+end
+
+-- Закрыть и освободить общий tooltip (OnUnload).
+function M.DestroyTooltip()
+    if tooltip == nil then return end
+    pcall(function() tooltip:Show(false) end)
+    pcall(function() tooltip:ReleaseHandler("OnEnter") end)
+    pcall(function() tooltip:ReleaseHandler("OnLeave") end)
+    pcall(function() api.Interface:Free(tooltip) end)
+    tooltip = nil
+end
+
+-- Цепочка ховер-обработчиков. Обёртка САМА сохраняется в
+-- _cbtHoverOnEnter/_cbtHoverOnLeave: без этого Hover(), вызванный после
+-- Tooltip() (или наоборот), перезаписывал SetHandler и терял предыдущий слой —
+-- подсказка исчезала, если фабрика ставила подсветку позже. Теперь порядок
+-- вызовов не важен: каждый новый слой вызывает сохранённый предыдущий.
 local HOVER_FIELD = {
     OnEnter = "_cbtHoverOnEnter",
     OnLeave = "_cbtHoverOnLeave",
 }
 
 local function chainHandler(widget, event, fn)
-    local prev = widget[HOVER_FIELD[event]]
-    widget:SetHandler(event, function(self, ...)
+    local field = HOVER_FIELD[event]
+    local prev = widget[field]
+    local wrapper = function(self, ...)
         if prev then pcall(prev, self, ...) end
         fn(self, ...)
-    end)
+    end
+    widget[field] = wrapper
+    widget:SetHandler(event, wrapper)
+    return wrapper
 end
 
--- Регистрирует ховер-обработчик виджета так, чтобы Tooltip мог его сохранить.
+-- Регистрирует ховер-обработчик виджета, сохраняя уже навешенные (тултип,
+-- чужую подсветку): Hover можно звать до или после Tooltip.
 function M.Hover(widget, onEnter, onLeave)
     if not widget then return widget end
-    if onEnter then
-        widget._cbtHoverOnEnter = onEnter
-        widget:SetHandler("OnEnter", onEnter)
-    end
-    if onLeave then
-        widget._cbtHoverOnLeave = onLeave
-        widget:SetHandler("OnLeave", onLeave)
-    end
+    if onEnter then chainHandler(widget, "OnEnter", onEnter) end
+    if onLeave then chainHandler(widget, "OnLeave", onLeave) end
     return widget
+end
+
+-- Пометить виджет как НЕ получающий ховер сам: Clickable(false) выключает
+-- hit-testing (а вместе с EnablePick(false) — и pick), поэтому OnEnter на такой
+-- виджет не приходит. Так живут все подписи (helpers.createLabel) и заголовок
+-- окна в шапке; прокси ставится только когда к виджету привязывают подсказку.
+function M.MarkNoHover(widget)
+    if widget then widget._cbtNoHover = true end
+    return widget
+end
+
+-- Прозрачный hover-прокси поверх неинтерактивного виджета: пустой emptywidget
+-- с теми же границами (два анкора по углам — следует за SetWidth/SetExtent),
+-- Clickable(true) и БЕЗ OnClick: у подписей кликов нет, поэтому click-through
+-- не страдает. Возвращает виджет, на который вешать подсказку. Подписи внутри
+-- кликабельных строк/кнопок не проксируются — там подсказка живёт на самой
+-- строке/кнопке, иначе прокси съел бы клик.
+local proxySeq = 0
+function M.HoverProxy(widget)
+    if not widget then return nil end
+    if widget._cbtHoverProxy then return widget._cbtHoverProxy end
+    local parent = nil
+    pcall(function() parent = widget:GetParent() end)
+    if not parent then return widget end
+    proxySeq = proxySeq + 1
+    local proxy = parent:CreateChildWidget("emptywidget", "cbtHoverProxy" .. tostring(proxySeq), 0, true)
+    if not proxy then return widget end
+    proxy:RemoveAllAnchors()
+    proxy:AddAnchor("TOPLEFT", widget, 0, 0)
+    proxy:AddAnchor("BOTTOMRIGHT", widget, 0, 0)
+    proxy:Clickable(true)
+    pcall(function() proxy:EnablePick(true) end)
+    proxy:Show(true)
+    proxy._cbtHoverProxyOf = widget
+    widget._cbtHoverProxy = proxy
+    return proxy
 end
 
 -- Динамическая подсказка: текст считается в момент наведения, поэтому строки
 -- списков (имя/id/значения) показывают актуальные данные без OnUpdate.
 function M.TooltipDynamic(widget, textFn)
     if not widget or type(textFn) ~= "function" then return widget end
-    chainHandler(widget, "OnEnter", function(self)
-        local ok, text = pcall(textFn, self)
+    -- Повторная привязка к тому же виджету только меняет источник текста:
+    -- второй слой обёрток означал бы двойной показ подсказки.
+    if widget._cbtTooltipTextFn ~= nil then
+        widget._cbtTooltipTextFn = textFn
+        return widget
+    end
+    widget._cbtTooltipTextFn = textFn
+    local host = widget
+    if widget._cbtNoHover then
+        host = M.HoverProxy(widget) or widget
+    end
+    chainHandler(host, "OnEnter", function(self)
+        local fn = widget._cbtTooltipTextFn
+        if fn == nil then return end
+        local ok, text = pcall(fn, self)
         if ok and type(text) == "string" and text ~= "" then
             -- Перевод в момент наведения: смена языка видна на следующем ховере.
-            text = locale.L(text)
-            pcall(function() api.Interface:SetTooltipOnPos(text, self, 0, -22) end)
+            showTooltip(widget, locale.L(text))
         end
     end)
-    chainHandler(widget, "OnLeave", function(self)
-        pcall(function() api.Interface:SetTooltipOnPos(nil, self, 0, 0) end)
+    chainHandler(host, "OnLeave", function()
+        hideTooltip()
     end)
     return widget
 end

@@ -83,8 +83,9 @@ end
 
 local defaultSettings = {
     enabled = true,
-    -- 1.30.0: язык интерфейса (en/ru/zh/tr/ko). Старые конфиги без поля
-    -- мигрируют в en в migrate(); неверный код отсекает locale.normalize().
+    -- 1.33.0: язык интерфейса (en/ru/tr/ko). Старые конфиги без поля
+    -- мигрируют в en в migrate(); 'zh' и любой неверный код отсекает
+    -- locale.applySettings() при первом чтении настроек.
     language = "en",
     buffOverrides = {},
     playerpet = {
