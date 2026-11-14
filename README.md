@@ -266,6 +266,13 @@ mount and target.
 
 ## Changelog
 
+### 1.36.4
+
+- Removed the redundant Save button from the main settings window: string
+  fields apply on Enter, checkboxes/colours apply immediately, and closing the
+  window runs the same full save. Add/Edit entry, preset and canvas-rename
+  dialogs keep their Save/confirm buttons.
+
 ### 1.36.3
 
 - Target-only tooltips no longer hover over empty space when Mount/Player is
@@ -1450,7 +1457,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.36.3
+**Current Version:** 1.36.4
 
 ## Credits
 

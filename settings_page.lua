@@ -3891,29 +3891,9 @@ local function buildTimerSection(lockButton)
     CbtWindow.Tooltip(labelTextColor, "Name label colour under the icons. Click to open the palette.")
     settingsControls.labelTextColor = labelTextColor
 
-    -- Save button — в самом низу окна, под "Label color". Применяет введённые
-    -- значения (icon size/spacing, position, font size, сетка) сразу, не
-    -- закрывая окно настроек.
-    local saveButton = helpers.createButton('cbtSaveButton', settingsWindow, 'Save', 0, 0)
-    saveButton:RemoveAllAnchors()
-    saveButton:AddAnchor("BOTTOMRIGHT", settingsWindow, -20, -18)
-    saveButton:SetExtent(120, 28)
-    saveButton:Show(true)
-    CbtWindow.Tooltip(saveButton,
-        "Apply icon, grid, position and timer values. Enter inside a field applies it too.")
-    settingsControls.saveButton = saveButton
-    saveButton:SetHandler("OnClick", function()
-        settings = helpers.getSettings()
-        applySaveKeepPages()
-        if saveButton.SetText then
-            saveButton:SetText("Saved")
-            if api and api.DoIn then
-                api:DoIn(900, function()
-                    if saveButton and saveButton.SetText then saveButton:SetText("Save") end
-                end)
-            end
-        end
-    end)
+    -- Кнопки Save здесь нет: каждое строковое поле применяется по Enter,
+    -- чекбоксы/цвета — сразу, а settingsWindowClose() вызывает тот же
+    -- saveSettings() и применяет всё остальное. Кнопка была дублем.
 end
 
 -- =====================================================================
