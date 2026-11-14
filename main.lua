@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.23.0"
+  version = "1.23.1"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -1701,11 +1701,29 @@ local function ttpPixels(value)
   return n / uiScaleSafe()
 end
 
+-- TTP 3.1+ стирает свои ключи из общей таблицы и хранит настройки в
+-- TrackThatPlease_settings.lua (при отсутствии — в _backup). Читаем оба места.
+local function readTTPPrivate()
+  local paths = { "TrackThatPlease_settings.lua", "TrackThatPlease_settings_backup.lua" }
+  for _, path in ipairs(paths) do
+    local ok, data = pcall(function() return api.File:Read(path) end)
+    if ok and type(data) == "table" then
+      for _ in pairs(data) do return data end
+    end
+  end
+  return nil
+end
+
 -- Нижняя граница и высота target-ряда TrackThatPlease в UI-координатах.
--- nil, если TTP не загружен (api.GetSettings вернёт nil) или ключей нет.
+-- nil, если TTP не загружен/настройки недоступны.
 local function ttpTargetBounds()
-  local ok, conf = pcall(function() return api.GetSettings(TTP_ADDON_ID) end)
-  if not ok or type(conf) ~= "table" then return nil end
+  local conf = nil
+  local ok, engine = pcall(function() return api.GetSettings(TTP_ADDON_ID) end)
+  if ok and type(engine) == "table" and engine.targetBuffVerticalOffset ~= nil then
+    conf = engine
+  end
+  if not conf then conf = readTTPPrivate() end
+  if not conf then return nil end
   local offset = ttpPixels(conf.targetBuffVerticalOffset)
   local size = ttpPixels(conf.targetIconSize)
   if not offset or not size then return nil end

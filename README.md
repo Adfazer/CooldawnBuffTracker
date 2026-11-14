@@ -159,6 +159,15 @@ mount and target.
 
 ## Changelog
 
+### 1.23.1
+
+- TrackThatPlease 3.1+ no longer keeps its target-row settings in the shared API
+  table (it scrubs it and stores a private file). The overlay now reads
+  `TrackThatPlease_settings.lua` (then `_backup`) to place our target row above TTP's
+  row; the shared table is still tried first for older TTP versions.
+- Settings layout: the `Reserved Y` field moved to its own row so it no longer
+  overlaps the `Under HP/MP bar` label.
+
 ### 1.23.0
 
 - **Native frame display modes** (all optional, off by default; floating
@@ -935,7 +944,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.23.0
+**Current Version:** 1.23.1
 
 ## Credits
 

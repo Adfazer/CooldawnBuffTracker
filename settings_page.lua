@@ -3243,14 +3243,14 @@ local function buildFrameModeSection()
     bindApplyOnEnter(ttpGap)
 
     -- Общий для обоих юнитов "Reserved Y" под строкой (место под чужими рядами)
-    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 860, 454, 13)
+    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 860, 502, 13)
     stripOffsetLabel:SetWidth(84)
     stripOffsetLabel:Show(false)
     settingsControls.stripOffsetLabel = stripOffsetLabel
     CbtWindow.Tooltip(stripOffsetLabel,
         "Extra space below the bar before the strip starts, px. Use it to clear another addon's row (for example TrackWhatPlease) without moving the native frame.")
 
-    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 946, 454)
+    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 946, 502)
     if stripOffsetY then
         stripOffsetY:SetMaxTextLength(4)
         stripOffsetY:SetWidth(45)
