@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.24.0"
+  version = "1.25.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -95,6 +95,9 @@ local UNIT_TYPES = { "playerpet", "player", "target" }
 -- присваиваются ниже, после функций отрисовки.
 local hideFrameModesForUnit
 local frameModeEnabled
+-- 1.25.0: настройки TTP читает refreshFrameCache (кэш 500 мс), поэтому нужна
+-- предварительная декларация — определение ниже, после ttpPixels/readTTPPrivate.
+local ttpTargetBounds
 local CANVAS_BASE_ID = {
   playerpet = "MountBuffCanvas",
   player = "PlayerBuffCanvas",
@@ -1582,32 +1585,35 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
 end
 
 -- =====================================================================
--- 1.23.0: режимы показа, привязанные к юниту.
---   * Player "Under MP bar" / Target "Under HP/MP bar" — все канвасы юнита
---     сливаются в ОДНУ строку: сначала записи канваса 1 в их порядке, затем
---     канваса 2 и т.д. Максимум 9 иконок в ряд, без имён, сетка канваса
---     игнорируется, лишние иконки уходят вниз следующими рядами.
+-- 1.23.0: режимы показа, привязанные к юниту (1.25.0 — только у цели).
+--   * Target "Under HP/MP bar" — все канвасы цели сливаются в ОДНУ строку:
+--     сначала записи канваса 1 в их порядке, затем канваса 2 и т.д.
+--     Максимум 9 иконок в ряд, без имён, сетка канваса игнорируется,
+--     лишние иконки уходят вниз следующими рядами.
 --   * Target "Overlay" — каждый канвас рисуется у цели в экранных
 --     координатах (api.Unit:GetUnitScreenPosition), как это делает
 --     TrackThatPlease; при загруженном TTP строка ставится над его рядом.
+--     Позиция пересчитывается КАЖДЫЙ кадр; якорь меняется только при
+--     сдвиге на >= 1 px (см. updateTargetOverlayPositions).
 -- Плавающие канвасы при включённом режиме скрыты; выключение возвращает их
 -- на прежнее место (позиция в настройках не меняется).
+-- Player-режим "Under MP bar" убран в 1.25.0: у игрока только плавающие
+-- канвасы.
 -- =====================================================================
 local MAX_STRIP_ICONS = 9
-local FRAME_CACHE_MS = 500      -- проверка фрейма/цели ~2 раза в секунду
+local FRAME_CACHE_MS = 500      -- проверка фрейма/цели/настроек TTP ~2 раза в секунду
 local TTP_ADDON_ID = "TrackThatPlease"
 local FRAME_ANCHOR_MAX_DIST = 100
+local MAX_ANCHOR_COORD = 20000  -- защита от вырожденной проекции у камеры
 
 local frameStrips = {}    -- [unitType] = { wnd, icons, sig, bar, offset }
-local frameOverlays = {}  -- [index] = { wnd, icons, sig, ax, ay }
-local frameCache = {}     -- [unitType] = { frame, bar, visible, screenX/Y/z, at }
+local frameOverlays = {}  -- [index] = { wnd, icons, sig, ax, ay, shown }
+local frameCache = {}     -- [unitType] = { frame, bar, visible, screenX/Y/z, ttpOffset/Size, at }
 
 frameModeEnabled = function(unitType)
   local us = settings and settings[unitType]
   if not us then return false end
-  if unitType == "player" then
-    return us.underMp == true
-  elseif unitType == "target" then
+  if unitType == "target" then
     return us.underBars == true or us.overlay == true
   end
   return false
@@ -1616,7 +1622,6 @@ end
 local function underBarModeFor(unitType)
   local us = settings and settings[unitType]
   if not us then return false end
-  if unitType == "player" then return us.underMp == true end
   if unitType == "target" then return us.underBars == true end
   return false
 end
@@ -1652,7 +1657,8 @@ local function unitBarOf(frame)
   return frame
 end
 
--- Кэш положения/видимости: ~2 проверки в секунду, а не каждый кадр.
+-- Кэш тяжёлых проверок: ~2 проверки в секунду, а не каждый кадр.
+-- Позиция цели сюда НЕ входит — её читает readTargetScreen() каждый кадр.
 local function refreshFrameCache(unitType, nowMs)
   local cache = frameCache[unitType]
   if not cache then
@@ -1666,22 +1672,54 @@ local function refreshFrameCache(unitType, nowMs)
   cache.frame = frame
   cache.visible = frame ~= nil and widgetVisible(frame)
   cache.bar = unitBarOf(frame)
-  cache.screenX, cache.screenY, cache.z = nil, nil, nil
 
   if unitType == "target" then
-    local ok, x, y, z = pcall(function() return api.Unit:GetUnitScreenPosition("target") end)
-    if ok and type(x) == "number" and type(y) == "number" then
-      -- NaN не равен самому себе; Inf отвергаем руками
-      local finite = (x == x) and (y == y)
-        and x ~= math.huge and x ~= -math.huge
-        and y ~= math.huge and y ~= -math.huge
-      if finite then
-        cache.screenX, cache.screenY = x, y
-        if type(z) == "number" and z == z then cache.z = z end
-      end
-    end
+    -- Настройки TTP (приватный файл) читаются вместе с рамкой — раз в 500 мс,
+    -- а не на каждом кадре: избегать его ряда нужно и в оверлее, и в строке.
+    cache.ttpOffset, cache.ttpSize = ttpTargetBounds()
   end
   return cache
+end
+
+-- 1.25.0: проекция цели читается КАЖДЫЙ кадр (как у TrackThatPlease) — по ней
+-- двигается оверлей, и 500-мс кэш давал рывки при движении/повороте камеры.
+-- Ошибка чтения или нечисло/Nan/Inf обнуляют позицию: оверлей прячется.
+local function readTargetScreen(cache)
+  if not cache then return false end
+  local ok, x, y, z = pcall(function() return api.Unit:GetUnitScreenPosition("target") end)
+  if not ok or type(x) ~= "number" or type(y) ~= "number" then
+    cache.screenX, cache.screenY, cache.z = nil, nil, nil
+    return false
+  end
+  -- NaN не равен самому себе; Inf отвергаем руками
+  local finite = (x == x) and (y == y)
+    and x ~= math.huge and x ~= -math.huge
+    and y ~= math.huge and y ~= -math.huge
+  if not finite then
+    cache.screenX, cache.screenY, cache.z = nil, nil, nil
+    return false
+  end
+  cache.screenX, cache.screenY = x, y
+  if type(z) == "number" and z == z then
+    cache.z = z
+  else
+    cache.z = nil
+  end
+  return true
+end
+
+-- Годна ли позиция для якоря: z в прежнем диапазоне (0..FRAME_ANCHOR_MAX_DIST)
+-- и координаты не «взорвались». Проекция вырождается у плоскости камеры, и z
+-- при этом остаётся положительным (замер TTP: x от -12733 до 90218), поэтому
+-- одного z мало.
+local function targetScreenSane(cache)
+  if not cache or not cache.screenX or not cache.screenY then return false end
+  local x, y = cache.screenX, cache.screenY
+  if x <= -MAX_ANCHOR_COORD or x >= MAX_ANCHOR_COORD then return false end
+  if y <= -MAX_ANCHOR_COORD or y >= MAX_ANCHOR_COORD then return false end
+  local z = cache.z
+  if z and (z < 0 or z > FRAME_ANCHOR_MAX_DIST) then return false end
+  return true
 end
 
 local function uiScaleSafe()
@@ -1716,7 +1754,7 @@ end
 
 -- Нижняя граница и высота target-ряда TrackThatPlease в UI-координатах.
 -- nil, если TTP не загружен/настройки недоступны.
-local function ttpTargetBounds()
+ttpTargetBounds = function()
   local conf = nil
   local ok, engine = pcall(function() return api.GetSettings(TTP_ADDON_ID) end)
   if ok and type(engine) == "table" and engine.targetBuffVerticalOffset ~= nil then
@@ -1804,6 +1842,8 @@ local function createAttachedWindow(id)
 end
 
 local function ensureFrameStrip(unitType)
+  -- 1.25.0: строка под полосой HP/MP есть только у цели; Player-режим убран.
+  if unitType ~= "target" then return nil end
   local holder = frameStrips[unitType]
   if holder and holder.wnd then return holder end
   holder = { icons = {} }
@@ -2040,12 +2080,13 @@ end
 -- Экранная позиция оверлея: x и НИЖНЯЯ граница ряда (якорь BOTTOM).
 -- TTP рисует свой target-ряд в мировых координатах, поэтому при загруженном
 -- TTP наша строка встаёт над его рядом (topY - gap), иначе — от экранной
--- позиции цели с пользовательскими overlayX/overlayY.
+-- позиции цели с пользовательскими overlayX/overlayY. Настройки TTP берутся
+-- из кэша (обновляются раз в 500 мс), сама позиция цели — уже свежая.
 local function overlayScreenPosition(cfg, cache)
   local us = settings and settings.target
   local avoidTTP = not (us and us.avoidTTP == false)
   if avoidTTP then
-    local ttpOffset, ttpSize = ttpTargetBounds()
+    local ttpOffset, ttpSize = cache and cache.ttpOffset, cache and cache.ttpSize
     if ttpOffset and ttpSize then
       local gap = tonumber(us and us.ttpGap) or 4
       if gap < 0 then gap = 0 end
@@ -2057,6 +2098,49 @@ local function overlayScreenPosition(cfg, cache)
   local ox = tonumber(cfg and cfg.overlayX) or 0
   local oy = tonumber(cfg and cfg.overlayY) or -30
   return cache.screenX + ox, cache.screenY + oy
+end
+
+-- Ставит окно оверлея на (x, bottom) в целых пикселях. RemoveAllAnchors и
+-- AddAnchor вызываются ТОЛЬКО когда округлённая позиция сдвинулась на >= 1 px
+-- (как в TrackThatPlease): иначе виджеты дёргаются каждый кадр вхолостую.
+local function applyOverlayAnchor(holder, x, bottomY)
+  if not holder or not holder.wnd or not x or not bottomY then return end
+  x = math.floor(x + 0.5)
+  bottomY = math.floor(bottomY + 0.5)
+  if holder.ax == x and holder.ay == bottomY then return end
+  holder.ax, holder.ay = x, bottomY
+  pcall(function()
+    holder.wnd:RemoveAllAnchors()
+    holder.wnd:AddAnchor("BOTTOM", "UIParent", "TOPLEFT", x, bottomY)
+  end)
+end
+
+-- 1.25.0: оверлей цели ведётся каждый кадр (TrackThatPlease-стиль).
+-- Каждый кадр читается только проекция + target id; рамка/полоса/настройки
+-- TTP остаются на 500-мс кэше, баффы/ауры не опрашиваются чаще прежнего.
+-- Цель потеряна или проекция негодна — все окна оверлея прячутся.
+local function updateTargetOverlayPositions()
+  local us = settings and settings.target
+  if not (us and us.overlay == true) then return end
+  local cache = frameCache.target
+  local visible = cache and cache.visible
+    and getCurrentTargetId() ~= nil
+    and readTargetScreen(cache)
+    and targetScreenSane(cache)
+  if not visible then
+    for _, oh in pairs(frameOverlays) do
+      setHolderShown(oh, false)
+    end
+    return
+  end
+  local canvases = us.canvases or {}
+  for idx = 1, #canvases do
+    local holder = frameOverlays[idx]
+    if holder and holder.shown and holder.wnd then
+      local x, bottomY = overlayScreenPosition(canvases[idx] or {}, cache)
+      applyOverlayAnchor(holder, x, bottomY)
+    end
+  end
 end
 
 local function renderTargetOverlays(activeBuffs)
@@ -2072,12 +2156,10 @@ local function renderTargetOverlays(activeBuffs)
   end
 
   local cache = frameCache.target
-  local baseVisible = cache and cache.visible and cache.screenX and cache.screenY
-  if baseVisible and cache.z then
-    -- z = глубина от камеры: отрицательная — цель за камерой, projection
-    -- там «взрывается», как и у TTP (тот тоже режет по z и по экрану).
-    if cache.z < 0 or cache.z > FRAME_ANCHOR_MAX_DIST then baseVisible = false end
-  end
+  -- Если позиция ещё не читалась (первый рендер после сохранения настроек),
+  -- берём её здесь же: иначе оверлей мигнул бы до следующего кадра.
+  if cache and not cache.screenX then readTargetScreen(cache) end
+  local baseVisible = cache and cache.visible and targetScreenSane(cache)
   if baseVisible and getCurrentTargetId() == nil then baseVisible = false end
 
   for idx = 1, #canvases do
@@ -2109,15 +2191,9 @@ local function renderTargetOverlays(activeBuffs)
         if not x or not bottomY then
           setHolderShown(holder, false)
         else
-          x = math.floor(x + 0.5)
-          bottomY = math.floor(bottomY + 0.5)
-          if holder.ax ~= x or holder.ay ~= bottomY then
-            holder.ax, holder.ay = x, bottomY
-            pcall(function()
-              holder.wnd:RemoveAllAnchors()
-              holder.wnd:AddAnchor("BOTTOM", "UIParent", "TOPLEFT", x, bottomY)
-            end)
-          end
+          -- Свежая позиция уже посчитана updateTargetOverlayPositions() в этом
+          -- кадре; здесь якорь нужен лишь для только что показанного окна.
+          applyOverlayAnchor(holder, x, bottomY)
           local ocfg = attachedCfg("target", perRow, size, #subset)
           renderAttachedIcons(holder, "target", 110 + idx, subset, ocfg)
           setHolderShown(holder, true)
@@ -3470,6 +3546,9 @@ local function OnUpdate(dt)
     hideAllCanvases()
     return
   end
+  -- 1.25.0: оверлей цели переставляется каждый кадр — баффы и рамка при этом
+  -- не опрашиваются (их частота прежняя).
+  updateTargetOverlayPositions()
   -- Мана маунта: сэмплим чаще, чем баффы (100 мс), чтобы не терять мелкие траты
   manaTimer = manaTimer + dt
   if manaTimer >= 100 then

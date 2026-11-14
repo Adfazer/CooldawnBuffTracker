@@ -46,7 +46,8 @@ local CANVAS_LAYOUT_DEFAULT = {
 -- 1.23.0: режимы показа, привязанные к нативным фреймам юнита. Живут на
 -- уровне юнита, а не канваса: под полосой HP/MP все канвасы сливаются в одну
 -- строку, поэтому отдельных раскладок у них быть не может.
-local DISPLAY_FIELDS = { "underMp", "overlay", "underBars", "stripOffsetY", "avoidTTP", "ttpGap" }
+-- 1.25.0: Player-режим "Under MP bar" убран — DISPLAY_FIELDS только у цели.
+local DISPLAY_FIELDS = { "overlay", "underBars", "stripOffsetY", "avoidTTP", "ttpGap" }
 
 local function clampNumber(value, minValue, maxValue, fallback)
     local n = tonumber(value)
@@ -97,8 +98,6 @@ local defaultSettings = {
         selectedCanvas = 1,
         trackedBuffs = {},
         mirror = {},
-        underMp = false,        -- 1.23.0: слить канвасы в строку под полосой MP
-        stripOffsetY = 0,       -- запас под чужими строками (TrackWhatPlease и т.п.)
     },
     target = {
         enabled = true,
@@ -280,6 +279,19 @@ local function migrateUnit(unit, unitType)
     if unit.enabled == nil then
         unit.enabled = true
         changed = true
+    end
+
+    -- 1.25.0: Player-режим "Under MP bar" убран — его ключи (underMp и запас
+    -- под чужой строкой) больше не читаются, чистим их из сохранений.
+    if unitType == "player" then
+        if unit.underMp ~= nil then
+            unit.underMp = nil
+            changed = true
+        end
+        if unit.stripOffsetY ~= nil then
+            unit.stripOffsetY = nil
+            changed = true
+        end
     end
 
     -- 1.23.0: режимы у нативных фреймов. У старых сохранений полей нет —

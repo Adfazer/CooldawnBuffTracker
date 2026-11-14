@@ -97,25 +97,26 @@ shows only the fields of that type.
   you return to a unit; stale cache is cleared after 5 minutes.
 - Independent position/size/display settings.
 
-### Native frame display (1.23.0)
-Three optional display modes attach the panels to the game's own unit frames.
-They are off by default; turning one off restores the floating canvas with its
-saved position. Configure them in the settings window, left column, right under
-the `Unit: Mount / Player / Target` buttons — the block shows only what applies
-to the selected unit (**Native frame display**):
+### Native frame display (1.23.0, target only since 1.25.0)
+Two optional target display modes attach the target panels to the game's own
+target frame or to the target itself. They are off by default; turning one off
+restores the floating canvas with its saved position. Configure them in the
+settings window, left column, right under the
+`Unit: Mount / Player / Target` buttons — the block shows only for **Target**
+(**Native frame display**); Mount and Player keep their floating panels.
 
-- **Under MP bar (Player)** — every player canvas merges into one icon strip
-  anchored under the player frame's MP bar (HP bar when mana is hidden). Canvas 1
+- **Under HP/MP bar (Target)** — all target canvases merge into one icon strip
+  anchored under the target frame's MP bar (HP for mana-less targets). Canvas 1
   entries come first, then canvas 2 and so on; **9 icons per row**, no name
-  labels, the canvas grid settings are ignored. Extra icons wrap downwards. Icon
-  size comes from the first player canvas (clamped to 16–40).
-- **Under HP/MP bar (Target)** — the same merged strip for all target canvases,
-  anchored under the target frame's MP bar (HP for mana-less targets).
+  labels, the canvas grid settings are ignored. Extra icons wrap downwards.
 - **Overlay around target** — each target canvas is drawn as its own compact
   overlay at the target's screen position (the same projection
   TrackThatPlease uses), with its own `X`, `Y`, `Size` and `Per row` fields in
-  that canvas's layout. Overlay replaces the floating panel of that canvas; it
-  can be on together with **Under HP/MP bar** (both rows render).
+  that canvas's layout. The position is re-read **every frame**, so the overlay
+  follows a moving target; it is re-anchored only when the rounded position
+  moved by a pixel, and hides when the target is lost or the projection is
+  invalid. Overlay replaces the floating panel of that canvas; it can be on
+  together with **Under HP/MP bar** (both rows render).
 - **Avoid TrackThatPlease** (default ON) — when TrackThatPlease is loaded, the
   overlay row is placed **above** its target row, using TTP's own
   `targetBuffVerticalOffset` and `targetIconSize` (and the client UI scale).
@@ -160,6 +161,24 @@ mount and target.
 
 ## Changelog
 
+### 1.25.0
+
+- **Player `Under MP bar` display mode removed.** The player no longer has a
+  frame-attached mode: `player.underMp`, its checkbox and label, the player
+  `Reserved Y` (the field exists only for the target strip now) and the merged
+  player strip renderer are gone. Old saves drop the keys on load, Import/Export
+  no longer carries them, and presets saved earlier simply ignore them.
+  **Native frame display** therefore shows nothing for Mount, nothing for
+  Player, and only the target options for Target.
+- **Target overlay follows the target at frame rate.** `GetUnitScreenPosition
+  ("target")` is read on every `UPDATE` (NaN/Inf, an exploded projection or
+  `z` outside the sane range hide the overlay) and each visible overlay window is
+  re-anchored only when the rounded position moved by at least 1 px — the scheme
+  TrackThatPlease uses. The row no longer lags or steps while the target moves,
+  a stationary target stays perfectly still, and the overlay disappears as soon
+  as the target is lost. Frame visibility, the MP/HP bar and TTP's private
+  settings file stay on the 500 ms cache, so aura/buff polling is unchanged.
+
 ### 1.24.0
 
 - Settings layout: the `Canvas:` row (dropdown, Add, Rename, Delete) moved up to the
@@ -167,8 +186,9 @@ mount and target.
   the right edge (`x 1060`, `y 44` / `70`), so the `Icon settings` column now starts at
   `y=100` and nothing overlaps it.
 - **Native frame display** moved out of the right column into the left one, directly
-  under the unit buttons. The block shows only what applies to the selected unit:
-  Mount — nothing; Player — `Under MP bar` + `Reserved Y`; Target — `Overlay around
+  under the unit buttons. The block shows only what applies to the selected unit
+  (the Player row was dropped in 1.25.0, so only Target has controls now):
+  Mount — nothing; Target — `Overlay around
   target`, `Under HP/MP bar`, `Avoid TrackThatPlease` + `Gap`, `Reserved Y`, and the
   per-canvas overlay `X` / `Y` / `Size` / `Per row` fields while Overlay is on.
   `Tracked entries` moves down by exactly the height of the block (one anchor), the
@@ -195,7 +215,8 @@ mount and target.
     player frame's MP bar (HP bar if mana is hidden). Canvas order is preserved
     (canvas 1 entries, then canvas 2 …), max **9 icons per row**, no name labels,
     the canvas grid is ignored and extra icons wrap downwards. Icon size comes
-    from the first player canvas (16–40).
+    from the first player canvas (16–40). *(Removed in 1.25.0 — player panels are
+    always floating.)*
   - **Target → Under HP/MP bar**: the same merged strip for all target canvases,
     below the target frame's MP bar (HP for mana-less targets).
   - **Target → Overlay around target**: every target canvas renders as its own
@@ -213,7 +234,8 @@ mount and target.
 - All new fields persist in settings, presets and Import/Export
   (`player.underMp`, `target.overlay/underBars/avoidTTP/ttpGap/stripOffsetY`,
   `canvases[i].overlayX/overlayY/overlaySize/overlayPerRow`) with migration
-  defaults for existing configurations.
+  defaults for existing configurations. *(The player `underMp` key was removed
+  again in 1.25.0 together with its mode.)*
 
 ### 1.22.0
 
@@ -963,7 +985,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.24.0
+**Current Version:** 1.25.0
 
 ## Credits
 

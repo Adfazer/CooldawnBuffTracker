@@ -362,15 +362,8 @@ local function saveSettings()
 
     -- 1.23.0: режимы у нативных фреймов. Пишем только значения ВИДИМЫХ
     -- контролов: скрытая секция другого юнита иначе затирала бы его поля.
-    if currentUnitType == "player" then
-        if settings.player then
-            settings.player.stripOffsetY = clampIntText(
-                settingsControls.stripOffsetY and settingsControls.stripOffsetY:GetText(), -50, 300, 0)
-            if settingsControls.stripOffsetY then
-                settingsControls.stripOffsetY:SetText(tostring(settings.player.stripOffsetY))
-            end
-        end
-    elseif currentUnitType == "target" then
+    -- 1.25.0: Player-режим убран, блок есть только у цели.
+    if currentUnitType == "target" then
         if settings.target then
             settings.target.stripOffsetY = clampIntText(
                 settingsControls.stripOffsetY and settingsControls.stripOffsetY:GetText(), -50, 300, 0)
@@ -3132,15 +3125,16 @@ end
 
 -- =====================================================================
 -- "Native frame display" — режимы, привязанные к юниту.
---   Player: Under MP bar + Reserved Y.
+--   Player: ничего — Player-режим "Under MP bar" убран в 1.25.0.
 --   Target: Overlay around target, Under HP/MP bar, Avoid TrackThatPlease
 --           (+ Gap), Reserved Y и поля оверлея выбранного канваса.
 --   Mount:  ничего — блок скрыт.
 -- 1.24.0: блок переехал в ЛЕВУЮ колонку под кнопки Unit (x 20..355): ряд
 -- Canvas сдвинут на y=44, поэтому под ним освободилось место. Один набор
--- контролов на оба юнита: syncFrameModeControls() прячет лишние, подставляет
--- значения выбранного юнита/канваса и уводит заголовок "Tracked entries" вниз
--- ровно на высоту блока (двигается один якорь группы — за ним едет весь список).
+-- контролов на выбранный юнит: syncFrameModeControls() прячет лишние,
+-- подставляет значения выбранного юнита/канваса и уводит заголовок
+-- "Tracked entries" вниз ровно на высоту блока (двигается один якорь группы —
+-- за ним едет весь список).
 -- =====================================================================
 local frameControlsSyncing = false
 
@@ -3198,22 +3192,8 @@ local function buildFrameModeSection()
         end
     end
 
-    -- Player: строка под полосой MP — ряд 1 левой колонки (чекбокс x=20).
-    local underMpCheck = CbtWindow.CheckButton('cbtUnderMp', settingsWindow, onToggle("player", "underMp"))
-    if underMpCheck then
-        underMpCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1)
-        underMpCheck:Show(false)
-        CbtWindow.Tooltip(underMpCheck,
-            "Merge every player canvas into one icon strip under the player frame's MP bar (HP if mana is hidden). 9 icons per row, no names; the canvas grid is ignored.")
-    end
-    settingsControls.underMpCheck = underMpCheck
-
-    local underMpLabel = helpers.createLabel('cbtUnderMpLabel', settingsWindow, 'Under MP bar', 42, FRAME_ROW_1 - 1, 13)
-    underMpLabel:SetWidth(150)
-    underMpLabel:Show(false)
-    settingsControls.underMpLabel = underMpLabel
-
-    -- Target: оверлей у цели — тот же ряд 1 (у Player там Under MP bar).
+    -- 1.25.0: Player-режим "Under MP bar" убран — у игрока блок пуст.
+    -- Target: оверлей у цели — ряд 1 левой колонки.
     local overlayCheck = CbtWindow.CheckButton('cbtTargetOverlay', settingsWindow, onToggle("target", "overlay"))
     if overlayCheck then
         overlayCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1)
@@ -3273,8 +3253,8 @@ local function buildFrameModeSection()
     settingsControls.ttpGap = ttpGap
     bindApplyOnEnter(ttpGap)
 
-    -- Общий для обоих юнитов "Reserved Y" под строкой (место под чужими рядами).
-    -- У Player это ряд 2, у Target — ряд 4: y проставляет syncFrameModeControls().
+    -- "Reserved Y" под строкой (место под чужими рядами) — только у цели,
+    -- ряд 4: y проставляет syncFrameModeControls().
     local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 20, FRAME_ROW_1 + 3 * FRAME_ROW_STEP, 13)
     stripOffsetLabel:SetWidth(84)
     stripOffsetLabel:Show(false)
@@ -3357,13 +3337,11 @@ local function buildFrameModeSection()
 
     syncFrameModeControls = function()
         if not settingsControls.frameModeGroupLabel then return end
-        local isPlayer = currentUnitType == "player"
+        -- 1.25.0: блок относится только к цели — Mount и Player его не показывают.
         local isTarget = currentUnitType == "target"
-        local show = isPlayer or isTarget
+        local show = isTarget
 
         showControl(settingsControls.frameModeGroupLabel, show)
-        showControl(settingsControls.underMpCheck, isPlayer)
-        showControl(settingsControls.underMpLabel, isPlayer)
 
         showControl(settingsControls.overlayCheck, isTarget)
         showControl(settingsControls.overlayLabel, isTarget)
@@ -3387,20 +3365,19 @@ local function buildFrameModeSection()
         showControl(settingsControls.overlayPerRowLabel, overlayFields)
         showControl(settingsControls.overlayPerRow, overlayFields)
 
-        -- "Reserved Y" — ряд 2 у Player, ряд 4 у Target (над ним три ряда).
+        -- "Reserved Y" — ряд 4 у Target (над ним три ряда: Overlay, Under HP/MP,
+        -- Avoid TrackThatPlease). У Player поля больше нет.
         anchorControl(settingsControls.stripOffsetLabel, 20,
-            FRAME_ROW_1 + (isTarget and 3 or 1) * FRAME_ROW_STEP)
+            FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
         anchorControl(settingsControls.stripOffsetY, 104,
-            FRAME_ROW_1 + (isTarget and 3 or 1) * FRAME_ROW_STEP)
+            FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
 
-        -- "Tracked entries" уезжает вниз ровно на высоту блока: у Mount — сразу
-        -- под ряд Canvas, у Player — после двух рядов, у Target — после четырёх
-        -- (пяти, когда Overlay ON и видны поля оверлея). Двигается один якорь
-        -- группы, остальная левая колонка висит на нём.
+        -- "Tracked entries" уезжает вниз ровно на высоту блока: у Mount и Player
+        -- блока нет, у Target — четыре ряда (пять, когда Overlay ON и видны поля
+        -- оверлея). Двигается один якорь группы, остальная левая колонка висит
+        -- на нём.
         local rows = 0
-        if isPlayer then
-            rows = 2
-        elseif isTarget then
+        if isTarget then
             rows = overlayFields and 5 or 4
         end
         if settingsControls.trackedBuffsGroupLabel then
@@ -3414,16 +3391,7 @@ local function buildFrameModeSection()
         if not show then return end
 
         frameControlsSyncing = true
-        if isPlayer and settings.player then
-            if settingsControls.underMpCheck then
-                pcall(function()
-                    settingsControls.underMpCheck:SetChecked(settings.player.underMp == true)
-                end)
-            end
-            if settingsControls.stripOffsetY then
-                settingsControls.stripOffsetY:SetText(tostring(settings.player.stripOffsetY or 0))
-            end
-        elseif isTarget and settings.target then
+        if isTarget and settings.target then
             if settingsControls.overlayCheck then
                 pcall(function()
                     settingsControls.overlayCheck:SetChecked(settings.target.overlay == true)
