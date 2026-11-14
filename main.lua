@@ -2239,7 +2239,18 @@ local function renderAttachedIcons(holder, unitType, namespace, buffs, cfg)
         if relayout then
           icon:SetExtent(cfg.iconSize, cfg.iconSize)
           anchorIconInGrid(icon, holder.wnd, i, cfg)
-          CbtIcon.Paint(icon, buff.icon)
+          local paintOk, paintErr = pcall(CbtIcon.Paint, icon, buff.icon)
+          if not paintOk then
+            pcall(function()
+              if F_SLOT and F_SLOT.SetIconBackGround then
+                F_SLOT.SetIconBackGround(icon, nil)
+              end
+            end)
+            if not lastRuntimeError.overlayIcon then
+              lastRuntimeError.overlayIcon = true
+              CbtLog.error("overlay icon paint failed: %s", tostring(paintErr))
+            end
+          end
           if icon.nameLabel then icon.nameLabel:Show(false) end
           if icon.timerLabel then
             icon.timerLabel.style:SetFontSize(cfg.timerFontSize or 14)
@@ -2725,6 +2736,9 @@ local function checkBuffs(unitType)
   local hasCanvases = #(unitCanvases[unitType] or {}) > 0
   -- Снимок аур цели для эффективных КД (1.28.0); заполняется только для target.
   local effectiveSnapshot = nil
+  -- A target switch must force a redraw even when the new target has no auras;
+  -- otherwise the old canvas stays on screen with its last timer text.
+  local targetChanged = false
 
   if unitType == "target" then
     -- Special handling for target with caching logic
@@ -2776,6 +2790,7 @@ local function checkBuffs(unitType)
     -- We have a target
     -- Check if target changed
     if newTargetId ~= currentTargetId then
+      targetChanged = true
       -- Save current target data to cache before switching
       if currentTargetId and targetCache[currentTargetId] then
         targetCache[currentTargetId].buffStates = {}
@@ -2905,7 +2920,7 @@ local function checkBuffs(unitType)
   end
 
   local activeBuffsOnUnit = {}
-  local hasChanges = false
+  local hasChanges = targetChanged
   local currentBuffsOnUnit = {}
   -- Все ауры цели за этот тик: нужны эффективным КД (flat/percent-моды,
   -- стаки, reset-проки), в том числе для навыков, которые не отслеживаются.
@@ -4052,7 +4067,11 @@ local function OnUpdate(dt)
   end
   -- 1.25.0: оверлей цели переставляется каждый кадр — баффы и рамка при этом
   -- не опрашиваются (их частота прежняя).
-  updateTargetOverlayPositions()
+  local overlayOk, overlayErr = pcall(updateTargetOverlayPositions)
+  if not overlayOk and not lastRuntimeError.overlay then
+    lastRuntimeError.overlay = true
+    CbtLog.error("overlay update failed: %s", tostring(overlayErr))
+  end
   -- Мана маунта: сэмплим чаще, чем баффы (100 мс), чтобы не терять мелкие траты
   manaTimer = manaTimer + dt
   if manaTimer >= 100 then
