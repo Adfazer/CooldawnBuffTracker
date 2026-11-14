@@ -32,7 +32,7 @@ settings storage and all `require` paths.
   with its own panel and settings.
 - **Multiple canvases per unit** — every unit type can show several independent
   panels at once. Each canvas has its own layout, position and tracked entries;
-  the **Canvas** selector above the tracked list adds, renames, deletes and
+  the **Canvas** selector on the unit row adds, renames, deletes and
   switches them. Existing configurations migrate into a canvas named "Main".
 - **Typed custom entries** — add a buff/debuff by its numeric ID, a skill by its
   combat-log spell name, or a mount mana skill, all from one form.
@@ -100,8 +100,9 @@ shows only the fields of that type.
 ### Native frame display (1.23.0)
 Three optional display modes attach the panels to the game's own unit frames.
 They are off by default; turning one off restores the floating canvas with its
-saved position. Configure them in the settings window, right column,
-**Native frame display**:
+saved position. Configure them in the settings window, left column, right under
+the `Unit: Mount / Player / Target` buttons — the block shows only what applies
+to the selected unit (**Native frame display**):
 
 - **Under MP bar (Player)** — every player canvas merges into one icon strip
   anchored under the player frame's MP bar (HP bar when mana is hidden). Canvas 1
@@ -158,6 +159,24 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.24.0
+
+- Settings layout: the `Canvas:` row (dropdown, Add, Rename, Delete) moved up to the
+  `Unit` row (`y=44`, `x 340..724`), and `Debug` / `Record (Debug)` became a column at
+  the right edge (`x 1060`, `y 44` / `70`), so the `Icon settings` column now starts at
+  `y=100` and nothing overlaps it.
+- **Native frame display** moved out of the right column into the left one, directly
+  under the unit buttons. The block shows only what applies to the selected unit:
+  Mount — nothing; Player — `Under MP bar` + `Reserved Y`; Target — `Overlay around
+  target`, `Under HP/MP bar`, `Avoid TrackThatPlease` + `Gap`, `Reserved Y`, and the
+  per-canvas overlay `X` / `Y` / `Size` / `Per row` fields while Overlay is on.
+  `Tracked entries` moves down by exactly the height of the block (one anchor), the
+  list is 208 px (9 rows) and the ID/name form with its pagination stays above the
+  footer.
+- `ID / name` autocomplete suggests only entries that exist in `Custom entries`
+  (the dump search is gone); a row still inserts that entry's id. The popup stays at
+  4 rows, or 3 while the overlay fields are shown, so it never spills out of the window.
 
 ### 1.23.1
 
@@ -944,7 +963,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.23.1
+**Current Version:** 1.24.0
 
 ## Credits
 

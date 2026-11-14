@@ -1639,34 +1639,37 @@ end
 
 -- Строка выбора канваса: [Canvas: Main] [Add] [Rename] [Delete]
 local function buildCanvasSelector()
-    local label = helpers.createLabel('canvasLabel', settingsWindow, 'Canvas:', 340, 72, 14)
+    -- 1.24.0: ряд канваса стоит на одном уровне с кнопками Unit (y=44), справа
+    -- от них (x 340..724). Раньше он висел отдельной строкой на y=71 и съедал
+    -- место, которое теперь занимает блок "Native frame display".
+    local label = helpers.createLabel('canvasLabel', settingsWindow, 'Canvas:', 340, 47, 14)
     label:SetWidth(52)
     label:Show(true)
 
     canvasMenuButton = helpers.createButton('canvasMenuButton', settingsWindow,
-        'Canvas: ' .. canvasName(selectedCanvasIndex()), 394, 71)
-    canvasMenuButton:SetExtent(150, 20)
+        'Canvas: ' .. canvasName(selectedCanvasIndex()), 394, 44)
+    canvasMenuButton:SetExtent(150, 26)
     pcall(function() canvasMenuButton.textLabel.style:SetFontSize(12) end)
     canvasMenuButton:Show(true)
     canvasMenuButton:SetHandler("OnClick", function() openCanvasListPopup() end)
     settingsControls.canvasMenuButton = canvasMenuButton
 
-    local addButton = helpers.createButton('canvasAddButton', settingsWindow, 'Add', 548, 71)
-    addButton:SetExtent(44, 20)
+    local addButton = helpers.createButton('canvasAddButton', settingsWindow, 'Add', 548, 44)
+    addButton:SetExtent(44, 26)
     pcall(function() addButton.textLabel.style:SetFontSize(12) end)
     addButton:Show(true)
     addButton:SetHandler("OnClick", addCanvas)
     settingsControls.canvasAddButton = addButton
 
-    local renameButton = helpers.createButton('canvasRenameButton', settingsWindow, 'Rename', 596, 71)
-    renameButton:SetExtent(66, 20)
+    local renameButton = helpers.createButton('canvasRenameButton', settingsWindow, 'Rename', 596, 44)
+    renameButton:SetExtent(66, 26)
     pcall(function() renameButton.textLabel.style:SetFontSize(12) end)
     renameButton:Show(true)
     renameButton:SetHandler("OnClick", openRenameCanvasDialog)
     settingsControls.canvasRenameButton = renameButton
 
-    local deleteButton = helpers.createButton('canvasDeleteButton', settingsWindow, 'Delete', 666, 71)
-    deleteButton:SetExtent(58, 20)
+    local deleteButton = helpers.createButton('canvasDeleteButton', settingsWindow, 'Delete', 666, 44)
+    deleteButton:SetExtent(58, 26)
     pcall(function() deleteButton.textLabel.style:SetFontSize(12) end)
     deleteButton:Show(true)
     deleteButton:SetHandler("OnClick", openDeleteCanvasDialog)
@@ -1749,6 +1752,10 @@ local function buildTrackedBuffsSection()
                                                     '', 34, 84, 20)  -- Удаляем текст "Buff tracker management"
     trackedBuffsGroupLabel:SetWidth(390) -- Increase header width
     trackedBuffsGroupLabel:Show(true)
+    -- 1.24.0: якорь группы — точка, за которой едет вся левая колонка
+    -- (заголовок, список, пагинация, форма ID/name). Его двигает
+    -- syncFrameModeControls(), освобождая место блоку "Native frame display".
+    settingsControls.trackedBuffsGroupLabel = trackedBuffsGroupLabel
 
     -- SECOND BLOCK - Tracked buffs list
     local trackedBuffsListHeader = helpers.createLabel('trackedBuffsListHeader', trackedBuffsGroupLabel,
@@ -1757,11 +1764,14 @@ local function buildTrackedBuffsSection()
     trackedBuffsListHeader:SetWidth(390)
     settingsControls.trackedBuffsListHeader = trackedBuffsListHeader
 
-    -- Record (Debug): активные баффы и навыки из лога
-    local recordButton = helpers.createButton('recordButton', trackedBuffsGroupLabel, 'Record (Debug)', 0, 0)
+    -- Record (Debug): активные баффы и навыки из лога.
+    -- 1.24.0: второй кнопкой в правом столбике — под Debug (1060, 70) и над
+    -- блоком "Icon settings"; показывается только при Debug: ON. Родитель —
+    -- само окно: кнопка не должна ездить вместе с группой Tracked entries.
+    local recordButton = helpers.createButton('recordButton', settingsWindow, 'Record (Debug)', 0, 0)
     recordButton:SetExtent(110, 24)
     recordButton:RemoveAllAnchors()
-    recordButton:AddAnchor("TOPLEFT", settingsWindow, 558, 44)
+    recordButton:AddAnchor("TOPLEFT", settingsWindow, 1060, 70)
     recordButton:Show(settings and settings.debugBuffId and true or false)
     recordButton:SetHandler("OnClick", function()
         recordWindow.setProviders(
@@ -1779,8 +1789,11 @@ local function buildTrackedBuffsSection()
 
 
     -- Create container for buffs list and place it directly under header
+    -- 1.24.0: высота 208 (было 220) — 9 строк по 22 px + верхний отступ 6 px;
+    -- блок "Native frame display" над заголовком сдвигает список вниз, и форма
+    -- ID/name с пагинацией должны остаться выше футера (Save на y=554).
     local buffsListContainer = api.Interface:CreateWidget('window', 'buffsListContainer', trackedBuffsListHeader)
-    buffsListContainer:SetExtent(334, 220) -- Увеличенная высота контейнера для списка (6 элементов)
+    buffsListContainer:SetExtent(334, 208)
     buffsListContainer:AddAnchor("TOPLEFT", trackedBuffsListHeader, 0, 35)
     buffsListContainer:Show(true)
     buffsListContainer:Clickable(true) -- Включаем кликабельность для обработки колесика мыши
@@ -2111,7 +2124,9 @@ local function buildNewBuffInput(buffsListContainer)
     settingsControls.addBuffButton = addBuffButton
     addBuffButton:SetHandler("OnClick", addTrackedBuff)
 
-    -- Live search: подсказки по мере ввода (кастомные баффы + база дампа)
+    -- Live search: подсказки только из Custom entries (1.24.0). Id/имя, которых
+    -- нет в списке кастомных записей, не подсказываем и не ищем по дампу: поле
+    -- принимает свободный id, а подсказка — это вход в уже заведённую запись.
     local acPanel = api.Interface:CreateWidget('window', 'buffAcPanel', newBuffIdLabel)
     pcall(function() acPanel:SetUILayer("dialog") end)
     acPanel:SetExtent(300, 22)
@@ -2145,6 +2160,7 @@ local function buildNewBuffInput(buffsListContainer)
 
     local function updateAc()
         if not settingsControls.newBuffId then return end
+        local maxRows = settingsControls.acMaxRows or 4
         local q = settingsControls.newBuffId:GetText() or ""
         q = q:gsub("^%s+", ""):gsub("%s+$", "")
         if q == "" then hideAc(); return end
@@ -2161,23 +2177,10 @@ local function buildNewBuffInput(buffsListContainer)
                 seen[idv] = true
                 matches[#matches + 1] = { value = cb.id, text = (nm ~= "" and nm or idv) .. "  [" .. idv .. "]" }
             end
-            if #matches >= 4 then break end
-        end
-        if #matches < 6 and M.searchIcons then
-            local ok, list = pcall(M.searchIcons, q, 12)
-            if ok and type(list) == "table" then
-                for _, e in ipairs(list) do
-                    local idv = tostring(e.id or e.name or "")
-                    if idv ~= "" and not seen[idv] then
-                        seen[idv] = true
-                        matches[#matches + 1] = { value = idv, text = tostring(e.name or idv) .. "  [" .. idv .. "]" }
-                    end
-                    if #matches >= 4 then break end
-                end
-            end
+            if #matches >= maxRows then break end
         end
         if #matches == 0 then hideAc(); return end
-        for i = 1, 4 do
+        for i = 1, maxRows do
             local item = matches[i]
             local row = acRows[i]
             if item then
@@ -2189,7 +2192,7 @@ local function buildNewBuffInput(buffsListContainer)
                 row:Show(false)
             end
         end
-        acPanel:SetExtent(300, math.min(#matches, 4) * 22)
+        acPanel:SetExtent(300, math.min(#matches, maxRows) * 22)
         acPanel:Show(true)
     end
 
@@ -2545,8 +2548,11 @@ local function buildCustomBuffInputs(customBuffsListContainer)
     end
     settingsControls.debugBuffButton = debugBuffButton
     if debugBuffButton then
+        -- 1.24.0: кнопки Debug/Record — столбиком у правого края окна, над
+        -- блоком "Icon settings" (он начинается с y=100): Debug 44..68,
+        -- Record 70..94, обе по x 1060..1170 (как Save справа).
         debugBuffButton:RemoveAllAnchors()
-        debugBuffButton:AddAnchor("TOPLEFT", settingsWindow, 440, 44)
+        debugBuffButton:AddAnchor("TOPLEFT", settingsWindow, 1060, 44)
         debugBuffButton:SetExtent(110, 24)
     end
 
@@ -2799,9 +2805,11 @@ local function buildIconSection(customBuffErrorPanel)
     iconGroupLabel:Show(true)
     settingsControls.iconGroupLabel = iconGroupLabel
 
-    -- Явно устанавливаем якорь для группы настроек иконок
+    -- Явно устанавливаем якорь для группы настроек иконок.
+    -- 1.24.0: правый столбик начинается с y=100 — над ним стоят Debug (44..68)
+    -- и Record (70..94), поэтому заголовок не пересекается с кнопками.
     iconGroupLabel:RemoveAllAnchors()
-    iconGroupLabel:AddAnchor("TOPLEFT", settingsWindow, 860, 84)
+    iconGroupLabel:AddAnchor("TOPLEFT", settingsWindow, 860, 100)
 
     -- Icon size
     local iconSizeLabel = helpers.createLabel('iconSizeLabel', iconGroupLabel,
@@ -3123,14 +3131,36 @@ local function buildTimerSection(lockButton)
 end
 
 -- =====================================================================
--- 1.23.0: "Native frame display" — режимы, привязанные к юниту.
---   Player: Under MP bar (+ Reserved Y).
+-- "Native frame display" — режимы, привязанные к юниту.
+--   Player: Under MP bar + Reserved Y.
 --   Target: Overlay around target, Under HP/MP bar, Avoid TrackThatPlease
 --           (+ Gap), Reserved Y и поля оверлея выбранного канваса.
--- Один набор контролов на оба юнита: syncFrameModeControls() прячет лишние
--- и подставляет значения выбранного юнита/канваса.
+--   Mount:  ничего — блок скрыт.
+-- 1.24.0: блок переехал в ЛЕВУЮ колонку под кнопки Unit (x 20..355): ряд
+-- Canvas сдвинут на y=44, поэтому под ним освободилось место. Один набор
+-- контролов на оба юнита: syncFrameModeControls() прячет лишние, подставляет
+-- значения выбранного юнита/канваса и уводит заголовок "Tracked entries" вниз
+-- ровно на высоту блока (двигается один якорь группы — за ним едет весь список).
 -- =====================================================================
 local frameControlsSyncing = false
+
+-- Геометрия левой колонки: блок стоит сразу под рядом Unit (кнопки 44..70) и
+-- левее ряда Canvas (он занимает x 340..724). Ширина блока — до x=355, поэтому
+-- поля оверлея (X/Y/Size/Per row) идут отдельным рядом, а не в общей строке.
+local FRAME_TITLE_Y   = 74
+local FRAME_ROW_1     = 100  -- первый ряд чекбоксов
+local FRAME_ROW_STEP  = 24   -- чекбокс 17 px + подпись 20 px
+local FRAME_ROW_BOTTOM = 20  -- высота ряда по подписи
+local FRAME_BLOCK_GAP = 12   -- зазор между последним рядом и "Tracked entries"
+local TRACKED_GROUP_NO_BLOCK = 74 -- "Tracked entries" без блока (Mount)
+
+-- y группы "Tracked entries" после блока из rows рядов. Подпись заголовка
+-- рисуется на +10 от группы, поэтому из зазора вычитаются эти 10 px.
+local function trackedGroupY(rows)
+    if not rows or rows < 1 then return TRACKED_GROUP_NO_BLOCK end
+    local lastRow = FRAME_ROW_1 + (rows - 1) * FRAME_ROW_STEP
+    return lastRow + FRAME_ROW_BOTTOM + FRAME_BLOCK_GAP - 10
+end
 
 local function showControl(control, visible)
     if control and control.Show then
@@ -3145,10 +3175,11 @@ local function anchorControl(control, x, y)
 end
 
 local function buildFrameModeSection()
+    -- Заголовок блока — в левой колонке, сразу под кнопками Unit (44..70).
     local groupLabel = helpers.createLabel('frameModeGroupLabel', settingsWindow,
-                                           'Native frame display', 860, 408, 16)
+                                           'Native frame display', 20, FRAME_TITLE_Y, 16)
     groupLabel:SetWidth(320)
-    groupLabel:Show(true)
+    groupLabel:Show(false)
     settingsControls.frameModeGroupLabel = groupLabel
 
     -- Переключатель режима с сохранением и перерисовкой панелей.
@@ -3167,73 +3198,73 @@ local function buildFrameModeSection()
         end
     end
 
-    -- Player: строка под полосой MP
+    -- Player: строка под полосой MP — ряд 1 левой колонки (чекбокс x=20).
     local underMpCheck = CbtWindow.CheckButton('cbtUnderMp', settingsWindow, onToggle("player", "underMp"))
     if underMpCheck then
-        underMpCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 430)
+        underMpCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1)
         underMpCheck:Show(false)
         CbtWindow.Tooltip(underMpCheck,
             "Merge every player canvas into one icon strip under the player frame's MP bar (HP if mana is hidden). 9 icons per row, no names; the canvas grid is ignored.")
     end
     settingsControls.underMpCheck = underMpCheck
 
-    local underMpLabel = helpers.createLabel('cbtUnderMpLabel', settingsWindow, 'Under MP bar', 882, 429, 13)
+    local underMpLabel = helpers.createLabel('cbtUnderMpLabel', settingsWindow, 'Under MP bar', 42, FRAME_ROW_1 - 1, 13)
     underMpLabel:SetWidth(150)
     underMpLabel:Show(false)
     settingsControls.underMpLabel = underMpLabel
 
-    -- Target: оверлей у цели
+    -- Target: оверлей у цели — тот же ряд 1 (у Player там Under MP bar).
     local overlayCheck = CbtWindow.CheckButton('cbtTargetOverlay', settingsWindow, onToggle("target", "overlay"))
     if overlayCheck then
-        overlayCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 430)
+        overlayCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1)
         overlayCheck:Show(false)
         CbtWindow.Tooltip(overlayCheck,
             "Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.")
     end
     settingsControls.overlayCheck = overlayCheck
 
-    local overlayLabel = helpers.createLabel('cbtTargetOverlayLabel', settingsWindow, 'Overlay around target', 882, 429, 13)
+    local overlayLabel = helpers.createLabel('cbtTargetOverlayLabel', settingsWindow, 'Overlay around target', 42, FRAME_ROW_1 - 1, 13)
     overlayLabel:SetWidth(190)
     overlayLabel:Show(false)
     settingsControls.overlayLabel = overlayLabel
 
-    -- Target: строка под HP/MP
+    -- Target: строка под HP/MP — ряд 2.
     local underBarsCheck = CbtWindow.CheckButton('cbtTargetUnderBars', settingsWindow, onToggle("target", "underBars"))
     if underBarsCheck then
-        underBarsCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 454)
+        underBarsCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + FRAME_ROW_STEP)
         underBarsCheck:Show(false)
         CbtWindow.Tooltip(underBarsCheck,
             "Merge every target canvas into one icon strip under the target frame's MP bar (HP for mana-less targets). 9 icons per row, no names; the canvas grid is ignored. Works together with Overlay.")
     end
     settingsControls.underBarsCheck = underBarsCheck
 
-    local underBarsLabel = helpers.createLabel('cbtTargetUnderBarsLabel', settingsWindow, 'Under HP/MP bar', 882, 453, 13)
+    local underBarsLabel = helpers.createLabel('cbtTargetUnderBarsLabel', settingsWindow, 'Under HP/MP bar', 42, FRAME_ROW_1 + FRAME_ROW_STEP - 1, 13)
     underBarsLabel:SetWidth(170)
     underBarsLabel:Show(false)
     settingsControls.underBarsLabel = underBarsLabel
 
-    -- Target: не наезжать на ряд TrackThatPlease
+    -- Target: не наезжать на ряд TrackThatPlease — ряд 3 (+ поле Gap справа).
     local avoidTTPCheck = CbtWindow.CheckButton('cbtAvoidTTP', settingsWindow, onToggle("target", "avoidTTP"))
     if avoidTTPCheck then
-        avoidTTPCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 478)
+        avoidTTPCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + 2 * FRAME_ROW_STEP)
         avoidTTPCheck:Show(false)
         CbtWindow.Tooltip(avoidTTPCheck,
             "Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.")
     end
     settingsControls.avoidTTPCheck = avoidTTPCheck
 
-    local avoidTTPLabel = helpers.createLabel('cbtAvoidTTPLabel', settingsWindow, 'Avoid TrackThatPlease', 882, 477, 13)
+    local avoidTTPLabel = helpers.createLabel('cbtAvoidTTPLabel', settingsWindow, 'Avoid TrackThatPlease', 42, FRAME_ROW_1 + 2 * FRAME_ROW_STEP - 1, 13)
     avoidTTPLabel:SetWidth(150)
     avoidTTPLabel:Show(false)
     settingsControls.avoidTTPLabel = avoidTTPLabel
 
-    local ttpGapLabel = helpers.createLabel('cbtTtpGapLabel', settingsWindow, 'Gap:', 1036, 477, 13)
+    local ttpGapLabel = helpers.createLabel('cbtTtpGapLabel', settingsWindow, 'Gap:', 200, FRAME_ROW_1 + 2 * FRAME_ROW_STEP - 1, 13)
     ttpGapLabel:SetWidth(34)
     ttpGapLabel:Show(false)
     settingsControls.ttpGapLabel = ttpGapLabel
     CbtWindow.Tooltip(ttpGapLabel, "Space between our overlay row and TrackThatPlease's row, px.")
 
-    local ttpGap = helpers.createEdit('cbtTtpGap', settingsWindow, '4', 1072, 476)
+    local ttpGap = helpers.createEdit('cbtTtpGap', settingsWindow, '4', 236, FRAME_ROW_1 + 2 * FRAME_ROW_STEP)
     if ttpGap then
         ttpGap:SetMaxTextLength(3)
         ttpGap:SetWidth(45)
@@ -3242,15 +3273,16 @@ local function buildFrameModeSection()
     settingsControls.ttpGap = ttpGap
     bindApplyOnEnter(ttpGap)
 
-    -- Общий для обоих юнитов "Reserved Y" под строкой (место под чужими рядами)
-    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 860, 502, 13)
+    -- Общий для обоих юнитов "Reserved Y" под строкой (место под чужими рядами).
+    -- У Player это ряд 2, у Target — ряд 4: y проставляет syncFrameModeControls().
+    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 20, FRAME_ROW_1 + 3 * FRAME_ROW_STEP, 13)
     stripOffsetLabel:SetWidth(84)
     stripOffsetLabel:Show(false)
     settingsControls.stripOffsetLabel = stripOffsetLabel
     CbtWindow.Tooltip(stripOffsetLabel,
         "Extra space below the bar before the strip starts, px. Use it to clear another addon's row (for example TrackWhatPlease) without moving the native frame.")
 
-    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 946, 502)
+    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 104, FRAME_ROW_1 + 3 * FRAME_ROW_STEP)
     if stripOffsetY then
         stripOffsetY:SetMaxTextLength(4)
         stripOffsetY:SetWidth(45)
@@ -3259,13 +3291,16 @@ local function buildFrameModeSection()
     settingsControls.stripOffsetY = stripOffsetY
     bindApplyOnEnter(stripOffsetY)
 
-    -- Поля оверлея выбранного target-канваса (видны только при Overlay)
-    local overlayXLabel = helpers.createLabel('cbtOverlayXLabel', settingsWindow, 'X:', 860, 526, 13)
+    -- Поля оверлея выбранного target-канваса (видны только при Overlay) — ряд 5.
+    -- Вся строка умещается в левую колонку (20..332), не заходя под ряд Canvas.
+    local overlayRowY = FRAME_ROW_1 + 4 * FRAME_ROW_STEP
+
+    local overlayXLabel = helpers.createLabel('cbtOverlayXLabel', settingsWindow, 'X:', 20, overlayRowY, 13)
     overlayXLabel:SetWidth(14)
     overlayXLabel:Show(false)
     settingsControls.overlayXLabel = overlayXLabel
 
-    local overlayX = helpers.createEdit('cbtOverlayX', settingsWindow, '0', 876, 526)
+    local overlayX = helpers.createEdit('cbtOverlayX', settingsWindow, '0', 36, overlayRowY)
     if overlayX then
         overlayX:SetMaxTextLength(5)
         overlayX:SetWidth(42)
@@ -3274,12 +3309,12 @@ local function buildFrameModeSection()
     settingsControls.overlayX = overlayX
     bindApplyOnEnter(overlayX)
 
-    local overlayYLabel = helpers.createLabel('cbtOverlayYLabel', settingsWindow, 'Y:', 926, 526, 13)
+    local overlayYLabel = helpers.createLabel('cbtOverlayYLabel', settingsWindow, 'Y:', 86, overlayRowY, 13)
     overlayYLabel:SetWidth(14)
     overlayYLabel:Show(false)
     settingsControls.overlayYLabel = overlayYLabel
 
-    local overlayY = helpers.createEdit('cbtOverlayY', settingsWindow, '-30', 942, 526)
+    local overlayY = helpers.createEdit('cbtOverlayY', settingsWindow, '-30', 102, overlayRowY)
     if overlayY then
         overlayY:SetMaxTextLength(5)
         overlayY:SetWidth(42)
@@ -3288,12 +3323,12 @@ local function buildFrameModeSection()
     settingsControls.overlayY = overlayY
     bindApplyOnEnter(overlayY)
 
-    local overlaySizeLabel = helpers.createLabel('cbtOverlaySizeLabel', settingsWindow, 'Size:', 992, 526, 13)
+    local overlaySizeLabel = helpers.createLabel('cbtOverlaySizeLabel', settingsWindow, 'Size:', 152, overlayRowY, 13)
     overlaySizeLabel:SetWidth(32)
     overlaySizeLabel:Show(false)
     settingsControls.overlaySizeLabel = overlaySizeLabel
 
-    local overlaySize = helpers.createEdit('cbtOverlaySize', settingsWindow, '26', 1026, 526)
+    local overlaySize = helpers.createEdit('cbtOverlaySize', settingsWindow, '26', 186, overlayRowY)
     if overlaySize then
         overlaySize:SetMaxTextLength(3)
         overlaySize:SetWidth(42)
@@ -3302,12 +3337,12 @@ local function buildFrameModeSection()
     settingsControls.overlaySize = overlaySize
     bindApplyOnEnter(overlaySize)
 
-    local overlayPerRowLabel = helpers.createLabel('cbtOverlayPerRowLabel', settingsWindow, 'Per row:', 1076, 526, 13)
+    local overlayPerRowLabel = helpers.createLabel('cbtOverlayPerRowLabel', settingsWindow, 'Per row:', 236, overlayRowY, 13)
     overlayPerRowLabel:SetWidth(52)
     overlayPerRowLabel:Show(false)
     settingsControls.overlayPerRowLabel = overlayPerRowLabel
 
-    local overlayPerRow = helpers.createEdit('cbtOverlayPerRow', settingsWindow, '6', 1130, 526)
+    local overlayPerRow = helpers.createEdit('cbtOverlayPerRow', settingsWindow, '6', 290, overlayRowY)
     if overlayPerRow then
         overlayPerRow:SetMaxTextLength(2)
         overlayPerRow:SetWidth(42)
@@ -3351,12 +3386,32 @@ local function buildFrameModeSection()
         showControl(settingsControls.overlaySize, overlayFields)
         showControl(settingsControls.overlayPerRowLabel, overlayFields)
         showControl(settingsControls.overlayPerRow, overlayFields)
-        if not show then return end
 
-        -- "Reserved Y" стоит вторым рядом у Player и ниже у Target: у Target
-        -- над ним ещё два ряда чекбоксов.
-        anchorControl(settingsControls.stripOffsetLabel, 860, isTarget and 502 or 454)
-        anchorControl(settingsControls.stripOffsetY, 946, isTarget and 502 or 454)
+        -- "Reserved Y" — ряд 2 у Player, ряд 4 у Target (над ним три ряда).
+        anchorControl(settingsControls.stripOffsetLabel, 20,
+            FRAME_ROW_1 + (isTarget and 3 or 1) * FRAME_ROW_STEP)
+        anchorControl(settingsControls.stripOffsetY, 104,
+            FRAME_ROW_1 + (isTarget and 3 or 1) * FRAME_ROW_STEP)
+
+        -- "Tracked entries" уезжает вниз ровно на высоту блока: у Mount — сразу
+        -- под ряд Canvas, у Player — после двух рядов, у Target — после четырёх
+        -- (пяти, когда Overlay ON и видны поля оверлея). Двигается один якорь
+        -- группы, остальная левая колонка висит на нём.
+        local rows = 0
+        if isPlayer then
+            rows = 2
+        elseif isTarget then
+            rows = overlayFields and 5 or 4
+        end
+        if settingsControls.trackedBuffsGroupLabel then
+            anchorControl(settingsControls.trackedBuffsGroupLabel, 34, trackedGroupY(rows))
+        end
+
+        -- Подсказка поля ID/name не должна вылезать за нижний край окна: у
+        -- Target с полями оверлея форма стоит ниже, поэтому рядов на один меньше.
+        settingsControls.acMaxRows = (isTarget and overlayFields) and 3 or 4
+
+        if not show then return end
 
         frameControlsSyncing = true
         if isPlayer and settings.player then
