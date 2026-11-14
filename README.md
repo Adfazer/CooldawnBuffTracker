@@ -266,6 +266,15 @@ mount and target.
 
 ## Changelog
 
+### 1.36.0
+
+- Skill icons now use the game's native DDS paths (`game/ui/icon/icon_skill_*.dds`)
+  for 321 of 323 entries, exactly like the old Effective CDs window did; Tiger
+  Strike and the other tree skills display again. Only `Radiant Revive` and
+  `Hollow Renewal` (no native base icon) keep the packaged PNG overlay.
+- `skill_dump.tbl` stays a separate pool; a buff scan writes only
+  `buff_dump.tbl` and never touches the skill file.
+
 ### 1.35.0
 
 - **Skill icons are painted from the loose PNG on an `ImageDrawable`.** Every
@@ -1419,7 +1428,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.35.0
+**Current Version:** 1.36.0
 
 ## Credits
 

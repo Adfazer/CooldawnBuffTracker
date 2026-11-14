@@ -74,6 +74,7 @@ EXPECTED = {
     "Vitalism": (29, 8),
 }
 SKILL_PREFIX = "../Addon/CooldawnBuffTracker/skill_icons/"
+NATIVE_PREFIX = "game/ui/icon/"
 SKILL_SRC_DIR = os.path.join(REPO, "skill_icons_src")
 SKILL_LIVE_DIR = os.path.join(REPO, "skill_icons")
 SYNTH_MIN = 9000000
@@ -149,7 +150,7 @@ def asset_checks():
     check(os.path.isfile(manifest_path), "manifest.tsv exists")
     lines = [l for l in open(manifest_path, encoding="utf-8").read().splitlines() if l]
     header = lines[0].split("\t")
-    check(header[:5] == ["tree", "type", "skill_id", "name", "raw_name"],
+    check(header[:5] == ["tree", "type", "skill_id", "name", "raw_name"] and "pool_path" in header,
           "manifest header: %r" % header)
     rows = [dict(zip(header, line.split("\t"))) for line in lines[1:]]
     check(len(rows) == sum(a + p for a, p in EXPECTED.values()),
@@ -192,17 +193,38 @@ def asset_checks():
     check(valid_buffs > 20000, "buff_dump loads %d rows" % valid_buffs)
 
     ids, names_files = set(), set()
-    folders = set()
-    manifest_by_key = {(r["skill_id"], r["name"], r["file"]) for r in rows}
-    dump_keys = set()
+    manifest_by_id = {r["skill_id"]: r for r in rows}
+    native_count = custom_count = 0
+    native_tiger = []
     for row in dump_rows:
-        check(row[2].startswith(SKILL_PREFIX),
-              "dump path is the addon-folder PNG pool: %r" % row[2])
-        check(row[2].endswith(".png"), "dump path ends in .png: %r" % row[2])
-        folders.add(row[2].rsplit("/", 1)[0] + "/")
-        dump_keys.add((row[0], row[1], row[2].replace(SKILL_PREFIX, "")))
-    check(folders == {SKILL_PREFIX}, "every dump path lives in one folder: %r" % sorted(folders))
-    check(manifest_by_key == dump_keys, "manifest and dump describe the same entries")
+        rid, name, path = row
+        if path.startswith(NATIVE_PREFIX) and path.endswith(".dds"):
+            native_count += 1
+            check(re.match(r"^game/ui/icon/[A-Za-z0-9_.-]+\.dds$", path) is not None,
+                  "safe native DDS path: %r" % path)
+            if name.lower() == "tiger strike":
+                native_tiger.append(path)
+        elif path.startswith(SKILL_PREFIX) and path.endswith(".png"):
+            custom_count += 1
+            file_name = path.rsplit("/", 1)[-1]
+            check(os.path.isfile(os.path.join(SKILL_LIVE_DIR, file_name)),
+                  "custom PNG exists: %r" % path)
+        else:
+            check(False, "dump path is native DDS or custom PNG: %r" % path)
+        m = manifest_by_id.get(rid)
+        check(m is not None and m.get("pool_path") == path,
+              "manifest pool_path matches dump for id %s" % rid)
+    check(native_count == 321, "native DDS entries: %d" % native_count)
+    check(custom_count == 2, "custom PNG entries: %d" % custom_count)
+    check(native_tiger == ["game/ui/icon/icon_skill_fight18.dds",
+                           "game/ui/icon/icon_skill_fight39.dds",
+                           "game/ui/icon/icon_skill_fight38.dds"],
+          "Tiger Strike rows use native icons: %r" % native_tiger)
+    check(any(r["name"] == "Radiant Terrifying Roar" and r["pool_path"] ==
+              "game/ui/icon/icon_skill_fight26.dds" for r in rows),
+          "Radiant Terrifying Roar falls back to the base native icon")
+    check(any(r["name"] == "Radiant Revive" and r["pool_path"].endswith(".png") for r in rows),
+          "unmapped Radiant Revive keeps the custom PNG")
 
     for row in rows:
         rid, name, file_name = row["skill_id"], row["name"], row["file"]
@@ -407,7 +429,11 @@ HOST.tests = function()
   local function skillRows(rows)
     local n = 0
     for _, r in ipairs(rows) do
-      if string.find(tostring(r.path), "skill_icons/", 1, true) then n = n + 1 end
+      local path = tostring(r.path)
+      if string.find(path, "skill_icons/", 1, true)
+        or string.find(path, "game/ui/icon/icon_skill_", 1, true) == 1 then
+        n = n + 1
+      end
     end
     return n
   end
@@ -428,9 +454,9 @@ HOST.tests = function()
       "buff name still resolves from buff_dump: " .. tostring(info.buffByName))
     if EXPECT_SKILLS then
       check(type(info.skillByName) == "string"
-        and string.find(info.skillByName, "skill_icons/", 1, true) ~= nil
-        and string.find(info.skillByName, ".png", 1, true) ~= nil,
-        "skill name resolves to a PNG in skill_dump: " .. tostring(info.skillByName))
+        and string.find(info.skillByName, "game/ui/icon/", 1, true) == 1
+        and string.find(info.skillByName, ".dds", 1, true) ~= nil,
+        "skill name resolves to a native DDS in skill_dump: " .. tostring(info.skillByName))
     else
       check(info.skillByName == nil, "skill name absent without skill_dump")
     end
@@ -439,7 +465,7 @@ HOST.tests = function()
   local rows = hook.searchIcons("Radiant Terrifying Roar", 20)
   if EXPECT_SKILLS then
     check(#rows >= 1, "search by English skill name returns rows")
-    check(has(rows, "skill_icons/Aac-radiant_terrifying_roar.png"), "Radiant Terrifying Roar icon")
+    check(has(rows, "game/ui/icon/icon_skill_fight26.dds"), "Radiant Terrifying Roar icon")
   else
     check(#rows == 0, "skill-only name is absent without skill_dump")
   end
@@ -447,18 +473,18 @@ HOST.tests = function()
   rows = hook.searchIcons("Weapon Maneuvers", 20)
   check(#rows >= 1, "passive Weapon Maneuvers is searchable")
   if EXPECT_SKILLS then
-    check(has(rows, "skill_icons/Icon_skill_fight03.png"), "Weapon Maneuvers icon")
+    check(has(rows, "game/ui/icon/icon_skill_fight03.dds"), "Weapon Maneuvers icon")
   end
 
   rows = hook.searchIcons("Charge", 100)
   check(#rows >= 1, "Charge is searchable")
   if EXPECT_SKILLS then
-    check(has(rows, "skill_icons/Icon_skill_fight14.png"), "Charge skill icon")
+    check(has(rows, "game/ui/icon/icon_skill_fight14.dds"), "Charge skill icon")
   end
 
   rows = hook.searchIcons("Triple Slash", 200)
   if EXPECT_SKILLS then
-    check(skillRows(rows) == 9, "Triple Slash keeps nine morph icons: " .. tostring(skillRows(rows)))
+    check(skillRows(rows) >= 9, "Triple Slash keeps at least nine morph icons: " .. tostring(skillRows(rows)))
   end
 
   rows = hook.searchIcons("zzz-no-such-skill", 10)
@@ -492,11 +518,11 @@ HOST.tests = function()
       check(post.count == 2 + SKILL_COUNT,
         "the post-scan pool still merges every skill row: " .. tostring(post.count))
       check(type(post.skillByName) == "string"
-        and string.find(post.skillByName, "skill_icons/", 1, true) ~= nil
-        and string.find(post.skillByName, ".png", 1, true) ~= nil,
-        "the post-scan skill icon is a skill_icons/*.png path: " .. tostring(post.skillByName))
+        and string.find(post.skillByName, "game/ui/icon/", 1, true) == 1
+        and string.find(post.skillByName, ".dds", 1, true) ~= nil,
+        "the post-scan skill icon is a native DDS path: " .. tostring(post.skillByName))
       local postRows = hook.searchIcons("Radiant Terrifying Roar", 20)
-      check(#postRows >= 1 and has(postRows, "skill_icons/Aac-radiant_terrifying_roar.png"),
+      check(#postRows >= 1 and has(postRows, "game/ui/icon/icon_skill_fight26.dds"),
         "the post-scan search still returns skill icons")
     else
       check(post.count == 2, "legacy post-scan pool stays buff-only: " .. tostring(post.count))
@@ -630,6 +656,14 @@ HOST.tests = function()
   check(tgaList(slot3._cbtSkillIcon)[1]
     == "../Addon/CooldawnBuffTracker/skill_icons/Icon_skill_fight01.png",
     "a bare path gets the addon-relative prefix: " .. tostring(tgaList(slot3._cbtSkillIcon)[1]))
+
+  -- a native skill icon path must go straight to F_SLOT (no PNG overlay)
+  local slotNative = newSlot("cbtPaintSlotNative")
+  local paintedNative = CbtIcon.Paint(slotNative, "game/ui/icon/icon_skill_fight18.dds")
+  check(paintedNative == false, "a native skill icon returns false (native path)")
+  check(lastIconCall() ~= nil and lastIconCall().path == "game/ui/icon/icon_skill_fight18.dds",
+    "native skill icon goes through F_SLOT: " .. tostring(lastIconCall() and lastIconCall().path))
+  check(slotNative._cbtSkillIcon == nil, "no PNG drawable is created for a native path")
 
   -- normal game icon: native path, overlay hidden
   local painted4 = CbtIcon.Paint(slot, "game/ui/icon/icon_buff_debuff.dds")
