@@ -350,7 +350,7 @@ HOST.tests = function()
   -- labels: Clickable(false) kills hit-testing, so their tooltips run on a
   -- transparent hover proxy anchored over the label. The proxy must never carry
   -- OnClick, otherwise it would steal clicks from whatever sits underneath.
-  local proxied, proxyEnter, proxyClick = 0, 0, 0
+  local proxied, proxyEnter, proxyClick, containerHits = 0, 0, 0, 0
   for i = mark, #ENGINE.widgets do
     local w = ENGINE.widgets[i]
     if not w._freed and w._cbtHoverProxy ~= nil then
@@ -358,11 +358,22 @@ HOST.tests = function()
       local handlers = w._cbtHoverProxy._handlers or {}
       if handlers.OnEnter then proxyEnter = proxyEnter + 1 end
       if handlers.OnClick then proxyClick = proxyClick + 1 end
+      -- a proxy over a CONTAINER label would sit on top of its child buttons
+      -- and swallow their clicks (the 1.36.2 Add-entry bug)
+      for _, ch in pairs(w._children or {}) do
+        if ch ~= w._cbtHoverProxy and not ch._freed then
+          local chHandlers = ch._handlers or {}
+          if INTERACTIVE[ch._kind] or chHandlers.OnClick then
+            containerHits = containerHits + 1
+          end
+        end
+      end
     end
   end
   check(proxied >= 20, "label tooltips use a transparent hover proxy (" .. tostring(proxied) .. ")")
   check(proxyEnter == proxied, "every hover proxy receives OnEnter (" .. tostring(proxyEnter) .. "/" .. tostring(proxied) .. ")")
   check(proxyClick == 0, "hover proxies never install OnClick (click-through kept)")
+  check(containerHits == 0, "no hover proxy covers an interactive child (" .. tostring(containerHits) .. ")")
 
   ---------------------------------------------------------------------------
   -- 5. sample the actual texts (units/ranges, dynamic values)
