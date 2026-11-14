@@ -4481,7 +4481,13 @@ end
 -- shared event handler and freeze every canvas while the settings UI still
 -- works. One-shot file log makes the real fault visible.
 OnUpdate = function(dt)
-  if not live then return end
+  if not live then
+    if not lastRuntimeError.live then
+      lastRuntimeError.live = true
+      CbtDebugLog.info("UPDATE skipped: live=false")
+    end
+    return
+  end
   local ok, err = pcall(updateStep, dt)
   if not ok and not lastRuntimeError.update then
     lastRuntimeError.update = true
@@ -4492,6 +4498,8 @@ OnUpdate = function(dt)
 end
 
 local function OnUnload()
+  CbtDebugLog.info("OnUnload called")
+  CbtDebugLog.flush()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
   pcall(flushAuraDump)
