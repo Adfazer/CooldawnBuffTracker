@@ -3991,7 +3991,7 @@ local function buildFrameModeSection()
         overlayCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1)
         overlayCheck:Show(false)
         CbtWindow.Tooltip(overlayCheck,
-            "Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.")
+            "Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.")
     end
     settingsControls.overlayCheck = overlayCheck
 
@@ -3999,7 +3999,7 @@ local function buildFrameModeSection()
     overlayLabel:SetWidth(190)
     overlayLabel:Show(false)
     CbtWindow.Tooltip(overlayLabel,
-        "Draw the target canvas at the target's screen position instead of a fixed panel.")
+        "Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.")
     settingsControls.overlayLabel = overlayLabel
 
     -- 1.26.0: Hide target canvas — ряд 2. Прячет плавающие канвасы цели;
@@ -4009,7 +4009,7 @@ local function buildFrameModeSection()
         hideCanvasCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + FRAME_ROW_STEP)
         hideCanvasCheck:Show(false)
         CbtWindow.Tooltip(hideCanvasCheck,
-            "Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.")
+            "Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.")
     end
     settingsControls.hideCanvasCheck = hideCanvasCheck
 
@@ -4017,7 +4017,7 @@ local function buildFrameModeSection()
     hideCanvasLabel:SetWidth(170)
     hideCanvasLabel:Show(false)
     CbtWindow.Tooltip(hideCanvasLabel,
-        "Hide the floating target canvases. The overlay keeps drawing while it is on.")
+        "Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.")
     settingsControls.hideCanvasLabel = hideCanvasLabel
 
     -- Target: не наезжать на ряд TrackThatPlease — ряд 3 (+ поле Gap справа).
@@ -4026,7 +4026,7 @@ local function buildFrameModeSection()
         avoidTTPCheck:AddAnchor("TOPLEFT", settingsWindow, 20, FRAME_ROW_1 + 2 * FRAME_ROW_STEP)
         avoidTTPCheck:Show(false)
         CbtWindow.Tooltip(avoidTTPCheck,
-            "Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.")
+            "Keep the target overlay above TrackThatPlease's target row. Anchors to its real target canvas (targetBuffCanvas) when it can be found, otherwise places the row with targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to use the canvas offsets instead.")
     end
     settingsControls.avoidTTPCheck = avoidTTPCheck
 
@@ -4034,7 +4034,7 @@ local function buildFrameModeSection()
     avoidTTPLabel:SetWidth(150)
     avoidTTPLabel:Show(false)
     CbtWindow.Tooltip(avoidTTPLabel,
-        "Place the overlay above TrackThatPlease's target row (its settings are read).")
+        "Place the overlay above TrackThatPlease's target row (anchored to its row when it can be found).")
     settingsControls.avoidTTPLabel = avoidTTPLabel
 
     local ttpGapLabel = helpers.createLabel('cbtTtpGapLabel', settingsWindow, 'Gap:', 200, FRAME_ROW_1 + 2 * FRAME_ROW_STEP - 1, 13)
@@ -4215,7 +4215,9 @@ local function initSettingsPage()
         return
     end
     settingsWindow:SetExtent(1200, 600)
-    settingsWindow:SetUILayer("normal")
+    -- 1.31.0: окно должно быть выше оверлея цели (тот же слой normal,
+    -- z-order 1000), иначе оверлей перекрывает настройки.
+    CbtWindow.KeepAboveOverlay(settingsWindow)
     pcall(function() settingsWindow:SetCloseOnEscape(true) end)
     pcall(function() settingsWindow:EnableHidingIsRemove(false) end)
 

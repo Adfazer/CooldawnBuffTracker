@@ -133,24 +133,30 @@ right under the `Unit: Mount / Player / Target` buttons — the block shows only
 for **Target** (**Native frame display**); Mount and Player keep their floating
 panels and have no frame-attached options.
 
-- **Overlay around target** — each target canvas is drawn as its own compact
-  overlay at the target's screen position (the same projection
+- **Overlay around target** — draws an **additional** compact row for each
+  target canvas at the target's screen position (the same projection
   TrackThatPlease uses), with its own `X`, `Y`, `Size` and `Per row` fields in
   that canvas's layout. The position is re-read **every frame**, so the overlay
   follows a moving target; it is re-anchored only when the rounded position
   moved by a pixel, and hides when the target is lost or the projection is
-  invalid. Overlay replaces the floating panel of that canvas.
+  invalid. **The overlay does not hide the floating canvas** — the two are
+  independent, so with both switches off/on the panel and the overlay draw
+  together.
 - **Hide target canvas** — hides every floating target canvas. Buff data keeps
   running (timers are still tracked) and **Overlay** still draws when it is
-  enabled. With Overlay off, nothing target-related is drawn — that is the
-  chosen state, not a bug.
-- **Avoid TrackThatPlease** (default ON) — when TrackThatPlease is loaded, the
-  overlay row is placed **above** its target row, using TTP's own
-  `targetBuffVerticalOffset` and `targetIconSize` (and the client UI scale).
-  `Gap` sets the space between the rows (default 4 px). With TTP absent the
-  overlay uses the canvas `X`/`Y` offsets from the target's screen position.
-  Frame visibility and the target are re-checked twice a second; the overlay
-  hides with the frame and with no target.
+  enabled. With Overlay off and this switch on, nothing target-related is drawn —
+  that is the chosen state, not a bug.
+- **Avoid TrackThatPlease** (default ON) — when TrackThatPlease is loaded, its
+  real target row widget (`targetBuffCanvas`, found through
+  `FindWidget`/`GetWindow`/`GetWidgetByName`) is resolved and the overlay is
+  anchored **to it** (`BOTTOM` to its `TOPLEFT`, `-Gap`), so our row sits
+  `Gap` px above TTP's row and follows it automatically. The overlay lives on
+  the `normal` layer with a high z-order, so it is drawn **above** TTP instead
+  of behind it. When the widget cannot be resolved, the fallback uses TTP's
+  `targetBuffVerticalOffset` / `targetIconSize` and the client UI scale; with
+  TTP absent the canvas `X`/`Y` offsets from the target's screen position are
+  used. Frame visibility and the target are re-checked twice a second; the
+  overlay hides with the frame and with no target.
 
 The merged under-bar strip (`Under HP/MP bar`) and its `Reserved Y` field were
 removed in 1.26.0: the target overlay is the only frame-attached display mode,
@@ -203,6 +209,38 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.31.0
+
+- **Fixed: `Overlay around target` no longer hides the floating target
+  canvas.** The two switches are independent again. `Overlay around target`
+  draws an additional row at the target's screen position and leaves the
+  floating panel exactly where it is; only `Hide target canvas`
+  (`target.hideCanvas`) hides it. The four combinations behave as expected:
+  overlay off / hide off — panel only; overlay on / hide off — panel **and**
+  overlay; overlay off / hide on — nothing target-related; overlay on / hide on
+  — overlay only. Both tooltips were rewritten (all five languages) to say it.
+- **The target overlay now sits above TrackThatPlease instead of behind it.**
+  It is created on the `normal` layer with z-order 1000 (TTP keeps its canvas
+  on the default layer above `game`), so it is no longer painted under TTP's
+  target row; addon windows are lifted to z-order 1100 so the overlay never
+  covers the settings or a dialog.
+- **Anchored to TTP's real row.** `targetBuffCanvas` is resolved through
+  `api.Interface:FindWidget`, then `GetWindow`, then `GetWidgetByName` (the
+  `tax_tracker` trio, each in a `pcall`) and validated as a widget
+  (`GetExtent`/`AddAnchor`). When found, the overlay is anchored `BOTTOM` to its
+  `TOPLEFT` with `-Gap`, so our row sits `Gap` px above TTP's row and follows it
+  automatically — no nameplate-compensated Y math, no per-frame re-anchor (the
+  anchor is rebuilt only when the widget or `Gap` changes). When it is not
+  found, the previous computed fallback (`GetUnitScreenPosition` +
+  `targetBuffVerticalOffset`/`targetIconSize` + UI scale) is used, now also on
+  the `normal` layer. The lookup runs on the existing 500 ms frame cache and
+  logs `TTP canvas found` / `TTP canvas not found, fallback` once per change
+  when `Debug` is on.
+- Tests: `tests/ttp_anchor_harness.py` drives the real code with a mocked TTP
+  widget (found anchor, gap change, no per-frame re-anchor, validation
+  fall-through to `GetWindow`, computed fallback, the 4-way overlay/hideCanvas
+  matrix) and checks the layer/z-order of the overlay and of the addon windows.
 
 ### 1.30.0
 
@@ -1175,7 +1213,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.29.0
+**Current Version:** 1.31.0
 
 ## Credits
 

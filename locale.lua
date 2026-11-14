@@ -162,8 +162,7 @@ Donate USDT TRC20:	Донат USDT TRC20:
 Donation address. Click the field, select it and copy with Ctrl+C.	Адрес для доната. Нажмите на поле, выделите и скопируйте через Ctrl+C.
 Down	Вниз
 Drag to move the window.	Перетащите, чтобы переместить окно.
-Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.	Рисовать каждый канвас цели компактным оверлеем у экранной позиции цели (та же проекция, что у TrackThatPlease). Если TTP загружен, ряд ставится над его строкой цели.
-Draw the target canvas at the target's screen position instead of a fixed panel.	Рисовать канвас цели у экранной позиции цели вместо фиксированной панели.
+Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.	Рисовать дополнительный компактный оверлей у экранной позиции цели. Плавающий канвас он не скрывает — для этого есть Hide target canvas.
 Dump scan started...	Скан дампа запущен...
 Duration in seconds, 0 is allowed (Buff/Debuff only).	Длительность в секундах, 0 допустим (только бафф/дебафф).
 Duration must be a number >= 0	Длительность должна быть числом >= 0
@@ -239,9 +238,8 @@ Grid (cols x rows):	Сетка (столбцы x строки):
 Grid rows (1-10). Applies on Enter.	Строки сетки (1-10). Применяется по Enter.
 Grid: icons per row, number of rows, the cap and the vertical gap.	Сетка: иконок в ряду, число рядов, лимит и вертикальный отступ.
 Helpers module not loaded, using basic settings	Модуль helpers не загружен, использую базовые настройки
-Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.	Скрыть все плавающие канвасы цели. Данные баффов продолжают идти, а Target Overlay рисуется, пока он включён; при выключенном Overlay у цели ничего не рисуется.
+Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.	Скрыть все плавающие канвасы цели. Данные баффов продолжают идти, а Target Overlay рисуется, пока он включён.
 Hide target canvas	Скрывать канвас цели
-Hide the floating target canvases. The overlay keeps drawing while it is on.	Скрыть плавающие канвасы цели. Оверлей продолжает рисоваться, пока включён.
 Horizontal gap between icons, px (0-40). Applies on Enter.	Горизонтальный отступ между иконками, px (0-40). Применяется по Enter.
 ID/name:	ID/имя:
 ID:	ID:
@@ -275,7 +273,7 @@ Import: the Import field is empty - paste a configuration into the lower field f
 Interface language: the whole UI, every hover tooltip and all chat messages switch at once. The settings window rebuilds; no /reload needed.	Язык интерфейса: весь UI, все подсказки при наведении и все сообщения чата переключаются сразу. Окно настроек пересобирается; /reload не нужен.
 Invalid buff ID	Неверный ID баффа
 Invalid spell name	Неверное имя навыка
-Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.	Держать оверлей цели над рядом цели TrackThatPlease. Читается из настроек TTP: targetBuffVerticalOffset, targetIconSize и масштаб UI. Выключите, чтобы ставить оверлей по смещениям канваса.
+Keep the target overlay above TrackThatPlease's target row. Anchors to its real target canvas (targetBuffCanvas) when it can be found, otherwise places the row with targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to use the canvas offsets instead.	Держать оверлей цели над рядом цели TrackThatPlease. Прикрепляется к его настоящему канвасу цели (targetBuffCanvas), если он найден, иначе ставит ряд по targetBuffVerticalOffset, targetIconSize и масштабу UI. Выключите, чтобы ставить оверлей по смещениям канваса.
 Label color:	Цвет названий:
 Language	Язык
 Language changed to %s	Язык изменён на %s
@@ -362,7 +360,7 @@ Percent	Процент
 Percent modifiers counted right now plus the learned Smart %, added together. Applied second.	Процентные модификаторы, посчитанные сейчас, плюс выученный Smart %, вместе. Применяются вторыми.
 Percent total: %s	Процент всего: %s
 Percent total: -	Процент всего: -
-Place the overlay above TrackThatPlease's target row (its settings are read).	Ставить оверлей над рядом цели TrackThatPlease (его настройки читаются).
+Place the overlay above TrackThatPlease's target row (anchored to its row when it can be found).	Ставить оверлей над рядом цели TrackThatPlease (при найденном ряде — якорем к нему).
 Player	Игрок
 Player buff list updated: was %s, now %s	Список баффов игрока обновлён: было %s, стало %s
 Position X:	Позиция X:
@@ -450,6 +448,8 @@ Support	Поддержать
 Support the Addon Developer	Поддержать разработчика аддона
 Switch the canvas edited below. Shown: %s.	Переключить канвас, редактируемый ниже. Показан: %s.
 Switch the interface, every hover tooltip and all chat messages to this language.	Переключить интерфейс, все подсказки и все сообщения чата на этот язык.
+TTP canvas found: %s	Канвас TTP найден: %s
+TTP canvas not found, fallback: %s	Канвас TTP не найден, запасной вариант: %s
 Target	Цель
 Target cache cleaned: %s	Кэш цели очищен: %s
 Target display modes: overlay at the target's screen position, hide the floating canvas, avoid TrackThatPlease.	Режимы показа цели: оверлей у экранной позиции цели, скрыть плавающий канвас, не наезжать на TrackThatPlease.
@@ -653,8 +653,7 @@ Donate USDT TRC20:	捐赠 USDT TRC20:
 Donation address. Click the field, select it and copy with Ctrl+C.	捐赠地址。点击该字段，选中后用 Ctrl+C 复制。
 Down	下移
 Drag to move the window.	拖动以移动窗口。
-Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.	将每个目标画布绘制为目标屏幕位置上的紧凑叠加层 (与 TrackThatPlease 相同的投影)。加载 TTP 时该行位于其目标行上方。
-Draw the target canvas at the target's screen position instead of a fixed panel.	在目标屏幕位置绘制目标画布，而非固定面板。
+Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.	在目标的屏幕位置额外绘制一个紧凑叠加层。它不会隐藏浮动画布；要隐藏请使用 Hide target canvas。
 Dump scan started...	扫描已开始...
 Duration in seconds, 0 is allowed (Buff/Debuff only).	持续时间(秒)，0 有效 (仅增益/减益)。
 Duration must be a number >= 0	持续时间必须是不小于 0 的数字
@@ -730,9 +729,8 @@ Grid (cols x rows):	网格 (列 x 行):
 Grid rows (1-10). Applies on Enter.	网格行数 (1-10)。按 Enter 应用。
 Grid: icons per row, number of rows, the cap and the vertical gap.	网格: 每行图标数、行数、上限和垂直间距。
 Helpers module not loaded, using basic settings	helpers 模块未加载，使用基础设置
-Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.	隐藏所有浮动的目标画布。增益数据继续运行，叠加层开启时仍会绘制；叠加层关闭时不绘制任何目标内容。
+Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.	隐藏所有浮动的目标画布。增益数据继续运行，叠加层开启时仍会绘制。
 Hide target canvas	隐藏目标画布
-Hide the floating target canvases. The overlay keeps drawing while it is on.	隐藏浮动的目标画布。叠加层开启时仍会绘制。
 Horizontal gap between icons, px (0-40). Applies on Enter.	图标之间的水平间距(像素，0-40)。按 Enter 应用。
 ID/name:	ID/名称:
 ID:	ID:
@@ -766,7 +764,7 @@ Import: the Import field is empty - paste a configuration into the lower field f
 Interface language: the whole UI, every hover tooltip and all chat messages switch at once. The settings window rebuilds; no /reload needed.	界面语言: 整个界面、所有悬停提示和所有聊天消息会一起切换。设置窗口会重建；无需 /reload。
 Invalid buff ID	无效的增益 ID
 Invalid spell name	无效的技能名称
-Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.	将目标叠加层保持在 TrackThatPlease 目标行上方。读取 TTP 设置: targetBuffVerticalOffset、targetIconSize 和 UI 缩放。关闭后改用画布偏移放置叠加层。
+Keep the target overlay above TrackThatPlease's target row. Anchors to its real target canvas (targetBuffCanvas) when it can be found, otherwise places the row with targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to use the canvas offsets instead.	将目标叠加层保持在 TrackThatPlease 目标行上方。找到其真实目标画布 (targetBuffCanvas) 时直接锚定，否则用 targetBuffVerticalOffset、targetIconSize 和 UI 缩放放置。关闭后改用画布偏移。
 Label color:	名称颜色:
 Language	语言
 Language changed to %s	语言已切换为 %s
@@ -853,7 +851,7 @@ Percent	百分比
 Percent modifiers counted right now plus the learned Smart %, added together. Applied second.	当前计入的百分比修正加上已学习的 Smart %，合并计算。其次应用。
 Percent total: %s	百分比总计: %s
 Percent total: -	百分比总计: -
-Place the overlay above TrackThatPlease's target row (its settings are read).	将叠加层放在 TrackThatPlease 目标行上方 (会读取其设置)。
+Place the overlay above TrackThatPlease's target row (anchored to its row when it can be found).	将叠加层放在 TrackThatPlease 目标行上方 (找到其行时直接锚定)。
 Player	玩家
 Player buff list updated: was %s, now %s	玩家增益列表已更新: 原 %s，现 %s
 Position X:	位置 X:
@@ -941,6 +939,8 @@ Support	支持
 Support the Addon Developer	支持插件开发者
 Switch the canvas edited below. Shown: %s.	切换下方编辑的画布。当前: %s。
 Switch the interface, every hover tooltip and all chat messages to this language.	将界面、所有悬停提示和所有聊天消息切换为此语言。
+TTP canvas found: %s	找到 TTP 画布: %s
+TTP canvas not found, fallback: %s	未找到 TTP 画布，改用回退: %s
 Target	目标
 Target cache cleaned: %s	目标缓存已清理: %s
 Target display modes: overlay at the target's screen position, hide the floating canvas, avoid TrackThatPlease.	目标显示模式: 在目标屏幕位置叠加、隐藏浮动画布、避开 TrackThatPlease。
@@ -1144,8 +1144,7 @@ Donate USDT TRC20:	USDT TRC20 bağışı:
 Donation address. Click the field, select it and copy with Ctrl+C.	Bağış adresi. Alana tıklayın, seçin ve Ctrl+C ile kopyalayın.
 Down	Aşağı
 Drag to move the window.	Pencereyi taşımak için sürükleyin.
-Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.	Her hedef tuvalini hedefin ekran konumunda kompakt bir kaplama olarak çizer (TrackThatPlease ile aynı projeksiyon). TTP yüklüyse satır onun hedef satırının üstüne yerleşir.
-Draw the target canvas at the target's screen position instead of a fixed panel.	Hedef tuvalini sabit panel yerine hedefin ekran konumunda çizer.
+Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.	Hedefin ekran konumunda ek bir kompakt kaplama çizer. Yüzen tuvayı gizlemez; bunun için Hide target canvas kullanın.
 Dump scan started...	Döküm taraması başladı...
 Duration in seconds, 0 is allowed (Buff/Debuff only).	Süre saniye, 0 geçerlidir (yalnızca Buff/Debuff).
 Duration must be a number >= 0	Süre 0 veya daha büyük bir sayı olmalı
@@ -1221,9 +1220,8 @@ Grid (cols x rows):	Izgara (sütun x satır):
 Grid rows (1-10). Applies on Enter.	Izgara satırları (1-10). Enter ile uygulanır.
 Grid: icons per row, number of rows, the cap and the vertical gap.	Izgara: satır başına simge, satır sayısı, üst sınır ve dikey boşluk.
 Helpers module not loaded, using basic settings	Helpers modülü yüklenmedi, temel ayarlar kullanılıyor
-Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.	Tüm yüzen hedef tuvallerini gizler. Buff verisi çalışmaya devam eder ve Target Overlay açıksa çizilir; Overlay kapalıyken hedefle ilgili hiçbir şey çizilmez.
+Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.	Tüm yüzen hedef tuvallerini gizler. Buff verisi çalışmaya devam eder ve Target Overlay açıksa çizilir.
 Hide target canvas	Hedef tuvalini gizle
-Hide the floating target canvases. The overlay keeps drawing while it is on.	Yüzen hedef tuvallerini gizler. Kaplama açıkken çizilmeye devam eder.
 Horizontal gap between icons, px (0-40). Applies on Enter.	Simgeler arası yatay boşluk, px (0-40). Enter ile uygulanır.
 ID/name:	ID/ad:
 ID:	ID:
@@ -1257,7 +1255,7 @@ Import: the Import field is empty - paste a configuration into the lower field f
 Interface language: the whole UI, every hover tooltip and all chat messages switch at once. The settings window rebuilds; no /reload needed.	Arayüz dili: tüm arayüz, tüm ipuçları ve tüm sohbet mesajları birden değişir. Ayarlar penceresi yeniden kurulur; /reload gerekmez.
 Invalid buff ID	Geçersiz buff ID'si
 Invalid spell name	Geçersiz beceri adı
-Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.	Hedef kaplamasını TrackThatPlease hedef satırının üstünde tutar. TTP ayarlarından okunur: targetBuffVerticalOffset, targetIconSize ve arayüz ölçeği. Kapatırsanız kaplama tuval kaymalarıyla yerleşir.
+Keep the target overlay above TrackThatPlease's target row. Anchors to its real target canvas (targetBuffCanvas) when it can be found, otherwise places the row with targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to use the canvas offsets instead.	Hedef kaplamasını TrackThatPlease hedef satırının üstünde tutar. Gerçek hedef tuvali (targetBuffCanvas) bulunursa ona bağlanır, bulunamazsa satırı targetBuffVerticalOffset, targetIconSize ve arayüz ölçeğiyle yerleştirir. Kapatırsanız kaplama tuval kaymalarıyla yerleşir.
 Label color:	Etiket rengi:
 Language	Dil
 Language changed to %s	Dil %s olarak değiştirildi
@@ -1344,7 +1342,7 @@ Percent	Yüzde
 Percent modifiers counted right now plus the learned Smart %, added together. Applied second.	Şu anda sayılan yüzde değiştiricileri ve öğrenilen Smart % toplanır. İkinci olarak uygulanır.
 Percent total: %s	Yüzde toplam: %s
 Percent total: -	Yüzde toplam: -
-Place the overlay above TrackThatPlease's target row (its settings are read).	Kaplamayı TrackThatPlease hedef satırının üstüne koyar (ayarları okunur).
+Place the overlay above TrackThatPlease's target row (anchored to its row when it can be found).	Kaplamayı TrackThatPlease hedef satırının üstüne koyar (satır bulunursa ona bağlanır).
 Player	Oyuncu
 Player buff list updated: was %s, now %s	Oyuncu buff listesi güncellendi: önce %s, şimdi %s
 Position X:	Konum X:
@@ -1432,6 +1430,8 @@ Support	Destek
 Support the Addon Developer	Eklenti geliştiricisini destekleyin
 Switch the canvas edited below. Shown: %s.	Aşağıda düzenlenen tuvayı değiştirir. Gösterilen: %s.
 Switch the interface, every hover tooltip and all chat messages to this language.	Arayüzü, tüm ipuçlarını ve tüm sohbet mesajlarını bu dile geçirir.
+TTP canvas found: %s	TTP tuvali bulundu: %s
+TTP canvas not found, fallback: %s	TTP tuvali bulunamadı, yedek: %s
 Target	Hedef
 Target cache cleaned: %s	Hedef önbelleği temizlendi: %s
 Target display modes: overlay at the target's screen position, hide the floating canvas, avoid TrackThatPlease.	Hedef görünüm modları: hedefin ekran konumunda kaplama, yüzen tuvayı gizle, TrackThatPlease'ten kaçın.
@@ -1635,8 +1635,7 @@ Donate USDT TRC20:	USDT TRC20 후원:
 Donation address. Click the field, select it and copy with Ctrl+C.	후원 주소입니다. 필드를 클릭해 선택한 뒤 Ctrl+C로 복사하세요.
 Down	아래로
 Drag to move the window.	창을 옮기려면 드래그하세요.
-Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.	각 대상 캔버스를 대상의 화면 위치에 간결한 오버레이로 표시합니다 (TrackThatPlease와 같은 투영). TTP가 로드되어 있으면 해당 대상 행 위에 배치됩니다.
-Draw the target canvas at the target's screen position instead of a fixed panel.	고정 패널 대신 대상의 화면 위치에 대상 캔버스를 표시합니다.
+Draw an additional compact overlay at the target's screen position. It does not hide the floating canvas; use Hide target canvas for that.	대상의 화면 위치에 추가로 간결한 오버레이를 그립니다. 부동 캔버스는 숨기지 않으며, 숨기려면 Hide target canvas를 사용하세요.
 Dump scan started...	덤프 스캔이 시작되었습니다...
 Duration in seconds, 0 is allowed (Buff/Debuff only).	지속시간(초), 0도 유효합니다 (버프/디버프 전용).
 Duration must be a number >= 0	지속시간은 0 이상의 숫자여야 합니다
@@ -1712,9 +1711,8 @@ Grid (cols x rows):	그리드 (열 x 행):
 Grid rows (1-10). Applies on Enter.	그리드 행 (1-10). Enter로 적용됩니다.
 Grid: icons per row, number of rows, the cap and the vertical gap.	그리드: 행당 아이콘 수, 행 수, 최대치, 세로 간격.
 Helpers module not loaded, using basic settings	helpers 모듈이 로드되지 않아 기본 설정을 사용합니다
-Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on; with Overlay off nothing target-related is drawn.	모든 부동 대상 캔버스를 숨깁니다. 버프 데이터는 계속 동작하며 오버레이가 켜져 있으면 Target Overlay도 그려집니다. 오버레이가 꺼져 있으면 대상 관련 표시가 없습니다.
+Hide every floating target canvas. Buff data keeps running and the Target Overlay still draws when it is on.	모든 부동 대상 캔버스를 숨깁니다. 버프 데이터는 계속 동작하며 Target Overlay가 켜져 있으면 계속 그려집니다.
 Hide target canvas	대상 캔버스 숨기기
-Hide the floating target canvases. The overlay keeps drawing while it is on.	부동 대상 캔버스를 숨깁니다. 오버레이는 켜져 있는 동안 계속 그려집니다.
 Horizontal gap between icons, px (0-40). Applies on Enter.	아이콘 사이 가로 간격(픽셀, 0-40). Enter로 적용됩니다.
 ID/name:	ID/이름:
 ID:	ID:
@@ -1748,7 +1746,7 @@ Import: the Import field is empty - paste a configuration into the lower field f
 Interface language: the whole UI, every hover tooltip and all chat messages switch at once. The settings window rebuilds; no /reload needed.	인터페이스 언어: 전체 UI, 모든 툴팁, 모든 채팅 메시지가 한 번에 전환됩니다. 설정 창이 다시 만들어지며 /reload는 필요 없습니다.
 Invalid buff ID	잘못된 버프 ID
 Invalid spell name	잘못된 스킬 이름
-Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.	대상 오버레이를 TrackThatPlease 대상 행 위에 유지합니다. TTP 설정(targetBuffVerticalOffset, targetIconSize, UI 배율)을 읽습니다. 끄면 캔버스 오프셋으로 오버레이를 배치합니다.
+Keep the target overlay above TrackThatPlease's target row. Anchors to its real target canvas (targetBuffCanvas) when it can be found, otherwise places the row with targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to use the canvas offsets instead.	대상 오버레이를 TrackThatPlease 대상 행 위에 유지합니다. 실제 대상 캔버스(targetBuffCanvas)를 찾으면 거기에 고정하고, 없으면 targetBuffVerticalOffset, targetIconSize, UI 배율로 배치합니다. 끄면 캔버스 오프셋으로 배치합니다.
 Label color:	이름 색상:
 Language	언어
 Language changed to %s	언어가 %s(으)로 변경되었습니다
@@ -1835,7 +1833,7 @@ Percent	퍼센트
 Percent modifiers counted right now plus the learned Smart %, added together. Applied second.	현재 계산된 퍼센트 수정자와 학습된 Smart %를 합산합니다. 두 번째로 적용됩니다.
 Percent total: %s	퍼센트 합계: %s
 Percent total: -	퍼센트 합계: -
-Place the overlay above TrackThatPlease's target row (its settings are read).	오버레이를 TrackThatPlease 대상 행 위에 배치합니다 (해당 설정을 읽습니다).
+Place the overlay above TrackThatPlease's target row (anchored to its row when it can be found).	오버레이를 TrackThatPlease 대상 행 위에 배치합니다 (행을 찾으면 거기에 고정).
 Player	플레이어
 Player buff list updated: was %s, now %s	플레이어 버프 목록 갱신됨: 이전 %s, 현재 %s
 Position X:	위치 X:
@@ -1923,6 +1921,8 @@ Support	후원
 Support the Addon Developer	애드온 개발자 후원
 Switch the canvas edited below. Shown: %s.	아래에서 편집할 캔버스를 전환합니다. 표시 중: %s.
 Switch the interface, every hover tooltip and all chat messages to this language.	인터페이스, 모든 툴팁, 모든 채팅 메시지를 이 언어로 전환합니다.
+TTP canvas found: %s	TTP 캔버스를 찾았습니다: %s
+TTP canvas not found, fallback: %s	TTP 캔버스를 찾지 못해 대체 배치: %s
 Target	대상
 Target cache cleaned: %s	대상 캐시 정리됨: %s
 Target display modes: overlay at the target's screen position, hide the floating canvas, avoid TrackThatPlease.	대상 표시 모드: 대상 화면 위치에 오버레이, 부동 캔버스 숨기기, TrackThatPlease 회피.

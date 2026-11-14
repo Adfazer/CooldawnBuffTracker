@@ -77,7 +77,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.30.0"
+  version = "1.31.0"
 }
 
 local buffData = {}
@@ -1863,8 +1863,9 @@ end
 --     TrackThatPlease; при загруженном TTP строка ставится над его рядом.
 --     Позиция пересчитывается КАЖДЫЙ кадр; якорь меняется только при
 --     сдвиге на >= 1 px (см. updateTargetOverlayPositions).
--- Плавающие канвасы при включённом оверлее скрыты; выключение возвращает их
--- на прежнее место (позиция в настройках не меняется).
+-- Плавающие канвасы при включённом оверлее остаются на месте (1.31.0): их
+-- прячет только отдельный Hide target canvas. Выключение оверлея возвращает
+-- панели на прежнее место (позиция в настройках не меняется).
 -- Player-режим "Under MP bar" убран в 1.25.0, слитая строка под HP/MP у цели —
 -- в 1.26.0: у обоих юнитов только плавающие канвасы, у цели ещё оверлей.
 -- =====================================================================
@@ -1905,6 +1906,45 @@ local function widgetVisible(widget)
   return vis and true or false
 end
 
+-- 1.31.0: настоящий виджет target-ряда TrackThatPlease. api.Interface:
+-- FindWidget часто не находит окна, созданные CreateEmptyWindow, поэтому
+-- пробуем три способа подряд (паттерн tax_tracker). Объект принимаем, только
+-- если он ведёт себя как виджет: у него есть GetExtent и AddAnchor.
+-- Всё в одной таблице: у чанка main.lua жёсткий лимит 200 локальных имён.
+local TTPRow = {
+  canvasId = "targetBuffCanvas",
+  lookups = { "FindWidget", "GetWindow", "GetWidgetByName" },
+}
+
+function TTPRow.looksLikeWidget(widget)
+  if widget == nil then return false end
+  local okExtent, extent = pcall(function() return widget.GetExtent end)
+  if not okExtent or extent == nil then return false end
+  local okAnchor, anchor = pcall(function() return widget.AddAnchor end)
+  if not okAnchor or anchor == nil then return false end
+  return true
+end
+
+-- Скрытый или освобождённый канвас (ошибка вызова) для якоря не годится.
+function TTPRow.usable(widget)
+  if not widget then return false end
+  local ok, visible = pcall(function() return widget:IsVisible() end)
+  if not ok then return false end
+  return visible and true or false
+end
+
+function TTPRow.find()
+  for _, lookup in ipairs(TTPRow.lookups) do
+    local ok, widget = pcall(function()
+      local getter = api.Interface[lookup]
+      if getter == nil then return nil end
+      return getter(api.Interface, TTPRow.canvasId)
+    end)
+    if ok and TTPRow.looksLikeWidget(widget) then return widget end
+  end
+  return nil
+end
+
 -- Кэш тяжёлых проверок: ~2 проверки в секунду, а не каждый кадр.
 -- Позиция цели сюда НЕ входит — её читает readTargetScreen() каждый кадр.
 local function refreshFrameCache(unitType, nowMs)
@@ -1924,6 +1964,19 @@ local function refreshFrameCache(unitType, nowMs)
     -- Настройки TTP (приватный файл) читаются вместе с рамкой — раз в 500 мс,
     -- а не на каждом кадре: по ним оверлей встаёт над рядом TrackThatPlease.
     cache.ttpOffset, cache.ttpSize = ttpTargetBounds()
+    -- 1.31.0: сам виджет targetBuffCanvas ищется на том же 500-мс кэше;
+    -- лог печатается только при смене состояния «найден/не найден».
+    local canvas = TTPRow.find()
+    cache.ttpCanvas = canvas or false
+    local state = canvas and "found" or "missing"
+    if cache.ttpCanvasState ~= state then
+      cache.ttpCanvasState = state
+      if canvas then
+        CbtLog.debug("TTP canvas found: %s", TTPRow.canvasId)
+      else
+        CbtLog.debug("TTP canvas not found, fallback: %s", TTPRow.canvasId)
+      end
+    end
   end
   return cache
 end
@@ -2068,13 +2121,18 @@ local function attachedSig(cfg, buffs, count)
 end
 
 -- Создаёт окно-оверлей с прозрачным фоном и без перехвата мыши.
+-- 1.31.0: слой normal (выше слоя game, на котором TTP держит свой
+-- targetBuffCanvas) + высокий z-order, чтобы строка рисовалась ПОВЕРХ ряда
+-- TrackThatPlease, а не за ним. Клики всё так же проходят насквозь.
 local function createAttachedWindow(id)
   local wnd = api.Interface:CreateEmptyWindow(id)
   if not wnd then return nil end
-  pcall(function() wnd:SetUILayer("game") end)
+  pcall(function() wnd:SetUILayer("normal") end)
+  pcall(function() if wnd.SetZOrder then wnd:SetZOrder(1000) end end)
   pcall(function() wnd:Clickable(false) end)
   pcall(function() wnd:EnablePick(false) end)
   wnd:Show(false)
+  pcall(function() wnd:Raise() end)
   return wnd
 end
 
@@ -2226,6 +2284,18 @@ local function renderAttachedIcons(holder, unitType, namespace, buffs, cfg)
   end
 end
 
+-- 1.31.0: якорь оверлея к ряду TrackThatPlease и запасной расчёт. Всё в одной
+-- таблице — у чанка main.lua жёсткий лимит 200 локальных имён.
+local OverlayAnchor = {}
+
+-- Зазор до ряда TTP: 0..200 px, по умолчанию 4.
+function OverlayAnchor.gap(us)
+  local gap = tonumber(us and us.ttpGap) or 4
+  if gap < 0 then gap = 0 end
+  if gap > 200 then gap = 200 end
+  return gap
+end
+
 -- Экранная позиция оверлея: x и НИЖНЯЯ граница ряда (якорь BOTTOM).
 -- TTP рисует свой target-ряд в мировых координатах, поэтому при загруженном
 -- TTP наша строка встаёт над его рядом (topY - gap), иначе — от экранной
@@ -2237,9 +2307,7 @@ local function overlayScreenPosition(cfg, cache)
   if avoidTTP then
     local ttpOffset, ttpSize = cache and cache.ttpOffset, cache and cache.ttpSize
     if ttpOffset and ttpSize then
-      local gap = tonumber(us and us.ttpGap) or 4
-      if gap < 0 then gap = 0 end
-      if gap > 200 then gap = 200 end
+      local gap = OverlayAnchor.gap(us)
       local bottom = cache.screenY + ttpOffset
       return cache.screenX, bottom - ttpSize - gap
     end
@@ -2249,6 +2317,29 @@ local function overlayScreenPosition(cfg, cache)
   return cache.screenX + ox, cache.screenY + oy
 end
 
+-- 1.31.0: якорь к реальному ряду TrackThatPlease: наш низ ставится на зазор
+-- выше его верхнего левого угла (BOTTOM -> TOPLEFT, -gap). Якорь ставится
+-- ТОЛЬКО при смене канваса или зазора: TTP двигает свой ряд сам, наш едет
+-- за ним без RemoveAllAnchors/AddAnchor на каждом кадре.
+function OverlayAnchor.toTTP(holder, ttpCanvas, gap)
+  if not (holder and holder.wnd and ttpCanvas) then return false end
+  -- Сравнение по самой ссылке на виджет + зазору: строка с tostring() у
+  -- userdata может меняться от вызова к вызову и вызывала бы лишний якорь.
+  if holder.anchorKey == "ttp" and holder.anchorTTP == ttpCanvas and holder.anchorGap == gap then
+    return true
+  end
+  local ok = pcall(function()
+    holder.wnd:RemoveAllAnchors()
+    holder.wnd:AddAnchor("BOTTOM", ttpCanvas, "TOPLEFT", 0, -gap)
+  end)
+  if not ok then return false end
+  holder.anchorKey = "ttp"
+  holder.anchorTTP = ttpCanvas
+  holder.anchorGap = gap
+  holder.ax, holder.ay = nil, nil
+  return true
+end
+
 -- Ставит окно оверлея на (x, bottom) в целых пикселях. RemoveAllAnchors и
 -- AddAnchor вызываются ТОЛЬКО когда округлённая позиция сдвинулась на >= 1 px
 -- (как в TrackThatPlease): иначе виджеты дёргаются каждый кадр вхолостую.
@@ -2256,12 +2347,30 @@ local function applyOverlayAnchor(holder, x, bottomY)
   if not holder or not holder.wnd or not x or not bottomY then return end
   x = math.floor(x + 0.5)
   bottomY = math.floor(bottomY + 0.5)
-  if holder.ax == x and holder.ay == bottomY then return end
+  if holder.anchorKey == "screen" and holder.ax == x and holder.ay == bottomY then return end
+  holder.anchorKey = "screen"
   holder.ax, holder.ay = x, bottomY
   pcall(function()
     holder.wnd:RemoveAllAnchors()
     holder.wnd:AddAnchor("BOTTOM", "UIParent", "TOPLEFT", x, bottomY)
   end)
+end
+
+-- Одно место выбора якоря: реальный ряд TTP (follow), иначе проекция цели с
+-- настройками TTP (targetBuffVerticalOffset / targetIconSize), иначе
+-- пользовательские overlayX/overlayY.
+function OverlayAnchor.place(holder, cfg, cache)
+  if not (holder and holder.wnd) then return false end
+  local us = settings and settings.target
+  local gap = OverlayAnchor.gap(us)
+  local ttpCanvas = cache and cache.ttpCanvas or nil
+  if ttpCanvas and not (us and us.avoidTTP == false) and TTPRow.usable(ttpCanvas) then
+    if OverlayAnchor.toTTP(holder, ttpCanvas, gap) then return true end
+  end
+  local x, bottomY = overlayScreenPosition(cfg or {}, cache)
+  if not x or not bottomY then return false end
+  applyOverlayAnchor(holder, x, bottomY)
+  return true
 end
 
 -- 1.25.0: оверлей цели ведётся каждый кадр (TrackThatPlease-стиль).
@@ -2286,8 +2395,7 @@ local function updateTargetOverlayPositions()
   for idx = 1, #canvases do
     local holder = frameOverlays[idx]
     if holder and holder.shown and holder.wnd then
-      local x, bottomY = overlayScreenPosition(canvases[idx] or {}, cache)
-      applyOverlayAnchor(holder, x, bottomY)
+      OverlayAnchor.place(holder, canvases[idx] or {}, cache)
     end
   end
 end
@@ -2336,13 +2444,11 @@ local function renderTargetOverlays(activeBuffs)
         if perRow < 1 then perRow = 1 end
         if perRow > 12 then perRow = 12 end
 
-        local x, bottomY = overlayScreenPosition(cfg, cache)
-        if not x or not bottomY then
+        -- Свежая позиция уже посчитана updateTargetOverlayPositions() в этом
+        -- кадре; здесь якорь нужен лишь для только что показанного окна.
+        if not OverlayAnchor.place(holder, cfg, cache) then
           setHolderShown(holder, false)
         else
-          -- Свежая позиция уже посчитана updateTargetOverlayPositions() в этом
-          -- кадре; здесь якорь нужен лишь для только что показанного окна.
-          applyOverlayAnchor(holder, x, bottomY)
           local ocfg = attachedCfg("target", perRow, size, #subset)
           renderAttachedIcons(holder, "target", 110 + idx, subset, ocfg)
           setHolderShown(holder, true)
@@ -2529,9 +2635,9 @@ local function updateBuffIcons(unitType)
     end
   end
 
-  -- 1.26.0: единственный привязанный к юниту режим — оверлей цели; он
-  -- заменяет плавающие панели. Hide target canvas убирает их и без оверлея.
-  local overlayMode = (unitType == "target") and (unitSettings.overlay == true)
+  -- 1.31.0: оверлей цели и плавающие панели независимы. Плавающие канвасы
+  -- прячет ТОЛЬКО Hide target canvas (settings.target.hideCanvas); оверлей лишь
+  -- добавляет свою строку у цели.
   local hideFloating = floatingCanvasesHidden(unitType, unitSettings)
 
   -- Рисуем каждый канвас своим подмножеством записей (canvasOf).
@@ -2545,9 +2651,9 @@ local function updateBuffIcons(unitType)
           canvasBuffs[#canvasBuffs + 1] = buffInfo
         end
       end
-      if overlayMode or hideFloating then
-        -- Оверлей цели рисует записи канваса сам; Hide target canvas просто
-        -- прячет плавающую панель, данные продолжают собираться.
+      if hideFloating then
+        -- Плавающую панель прячет только Hide target canvas; данные при этом
+        -- продолжают собираться, а оверлей (если включён) рисуется сам.
         if canvas.IsVisible and canvas:IsVisible() then canvas:Show(false) end
       elseif #canvasBuffs == 0 then
         canvas:Show(false)

@@ -302,6 +302,8 @@ ALLOW_EXACT = {
     "playerpet", "player", "target", "English", "Русский", "中文", "Türkçe", "한국어",
     "Label", "System", "Pending", "Unknown", "TrackThatPlease", "UIParent",
     "LeftButton", "RightButton", "GetUnitClassName=", " err=", " name=",
+    # api.Interface lookup names used by the TrackThatPlease widget resolver
+    "FindWidget", "GetWindow", "GetWidgetByName",
     "CBTCombatEvents", "BuffCanvas", "MountBuffCanvas", "PlayerBuffCanvas",
     "TargetBuffCanvas", "CooldawnBuffTracker", "CooldawnBuffTrackerSettings",
     "CooldawnBuffTrackerPresets", "CooldawnBuffTrackerImportExport",

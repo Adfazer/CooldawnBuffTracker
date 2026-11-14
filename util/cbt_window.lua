@@ -6,12 +6,23 @@ local locale = require("CooldawnBuffTracker/locale")
 local M = {}
 local flatSeq = 0
 
+-- 1.31.0: оверлей цели живёт на слое normal с z-order 1000. Каждое окно
+-- аддона должно рисоваться ВЫШЕ него: тот же слой, z-order 1100 и Raise,
+-- иначе оверлей перекрывает настройки/диалоги, когда они пересекаются.
+function M.KeepAboveOverlay(win)
+    if win == nil then return end
+    pcall(function() win:SetUILayer("normal") end)
+    pcall(function() if win.SetZOrder then win:SetZOrder(1100) end end)
+    pcall(function() win:Raise() end)
+end
+
 -- Создаёт окно с шапкой. onClose - необязательный колбэк (по умолчанию скрыть).
 function M.Create(id, title, w, h, onClose)
     local win = api.Interface:CreateEmptyWindow(id)
     if not win then return nil end
     win:SetExtent(w, h)
     win:SetUILayer("normal")
+    pcall(function() if win.SetZOrder then win:SetZOrder(1100) end end)
     pcall(function() win:SetCloseOnEscape(true) end)
     pcall(function() win:EnableHidingIsRemove(false) end)
     win:AddAnchor("CENTER", "UIParent", 0, 0)
