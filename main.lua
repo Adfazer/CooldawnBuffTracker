@@ -4488,7 +4488,32 @@ local function OnLoad()
   initializeUI()
 
   live = true
-  api.On("UPDATE", OnUpdate)
+
+  -- СВОЙ 1x1-виджет вместо api.On("UPDATE"). В клиенте все api.On("UPDATE")
+  -- слушатели и api:DoIn тикают из ОДНОГО apiEmptyWnd:OnUpdate, где emit идёт
+  -- без pcall. Ошибка любого чужого аддона обрывает весь список и таймеры
+  -- навсегда (в игре это auto_vibrator/main.lua:284 при дебаффе Skewer).
+  -- Отдельный показанный виджет с OnUpdate игра зовёт своим путём; он переживает
+  -- падение общего event bus, как TrackedTargetMarker/power_ranger_on.
+  local driver = api.Interface:CreateEmptyWindow("CBTUpdateDriver")
+  if driver then
+    driver:SetExtent(1, 1)
+    driver:AddAnchor("TOPLEFT", "UIParent", "TOPLEFT", 0, 0)
+    pcall(function() driver:Clickable(false) end)
+    pcall(function() driver:EnablePick(false) end)
+    driver:SetHandler("OnUpdate", function(_, dt)
+      local ok, err = pcall(OnUpdate, dt)
+      if not ok then
+        CbtTrace.error("driver OnUpdate failed: " .. tostring(err))
+      end
+    end)
+    driver:Show(true)
+    CooldawnBuffTracker.updateDriver = driver
+    CbtTrace.info("update driver: widget OnUpdate (1x1), api.On UPDATE disabled")
+  else
+    CbtTrace.error("update driver creation failed; fallback api.On UPDATE")
+    api.On("UPDATE", OnUpdate)
+  end
 
   -- Сторож независим от UPDATE: api:DoIn продолжает тикать, даже если
   -- обработчик UPDATE перестал вызываться, и пишет это в trace-файл.
@@ -4583,6 +4608,13 @@ local function OnUnload()
   local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
   CbtTrace.info("OnUnload called")
   CbtTrace.flush()
+  local driver = CooldawnBuffTracker.updateDriver
+  if driver then
+    pcall(function() driver:SetHandler("OnUpdate", function() return end) end)
+    pcall(function() driver:Show(false) end)
+    pcall(function() api.Interface:Free(driver) end)
+    CooldawnBuffTracker.updateDriver = nil
+  end
   CbtDebugLog.info("OnUnload called")
   CbtDebugLog.flush()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
