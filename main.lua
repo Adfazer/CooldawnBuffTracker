@@ -4455,7 +4455,10 @@ local function OnLoad()
     driver:AddAnchor("TOPLEFT", "UIParent", "TOPLEFT", 0, 0)
     pcall(function() driver:Clickable(false) end)
     pcall(function() driver:EnablePick(false) end)
-    driver:SetHandler("OnUpdate", OnUpdate)
+    -- Widget OnUpdate receives (self, dt); pass only the delta. Without this
+    -- OnUpdate got the widget table as dt and updateStep died at the first
+    -- arithmetic, freezing the journal and canvases.
+    driver:SetHandler("OnUpdate", function(_, dt) OnUpdate(dt or 0) end)
     driver:Show(true)
     CooldawnBuffTracker.updateDriver = driver
   else
