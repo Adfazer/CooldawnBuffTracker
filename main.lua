@@ -77,7 +77,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.33.0"
+  version = "1.34.0"
 }
 
 local buffData = {}
@@ -3717,6 +3717,12 @@ local function processBuffIconScan()
         entries[#entries + 1] = { id = tonumber(id), name = name, path = normalizeTexturePath(path) }
       end
     end
+    -- 1.34.0: скан пишет ТОЛЬКО buff_dump.tbl (см. api.File.Write выше);
+    -- skill_dump.tbl — поставляемый файл, он здесь лишь перечитывается. Если его
+    -- нет (старая установка или файл потерян), пул остаётся buff-only и мы
+    -- предупреждаем, но скан не валим.
+    local skillDumpOk = readDumpFile("CooldawnBuffTracker/skill_dump.tbl") ~= nil
+      or readDumpFile("skill_dump.tbl") ~= nil
     local skillN = loadSkillDump(byName, entries)
     buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries + skillN }
     CbtLog.info("buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s",
@@ -3726,6 +3732,10 @@ local function processBuffIconScan()
       (st.firstError and locale.L(" | first error: %s", st.firstError)) or "")
     if skillN > 0 then
       CbtLog.info("buff dump: %s buffs, %s skill icons", #st.entries, skillN)
+    else
+      CbtLog.warn(locale.L(skillDumpOk
+        and "skill_dump.tbl holds no skill rows"
+        or "skill_dump.tbl missing: skill icons are not in the icon pool"))
     end
     if st.target ~= "" then
       local e = byName[st.target]

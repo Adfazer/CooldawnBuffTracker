@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
-"""Offline harness for the 1.32.0 skill-icon pool (CooldawnBuffTracker).
+"""Offline harness for the skill-icon pool (CooldawnBuffTracker 1.34.0).
 
-Two layers, both offline:
+Three layers, all offline:
 
 1. Assets — `skill_icons/manifest.tsv` and `skill_dump.tbl` must describe the
-   same 323 entries over 10 class trees: every PNG exists, has a valid PNG
-   signature and sane square dimensions, every path resolves inside
-   `skill_icons/`, ids are unique and never collide with `buff_dump.tbl`,
-   names are non-empty and carry no `(Rank N)` suffix, and no (name, file) pair
-   is duplicated.
+   same 323 entries over 10 class trees: every file is a 64x64 uncompressed
+   ARGB8888 DDS (`DDS ` magic, 32-bit RGB + alpha masks, 128 + 64*64*4 bytes),
+   every path resolves inside `skill_icons/` and ends in `.dds`, the PNG
+   sources live outside the runtime folder, ids are unique and never collide
+   with `buff_dump.tbl`, names are non-empty and carry no `(Rank N)` suffix,
+   and no (name, file) pair is duplicated.
 2. Loader/search — the real `main.lua` runs inside the aac_smoke patch-293
    sandbox with both data files preloaded exactly as `api.File:Read` returns
    them. The real `loadBuffDump()` must report buffs + skills, and the real
    `searchIcons()` provider must find a skill by its English name and return a
-   path that exists on disk. A second run without `skill_dump.tbl` proves the
-   old buff-only install still loads.
+   `.dds` path that exists on disk. A second run without `skill_dump.tbl` proves
+   the old buff-only install still loads.
+3. Scan safety (1.34.0) — statically, the only `api.File` write in `main.lua`
+   near the buff scan targets `buff_dump.tbl`; dynamically, a simulated
+   completed scan writes `buff_dump.tbl` in the sandbox, leaves the preloaded
+   `skill_dump.tbl` byte-identical, and the merged pool still carries the skill
+   icons. `skill_dump.tbl` on disk is hashed before and after the whole run.
 
 Usage:
     /home/hermes/work/.venv-aac/bin/python tests/skill_icons_harness.py
 Exit code 0 = all checks passed.
 """
+import hashlib
 import os
 import re
 import shutil
@@ -59,7 +66,12 @@ EXPECTED = {
     "Vitalism": (29, 8),
 }
 SKILL_PREFIX = "../Addon/CooldawnBuffTracker/skill_icons/"
+SKILL_SRC_DIR = os.path.join(REPO, "skill_icons_src")
 SYNTH_MIN = 9000000
+DDS_SIZE = 64
+DDS_BYTES = 128 + DDS_SIZE * DDS_SIZE * 4
+DDPF_ALPHAPIXELS = 0x1
+DDPF_RGB = 0x40
 
 failures = []
 checks = [0]
@@ -86,13 +98,35 @@ def lua_load_table(path):
     return table
 
 
-def png_size(path):
+def dds_info(path):
+    """Parse an uncompressed DDS header; None when the file is not one.
+
+    Returns {w, h, alpha, bpp, masks, caps, alpha_min} — alpha_min lets the
+    harness prove the alpha channel survived the conversion.
+    """
     data = open(path, "rb").read()
-    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+    if len(data) < 128 or data[:4] != b"DDS ":
         return None
-    if data[12:16] != b"IHDR":
+    size, flags, h, w, pitch, _depth, mips = struct.unpack("<7I", data[4:32])
+    pf_size, pf_flags, fourcc, bpp, rmask, gmask, bmask, amask = struct.unpack(
+        "<2I4s5I", data[76:108])
+    caps = struct.unpack("<5I", data[108:128])[0]
+    if size != 124 or pf_size != 32 or fourcc != b"\x00" * 4:
         return None
-    return struct.unpack(">II", data[16:24])
+    if not (pf_flags & DDPF_RGB and pf_flags & DDPF_ALPHAPIXELS):
+        return None
+    if len(data) != 128 + w * h * bpp // 8:
+        return None
+    alpha_min = 255
+    if bpp == 32 and amask == 0xFF000000:
+        raw = data[128:]
+        # A8R8G8B8 little-endian: the fourth byte of every pixel is alpha
+        alpha_min = min(raw[3::4]) if raw else 0
+    return {
+        "w": w, "h": h, "bpp": bpp, "alpha": bool(pf_flags & DDPF_ALPHAPIXELS),
+        "masks": (rmask, gmask, bmask, amask), "caps": caps, "mips": mips,
+        "pitch": pitch, "alpha_min": alpha_min, "size": len(data),
+    }
 
 
 def asset_checks():
@@ -143,6 +177,7 @@ def asset_checks():
     check(valid_buffs > 20000, "buff_dump loads %d rows" % valid_buffs)
 
     ids, names_files, shas = set(), set(), {}
+    dds_alpha = []
     manifest_by_key = {(r["skill_id"], r["name"], r["file"]) for r in rows}
     dump_keys = {(i, n, p) for i, n, p in
                  ((row[0], row[1], row[2].replace(SKILL_PREFIX, "")) for row in dump_rows)}
@@ -161,8 +196,8 @@ def asset_checks():
         check(name.strip() != "", "empty name for id %d" % rid)
         check("(Rank" not in name and "(rank" not in name, "rank suffix left in %r" % name)
         check("/" not in file_name and "\\" not in file_name, "icon is a bare file name: %r" % file_name)
-        check(re.match(r"^[A-Za-z0-9_.-]+\.png$", file_name) is not None,
-              "safe PNG file name: %r" % file_name)
+        check(re.match(r"^[A-Za-z0-9_.-]+\.dds$", file_name) is not None,
+              "safe DDS file name: %r" % file_name)
         check(row["type"] in ("active", "passive"), "type: %r" % row["type"])
         check(row["source_page"].startswith("https://wiki.aa-classic.com/" + row["tree"]),
               "source page for %r: %r" % (name, row["source_page"]))
@@ -172,34 +207,123 @@ def asset_checks():
               "duplicate (name, file): %r" % name)
         names_files.add((name.lower(), file_name))
         full = os.path.join(REPO, "skill_icons", file_name)
-        check(os.path.isfile(full), "missing PNG %s" % file_name)
+        check(os.path.isfile(full), "missing DDS %s" % file_name)
         if os.path.isfile(full):
-            size = png_size(full)
-            check(size is not None, "invalid PNG %s" % file_name)
-            if size:
-                w, h = size
-                check(w == h and 16 <= w <= 256, "dimensions %dx%d for %s" % (w, h, file_name))
-            import hashlib
+            info = dds_info(full)
+            check(info is not None, "invalid DDS %s" % file_name)
+            if info:
+                check((info["w"], info["h"]) == (DDS_SIZE, DDS_SIZE),
+                      "dimensions %dx%d for %s" % (info["w"], info["h"], file_name))
+                check(info["size"] == DDS_BYTES,
+                      "payload %d bytes for %s (want %d)" % (info["size"], file_name, DDS_BYTES))
+                check(info["masks"] == (0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000),
+                      "ARGB8888 masks in %s: %r" % (file_name, info["masks"]))
+                check(info["mips"] == 0 and info["pitch"] == DDS_SIZE * 4,
+                      "pitch/mips in %s: %d/%d" % (file_name, info["pitch"], info["mips"]))
+                dds_alpha.append(info["alpha_min"])
             sha = hashlib.sha256(open(full, "rb").read()).hexdigest()
             check(sha not in shas or shas[sha] == file_name,
                   "identical bytes in %s and %s" % (file_name, shas.get(sha)))
             shas[sha] = file_name
 
     check(len(dump_rows) == len(ids), "dump ids are unique (%d/%d)" % (len(ids), len(dump_rows)))
-    packaged = sorted(f for f in os.listdir(os.path.join(REPO, "skill_icons"))
-                      if f.lower().endswith(".png"))
+    runtime_dir = os.path.join(REPO, "skill_icons")
+    packaged = sorted(f for f in os.listdir(runtime_dir) if f.lower().endswith(".dds"))
     check(len(packaged) == len(set(r["file"] for r in rows)),
-          "packaged PNGs match the manifest (%d/%d)"
+          "packaged DDS files match the manifest (%d/%d)"
           % (len(packaged), len(set(r["file"] for r in rows))))
-    print("assets: %d entries (%d active, %d passive), %d PNGs, %d trees, 0 skipped"
+    check(not [f for f in os.listdir(runtime_dir) if f.lower().endswith(".png")],
+          "runtime skill_icons/ carries no PNG")
+    extra = [f for f in os.listdir(runtime_dir) if not f.endswith(".dds")]
+    check(extra == ["manifest.tsv"], "runtime skill_icons/ holds only DDS + manifest: %r" % extra)
+    check(os.path.isdir(SKILL_SRC_DIR), "PNG sources kept in skill_icons_src/")
+    sources = sorted(f for f in os.listdir(SKILL_SRC_DIR) if f.lower().endswith(".png")) \
+        if os.path.isdir(SKILL_SRC_DIR) else []
+    check(len(sources) == len(set(r["file"] for r in rows)),
+          "one PNG source per unique icon (%d/%d)" % (len(sources), len(set(r["file"] for r in rows))))
+    check({f[:-4] for f in sources} == {r["file"][:-4] for r in rows},
+          "every DDS has exactly one PNG source and vice versa")
+    check(dds_alpha and all(0 <= a <= 255 for a in dds_alpha), "alpha channel in every DDS")
+    print("assets: %d entries (%d active, %d passive), %d DDS (64x64 ARGB8888, %d with alpha), "
+          "%d trees, %d PNG sources, 0 skipped"
           % (len(rows), sum(1 for r in rows if r["type"] == "active"),
-             sum(1 for r in rows if r["type"] == "passive"), len(packaged), len(per_tree)))
+             sum(1 for r in rows if r["type"] == "passive"), len(packaged),
+             sum(1 for a in dds_alpha if a < 255), len(per_tree), len(sources)))
     return valid_buffs, len(rows)
+
+
+def strip_lua_comments(src):
+    """Lua source without comments (strings kept) — the scan check reads code only."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        ch = src[i]
+        if ch in "\"'":
+            quote = ch
+            out.append(ch)
+            i += 1
+            while i < n:
+                c = src[i]
+                out.append(c)
+                i += 1
+                if c == "\\" and i < n:
+                    out.append(src[i])
+                    i += 1
+                    continue
+                if c == quote:
+                    break
+        elif src.startswith("--", i):
+            if src.startswith("--[[", i):
+                end = src.find("]]", i + 4)
+                i = (end + 2) if end >= 0 else n
+            else:
+                end = src.find("\n", i)
+                i = end if end >= 0 else n
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+def scan_safety_checks():
+    """The buff icon scan must write buff_dump.tbl and never skill_dump.tbl."""
+    src = strip_lua_comments(open(os.path.join(REPO, "main.lua"), encoding="utf-8").read())
+    write_call = re.compile(r'api\.File[:.]Write\s*[,(]\s*(?:api\.File\s*,\s*)?"([^"]*)"')
+    call_site = re.compile(r"api\.File(?::Write\s*\(|\.Write\s*,)")
+    sites = [m.start() for m in call_site.finditer(src)]
+    check(len(sites) >= 1, "main.lua has a buff-scan write")
+    for pos in sites:
+        window = src[pos:pos + 320]
+        check("skill_dump" not in window,
+              "api.File.Write at offset %d mentions skill_dump: %r" % (pos, window[:120]))
+    start = src.find("local function processBuffIconScan()")
+    check(start >= 0, "processBuffIconScan found in main.lua")
+    end = src.find("\nlocal function ", start + 10)
+    body = src[start:end if end > 0 else len(src)]
+    check(len(call_site.findall(body)) == 1, "the scan has exactly one file write")
+    writes = write_call.findall(body)
+    check(writes == ["CooldawnBuffTracker/buff_dump.tbl"],
+          "the scan writes only buff_dump.tbl: %r" % writes)
+    check("loadSkillDump(byName, entries)" in body, "the scan re-merges skill_dump")
+    check("skill_dump.tbl" in body, "the scan reads (never writes) skill_dump.tbl")
+    print("scan safety: only write target %r" % (writes,))
+
+
+def sha256(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
 TEST_HOOK = r"""
 CooldawnBuffTracker.__test = {
   searchIcons = searchIcons,
+  -- 1.34.0: drive the real save branch of processBuffIconScan with a finished
+  -- fake scan (ranges exhausted -> it writes buff_dump.tbl and re-merges).
+  runScanSave = function(lines)
+    buffIconScan = {
+      ranges = {}, rangeIndex = 1, nextId = 0, entries = lines,
+      tables = #lines, named = #lines, errors = 0, target = "",
+    }
+    processBuffIconScan()
+  end,
   dumpInfo = function()
     if not buffDump then return nil end
     return {
@@ -256,7 +380,7 @@ HOST.tests = function()
   local rows = hook.searchIcons("Radiant Terrifying Roar", 20)
   if EXPECT_SKILLS then
     check(#rows >= 1, "search by English skill name returns rows")
-    check(has(rows, "skill_icons/Aac-radiant_terrifying_roar.png"), "Radiant Terrifying Roar icon")
+    check(has(rows, "skill_icons/Aac-radiant_terrifying_roar.dds"), "Radiant Terrifying Roar icon")
   else
     check(#rows == 0, "skill-only name is absent without skill_dump")
   end
@@ -264,13 +388,13 @@ HOST.tests = function()
   rows = hook.searchIcons("Weapon Maneuvers", 20)
   check(#rows >= 1, "passive Weapon Maneuvers is searchable")
   if EXPECT_SKILLS then
-    check(has(rows, "skill_icons/Icon_skill_fight03.png"), "Weapon Maneuvers icon")
+    check(has(rows, "skill_icons/Icon_skill_fight03.dds"), "Weapon Maneuvers icon")
   end
 
   rows = hook.searchIcons("Charge", 100)
   check(#rows >= 1, "Charge is searchable")
   if EXPECT_SKILLS then
-    check(has(rows, "skill_icons/Icon_skill_fight14.png"), "Charge skill icon")
+    check(has(rows, "skill_icons/Icon_skill_fight14.dds"), "Charge skill icon")
   end
 
   rows = hook.searchIcons("Triple Slash", 200)
@@ -285,6 +409,39 @@ HOST.tests = function()
   rows = hook.searchIcons("Fatigue", 10)
   check(#rows >= 1 and string.find(tostring(rows[1].path), "game/ui/icon/", 1, true) == 1,
     "buff dump is searched alongside skills")
+
+  -- 1.34.0 scan safety: a finished buff scan writes buff_dump.tbl only, never
+  -- truncates the supplied skill_dump.tbl, and re-merges the skill pool.
+  local skillBefore = ENGINE.files["CooldawnBuffTracker/skill_dump.tbl"]
+  hook.runScanSave({
+    "777001\tFake Buff\tgame/ui/icon/icon_buff_debuff.dds",
+    "777002\tFake Buff 2\tgame/ui/icon/icon_buff_debuff.dds",
+  })
+  local buffAfter = ENGINE.files["CooldawnBuffTracker/buff_dump.tbl"]
+  local skillAfter = ENGINE.files["CooldawnBuffTracker/skill_dump.tbl"]
+  check(type(buffAfter) == "string" and string.find(buffAfter, "Fake Buff", 1, true) ~= nil,
+    "the buff scan wrote buff_dump.tbl")
+  check(type(buffAfter) == "string" and string.find(buffAfter, "skill_icons/", 1, true) == nil,
+    "buff_dump.tbl carries no skill rows")
+  check(skillAfter == skillBefore, "the buff scan left skill_dump.tbl byte-identical")
+  local post = hook.dumpInfo()
+  check(post ~= nil, "the pool is rebuilt after the scan")
+  if post then
+    if EXPECT_SKILLS then
+      check(post.count == 2 + SKILL_COUNT,
+        "the post-scan pool still merges every skill row: " .. tostring(post.count))
+      check(type(post.skillByName) == "string"
+        and string.find(post.skillByName, "skill_icons/", 1, true) ~= nil
+        and string.find(post.skillByName, ".dds", 1, true) ~= nil,
+        "the post-scan skill icon is a skill_icons/*.dds path: " .. tostring(post.skillByName))
+      local postRows = hook.searchIcons("Radiant Terrifying Roar", 20)
+      check(#postRows >= 1 and has(postRows, "skill_icons/Aac-radiant_terrifying_roar.dds"),
+        "the post-scan search still returns skill icons")
+    else
+      check(post.count == 2, "legacy post-scan pool stays buff-only: " .. tostring(post.count))
+      check(post.skillByName == nil, "no skill icon without skill_dump")
+    end
+  end
 
   HOST.skillReport = { checks = checks, failures = failures }
   if #failures > 0 then
@@ -318,7 +475,7 @@ def patch_main(addon_dir):
     open(path, "w", encoding="utf-8").write(text[:index] + "\n" + TEST_HOOK + text[index:])
 
 
-def build_host(lua_module, addon_dir, expect_count, expect_skills):
+def build_host(lua_module, addon_dir, expect_count, expect_skills, skill_count):
     host_lua = lua_module.HOST_LUA
     preload = (
         '  do\n'
@@ -345,13 +502,15 @@ def build_host(lua_module, addon_dir, expect_count, expect_skills):
     head, sep, tail = host_lua.rpartition("return HOST")
     if not sep:
         raise SystemExit("aac_smoke HOST_LUA layout changed: return HOST not found")
-    consts = "EXPECT_COUNT = %d\nEXPECT_SKILLS = %s\n" % (expect_count, "true" if expect_skills else "false")
+    consts = "EXPECT_COUNT = %d\nEXPECT_SKILLS = %s\nSKILL_COUNT = %d\n" % (
+        expect_count, "true" if expect_skills else "false", skill_count)
     return head + consts + TEST_LUA + "\nreturn HOST" + tail
 
 
-def run_lua_case(name, addon_dir, expect_count, expect_skills):
+def run_lua_case(name, addon_dir, expect_count, expect_skills, skill_count):
     runtime = lua51.LuaRuntime()
-    host = runtime.execute(build_host(aac_smoke, addon_dir, expect_count, expect_skills).encode("utf-8"),
+    host = runtime.execute(
+        build_host(aac_smoke, addon_dir, expect_count, expect_skills, skill_count).encode("utf-8"),
                            name="@cbt_skill_icons_host.lua")
     opts = runtime.table()
     opts[b"dir"] = os.fsencode(addon_dir)
@@ -384,21 +543,28 @@ def run_lua_case(name, addon_dir, expect_count, expect_skills):
 
 
 def main():
+    dump_path = os.path.join(REPO, "skill_dump.tbl")
+    dump_hash = sha256(dump_path)
     buff_count, skill_count = asset_checks()
+    scan_safety_checks()
 
     os.makedirs(SCRATCH_ROOT, exist_ok=True)
     addon_dir = os.path.join(SCRATCH_ROOT, ADDON_ID)
     copy_addon(addon_dir)
     patch_main(addon_dir)
     merged = run_lua_case("loader with buff_dump + skill_dump", addon_dir,
-                          buff_count + skill_count, True)
+                          buff_count + skill_count, True, skill_count)
 
     legacy_dir = os.path.join(SCRATCH_ROOT, "legacy", ADDON_ID)
     copy_addon(legacy_dir)
     os.remove(os.path.join(legacy_dir, "skill_dump.tbl"))
     patch_main(legacy_dir)
     legacy = run_lua_case("loader with buff_dump only (legacy)", legacy_dir,
-                          buff_count, False)
+                          buff_count, False, 0)
+
+    check(sha256(dump_path) == dump_hash,
+          "skill_dump.tbl on disk unchanged across every buff-scan path (sha256)")
+    print("skill_dump.tbl sha256 %s (unchanged by the scan paths)" % dump_hash[:16])
 
     if failures:
         print("RESULT: FAIL — %d asset check(s)" % len(failures))
@@ -408,7 +574,7 @@ def main():
     if not (merged and legacy):
         print("RESULT: FAIL — Lua loader/search checks failed")
         return 1
-    print("RESULT: PASS — assets + merged loader + legacy fallback")
+    print("RESULT: PASS — DDS assets + merged loader + legacy fallback + scan safety")
     return 0
 
 

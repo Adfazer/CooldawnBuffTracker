@@ -120,18 +120,24 @@ shows only the fields of that type.
   mana entry has no aura on the target to mirror.
 - Long lists are paginated; all entries are saved automatically.
 
-### Skill icon library (1.32.0)
+### Skill icon library (1.34.0 — DDS)
 
 - **323 skill icons from the ten class trees** — every active skill (including
   its morph variants) and every passive shown on the AA Classic wiki:
   Battlerage, Witchcraft, Defense, Auramancy, Occultism, Archery, Sorcery,
   Shadowplay, Songcraft and Vitalism. 245 active + 78 passive entries in 321
-  unique PNG files.
-- The PNGs are packaged inside the addon (`skill_icons/`) and merged into the
-  same pool as the buff dump. The **Icon search** window finds them by English
-  name exactly like buff icons ("Charge", "Triple Slash", "Weapon Maneuvers",
-  "Radiant Terrifying Roar"), and the `Spell: ON` option fills the Spell field
-  for them too.
+  unique icons.
+- The icons are packaged inside the addon as **64×64 DDS** files
+  (`skill_icons/<name>.dds`, uncompressed ARGB8888 with alpha) and merged into
+  the same pool as the buff dump. **1.34.0 replaced the 48×48 wiki PNGs**: the
+  item-icon slot paints through the native texture loader
+  (`F_SLOT.SetIconBackGround` → `AddTexture`), which is a DDS/TGA path, so the
+  loose PNGs showed as empty slots in game. The PNG originals are kept outside
+  the runtime folder in `skill_icons_src/` (not shipped in the zip).
+- The **Icon search** window finds skills by English name exactly like buff
+  icons ("Charge", "Triple Slash", "Weapon Maneuvers", "Radiant Terrifying
+  Roar"), previews them in the same item-icon slot, and the `Spell: ON` option
+  fills the Spell field for them too.
 - Names are the base English names: the wiki's `(Rank N)` suffix is stripped, so
   one query returns every morph icon of a skill. Entries are deduplicated by
   (name, icon); the shared abyssal "Rising Hatred" icon is stored once.
@@ -140,10 +146,12 @@ shows only the fields of that type.
   9,000,000 up.
 - `skill_dump.tbl` is optional at runtime: an installation without it keeps the
   old buff-only behaviour unchanged.
+- **Buff scans never touch the skill table.** `Buff icons: Scan` writes only
+  `buff_dump.tbl`; `skill_dump.tbl` is shipped data that the scan re-reads and
+  re-merges into the pool after saving. If the file is missing the scan logs a
+  warning (skill icons stay out of the pool) instead of failing.
 - `skill_icons/manifest.tsv` lists tree, type, id, English and raw name, file,
-  source page and icon URL for maintenance. The wiki serves these icons at
-  48×48 (a few legacy files are 28×28 or 64×64); the client scales them, so no
-  conversion is needed.
+  source page and icon URL for maintenance (the `file` column names the DDS).
 
 ### Target tracking
 - Real-time monitoring of buffs/debuffs on the current target.
@@ -236,6 +244,34 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.34.0
+
+- **Skill icons are now 64×64 DDS** (uncompressed ARGB8888 with alpha) instead
+  of 48×48 loose PNGs. The item-icon slot paints through the native texture path
+  (`F_SLOT.SetIconBackGround` → `AddTexture`), which does not load the loose-PNG
+  source used by `ImageDrawable:SetTgaTexture`; in game every skill-tile preview
+  stayed an empty slot even though the pool rows, names and paths were correct.
+  All 321 unique icons were converted with Pillow (RGBA → LANCZOS 64×64), the
+  runtime pool and `skill_icons/manifest.tsv` now reference only `.dds`
+  (`../Addon/CooldawnBuffTracker/skill_icons/<name>.dds`). Still 323 rows over
+  the ten trees; ids and names are unchanged.
+- The PNG originals moved to `skill_icons_src/` (kept in the repository for the
+  next wiki refresh) and are **not** shipped in the zip: the runtime
+  `skill_icons/` folder holds only the DDS files and `manifest.tsv`.
+- **Scan safety: a buff scan can never overwrite the skill table.**
+  `processBuffIconScan` has exactly one file write, `buff_dump.tbl`;
+  `skill_dump.tbl` is shipped data that is re-read and re-merged after the save.
+  If `skill_dump.tbl` is missing, the scan now logs a warning (skill icons stay
+  out of the pool) instead of failing silently, and the skill count is logged
+  after every scan.
+- Tests: `tests/skill_icons_harness.py` now validates the DDS assets (magic,
+  64×64, ARGB8888 masks, 16,512-byte payload, alpha channel), the runtime folder
+  (only DDS + manifest, PNG sources outside it), the merged loader, the
+  buff-only legacy fallback, and scan safety: a static check on the only
+  `api.File.Write` target plus a simulated finished scan in the sandbox that
+  proves `skill_dump.tbl` stays byte-identical and the merged pool still carries
+  the skill icons. `skill_dump.tbl` on disk is hashed before and after the run.
 
 ### 1.33.0
 
@@ -1308,7 +1344,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.33.0
+**Current Version:** 1.34.0
 
 ## Credits
 

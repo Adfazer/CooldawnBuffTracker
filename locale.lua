@@ -490,6 +490,8 @@ buff dump: %s buffs, %s skill icons	дамп баффов: %s баффов, %s �
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	дамп баффов: %s баффов, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	дамп баффов: '%s' -> id=%s path=%s (обновлено записей: %s)
 buff dump: '%s' not found	дамп баффов: '%s' не найден
+skill_dump.tbl holds no skill rows	в skill_dump.tbl нет строк навыков
+skill_dump.tbl missing: skill icons are not in the icon pool	skill_dump.tbl отсутствует: иконок навыков нет в пуле иконок
 buff journal	журнал баффов
 buff scan: dumping all buffs%s (1..50000, 8000000..8001000)	скан баффов: выгружаю все баффы%s (1..50000, 8000000..8001000)
 cast %s by %s (%sms)	каст %s от %s (%s мс)
@@ -983,6 +985,8 @@ buff dump: %s buffs, %s skill icons	buff dökümü: %s buff, %s yetenek simgesi
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	buff dökümü: %s buff, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	buff dökümü: '%s' -> id=%s path=%s (güncellenen kayıt: %s)
 buff dump: '%s' not found	buff dökümü: '%s' bulunamadı
+skill_dump.tbl holds no skill rows	skill_dump.tbl içinde yetenek satırı yok
+skill_dump.tbl missing: skill icons are not in the icon pool	skill_dump.tbl yok: yetenek simgeleri simge havuzunda değil
 buff journal	buff kaydı
 buff scan: dumping all buffs%s (1..50000, 8000000..8001000)	buff taraması: tüm bufflar dökülüyor%s (1..50000, 8000000..8001000)
 cast %s by %s (%sms)	%s kullanımı, %s (%s ms)
@@ -1475,6 +1479,8 @@ buff dump: %s buffs, %s skill icons	버프 덤프: %s개 버프, %s개 기술 �
 buff dump: %s buffs, %s; tables=%s named=%s errors=%s%s	버프 덤프: %s개 버프, %s; tables=%s named=%s errors=%s%s
 buff dump: '%s' -> id=%s path=%s (entries updated: %s)	버프 덤프: '%s' -> id=%s path=%s (업데이트된 항목: %s)
 buff dump: '%s' not found	버프 덤프: '%s'을(를) 찾을 수 없습니다
+skill_dump.tbl holds no skill rows	skill_dump.tbl에 기술 행이 없습니다
+skill_dump.tbl missing: skill icons are not in the icon pool	skill_dump.tbl 없음: 스킬 아이콘이 아이콘 풀에 없습니다
 buff journal	버프 기록
 buff scan: dumping all buffs%s (1..50000, 8000000..8001000)	버프 스캔: 모든 버프 덤프 중%s (1..50000, 8000000..8001000)
 cast %s by %s (%sms)	%s 시전, %s (%s ms)
