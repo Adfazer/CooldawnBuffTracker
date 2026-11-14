@@ -69,4 +69,15 @@ function M.flush()
     writeAll()
 end
 
+-- Последняя достигнутая стадия кадра. Если UPDATE зависает, в файле остаётся
+-- именно та стадия, на которой он остановился. Не чаще 0.5 с на стадию.
+local stageName, stageAt = nil, 0
+function M.stage(name)
+    local ms = nowMs()
+    if stageName ~= name or (ms - stageAt) >= 500 then
+        stageName, stageAt = name, ms
+        append("stage", name)
+    end
+end
+
 return M
