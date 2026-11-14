@@ -4332,6 +4332,7 @@ local function onCombatMessage(event, ...)
 end
 
 local function OnLoad()
+  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
   -- Загружаем настройки (миграция плоских полей в canvases уже внутри)
   if helpers then
     settings = helpers.getSettings()
@@ -4361,6 +4362,9 @@ local function OnLoad()
 
   -- Уровень debug в логгере: серые сообщения печатаются только при Debug ON
   CbtLog.setDebug(settings and settings.debugBuffId)
+  CbtTrace.reset(tostring(CooldawnBuffTracker.version))
+  CbtTrace.info("OnLoad version=" .. tostring(CooldawnBuffTracker.version)
+    .. " debug=" .. tostring(settings and settings.debugBuffId))
   CbtDebugLog.reset()
   CbtDebugLog.setEnabled(settings and settings.debugBuffId)
 
@@ -4474,6 +4478,26 @@ local function OnLoad()
   live = true
   api.On("UPDATE", OnUpdate)
 
+  -- Сторож независим от UPDATE: api:DoIn продолжает тикать, даже если
+  -- обработчик UPDATE перестал вызываться, и пишет это в trace-файл.
+  local function watchdogTick()
+    if not live then return end
+    local now = getCurrentTime()
+    local last = tonumber(lastRuntimeError.lastBeatAt) or 0
+    local age = now - last
+    CbtTrace.info("watchdog: updateAge=" .. string.format("%.1f", age)
+      .. " target=" .. tostring(currentTargetId))
+    if age > 5 and (not lastRuntimeError.reregisteredAt
+        or (now - lastRuntimeError.reregisteredAt) > 30) then
+      lastRuntimeError.reregisteredAt = now
+      CbtTrace.error("watchdog: UPDATE stale " .. string.format("%.1f", age)
+        .. "s; re-register")
+      pcall(function() api.On("UPDATE", OnUpdate) end)
+    end
+    api:DoIn(5000, watchdogTick)
+  end
+  api:DoIn(5000, watchdogTick)
+
   -- Приёмник боевого лога: триггер кастомных баффов по имени навыка
   combatEventWnd = api.Interface:CreateEmptyWindow("CBTCombatEvents")
   if combatEventWnd then
@@ -4519,16 +4543,24 @@ end
 -- shared event handler and freeze every canvas while the settings UI still
 -- works. One-shot file log makes the real fault visible.
 OnUpdate = function(dt)
+  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
   if not live then
     if not lastRuntimeError.live then
       lastRuntimeError.live = true
-      CbtDebugLog.info("UPDATE skipped: live=false")
+      CbtTrace.info("UPDATE skipped: live=false")
     end
     return
+  end
+  lastRuntimeError.lastBeatAt = getCurrentTime()
+  if not lastRuntimeError.traceBeatAt or (lastRuntimeError.lastBeatAt - lastRuntimeError.traceBeatAt) >= 2 then
+    lastRuntimeError.traceBeatAt = lastRuntimeError.lastBeatAt
+    CbtTrace.info("UPDATE target=" .. tostring(currentTargetId)
+      .. " live=" .. tostring(live))
   end
   local ok, err = pcall(updateStep, dt)
   if not ok and not lastRuntimeError.update then
     lastRuntimeError.update = true
+    CbtTrace.error("UPDATE failed: " .. tostring(err))
     CbtLog.error("UPDATE failed: %s", tostring(err))
     CbtDebugLog.error("UPDATE failed: " .. tostring(err))
     CbtDebugLog.flush()
@@ -4536,6 +4568,9 @@ OnUpdate = function(dt)
 end
 
 local function OnUnload()
+  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
+  CbtTrace.info("OnUnload called")
+  CbtTrace.flush()
   CbtDebugLog.info("OnUnload called")
   CbtDebugLog.flush()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом

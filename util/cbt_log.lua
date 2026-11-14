@@ -45,6 +45,13 @@ local function paint(color, message)
 end
 
 local function emit(level, message)
+    -- Mirror every chat line into the independent trace file. This mirror is
+    -- deliberately NOT gated by the Debug flag or by CbtDebugLog.enabled: when
+    -- UPDATE dies, combat-event lines still reach the file.
+    pcall(function()
+        local T = require("CooldawnBuffTracker/util/cbt_trace")
+        if T then T.log(level, message) end
+    end)
     -- Mirror every chat line into the file log. cbt_debuglog is intentionally
     -- independent of this module (no cycle) and fails silently if File is
     -- unavailable.
