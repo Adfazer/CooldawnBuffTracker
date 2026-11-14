@@ -65,6 +65,22 @@ settings storage and all `require` paths.
   red for errors and grey for `Debug`-only diagnostics. Key values (ids, names,
   numbers) are highlighted.
 
+### Language (1.30.0)
+- **Five languages** — English (default), Русский, 中文, Türkçe and 한국어. The
+  `Language: English` control in the settings header opens a popup with the five
+  options; the active one is highlighted green.
+- **Switches everything at once** — window titles, labels, buttons, checkboxes,
+  error and confirmation texts, every hover tooltip and every chat line follow
+  the selected language. A switch rebuilds the settings window (child dialogs
+  close) and is saved immediately; `/reload` is not needed. HUD panels carry no
+  static text, so they keep running through a switch.
+- **Fallback** — `locale.L(text)` looks a string up by its English source. A
+  missing entry (or user data: buff names, ids, preset names, paths) is shown
+  unchanged, so an untranslated string degrades to English instead of breaking.
+- **CJK caveat** — the client font may not contain Chinese or Korean glyphs; both
+  are implemented and can be removed later if they render as boxes in game.
+- Existing configurations migrate to `language = "en"`.
+
 ### Configuration management
 - **Settings presets** — save the full layout (position, size, colors, grid, and
   tracked buffs) for all unit types as a named preset, and load it any time.
@@ -187,6 +203,34 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.30.0
+
+- **Interface language: English, Russian, Chinese (Simplified), Turkish, Korean.**
+  Default is English. A `Language: English` button in the settings header opens a
+  popup with the five languages and highlights the active one; the choice is
+  written to `settings.language` immediately.
+- **One switch changes the whole UI, all hover tooltips and all chat messages.**
+  The settings window is rebuilt in the new language (child dialogs close, the
+  window stays open), tooltips translate at hover time, and `CbtLog` translates
+  every chat line — the coloured `[CBT]` tag is unchanged. No `/reload` needed.
+- **`locale.lua`** — `L(text, ...)` looks the text up by its English source;
+  unknown strings (buff names, ids, preset names, file paths) pass through
+  unchanged, and `en` is the identity table. Templates with `%s` are formatted
+  after translation, so dynamic values keep their place.
+- Widget-level translation: `helpers.createLabel`/`createButton` (including the
+  later `SetText` of a button), `CbtWindow.Create` titles and
+  `CbtWindow.Tooltip`/`TooltipDynamic` localize existing call sites without
+  touching every literal; dynamic labels use `L('template', args)`.
+- Migration: configurations from 1.29 and earlier get `language = "en"`, so
+  nothing changes for existing users.
+- Tests: `tests/locale_harness.py` checks that every key exists in all five
+  languages (no missing/empty values, identical format specifiers), that an
+  unknown key falls back to English, that every auto-translated literal in the
+  source has a translation, and that a real language switch changes a button
+  label, a tooltip and a chat line while keeping one settings window.
+- Note: the client font may lack Chinese/Korean glyphs; both languages are
+  implemented and can be removed if the rendering is unacceptable in game.
 
 ### 1.29.0
 

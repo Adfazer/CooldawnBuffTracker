@@ -3,8 +3,10 @@
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
+local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
+local L = locale.L
 
 local win
 local rows = {}
@@ -70,9 +72,9 @@ local function refresh()
 
     if countLabel then
         if mode == "buff" then
-            countLabel:SetText("Buffs seen: " .. total .. " (active " .. activeCount .. ")")
+            countLabel:SetText(L("Buffs seen: %s (active %s)", total, activeCount))
         else
-            countLabel:SetText("Skills seen in combat log: " .. total)
+            countLabel:SetText(L("Skills seen in combat log: %s", total))
         end
     end
     if pageLabel then pageLabel:SetText(page .. "/" .. pages) end
@@ -172,7 +174,8 @@ local function makeRow(index)
             if addSpell then ok, msg = addSpell(item.name) end
         end
         if statusLabel then
-            statusLabel:SetText(tostring(msg or ((ok and "Added: ") or "Failed: ") .. tostring(item.name or item.id or "")))
+            statusLabel:SetText(msg or L((ok and "Added: %s") or "Failed: %s",
+                tostring(item.name or item.id or "")))
         end
         refresh()
     end)
@@ -187,11 +190,11 @@ local function makeRow(index)
         if not item then return nil end
         local name = tostring(item.name or item.id or "")
         if mode == "buff" then
-            return string.format("%s (id %s) - %s, seen %s time(s).",
-                name, tostring(item.id), item.active and "active" or "faded",
+            return string.format(L("%s (id %s) - %s, seen %s time(s)."),
+                name, tostring(item.id), item.active and L("active") or L("faded"),
                 tostring(item.count or 1))
         end
-        return string.format("%s - seen %s time(s) in the combat log.",
+        return string.format(L("%s - seen %s time(s) in the combat log."),
             name, tostring(item.count or 1))
     end)
 
@@ -225,7 +228,7 @@ local function build()
     scanBtn:Show(true)
     scanBtn:SetHandler("OnClick", function()
         if M.scanStarter then M.scanStarter() end
-        if statusLabel then statusLabel:SetText("Dump scan started...") end
+        if statusLabel then            statusLabel:SetText(L("Dump scan started...")) end
     end)
 
     -- юнит для вкладки Active buffs
@@ -248,8 +251,8 @@ local function build()
         local btn = helpers.createButton("cbtRecUnit_" .. u, win, (u == "playerpet") and "Mount" or (u == "player") and "Player" or "Target", ux, 72)
         btn:SetExtent(80, 22)
         btn:Show(true)
-        CbtWindow.Tooltip(btn, "Show the " .. ((u == "playerpet") and "Mount"
-            or (u == "player") and "Player" or "Target") .. " journal.")
+        CbtWindow.Tooltip(btn, L("Show the %s journal.", (u == "playerpet") and "Mount"
+            or (u == "player") and "Player" or "Target"))
         unitButtons[u] = btn
         btn:SetHandler("OnClick", function() setUnit(u) end)
         ux = ux + 86
@@ -260,16 +263,16 @@ local function build()
     clearBtn:SetExtent(110, 24)
     clearBtn:Show(true)
     CbtWindow.TooltipDynamic(clearBtn, function()
-        return "Clear the " .. (mode == "buff" and "buff journal" or "skill log")
-            .. " of the selected unit."
+        return L("Clear the %s of the selected unit.",
+            mode == "buff" and L("buff journal") or L("skill log"))
     end)
     clearBtn:SetHandler("OnClick", function()
         if mode == "buff" then
             if clearBuffLog then clearBuffLog(unit) end
-            if statusLabel then statusLabel:SetText("Buff log cleared") end
+            if statusLabel then statusLabel:SetText(L("Buff log cleared")) end
         else
             if clearLog then clearLog(unit) end
-            if statusLabel then statusLabel:SetText("Skill log cleared") end
+            if statusLabel then statusLabel:SetText(L("Skill log cleared")) end
         end
         page = 1
         refresh()
@@ -303,7 +306,7 @@ local function build()
     setColor(pageLabel, COLORS.text)
     pageLabel:Show(true)
     CbtWindow.TooltipDynamic(pageLabel, function(self)
-        return "Page " .. tostring(self:GetText() or "1/1") .. " - 8 entries per page."
+        return L("Page %s - 8 entries per page.", tostring(self:GetText() or "1/1"))
     end)
 
     local nextBtn = helpers.createButton("cbtRecNext", win, ">", 170, 446)

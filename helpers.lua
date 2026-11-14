@@ -2,6 +2,7 @@ local api = require("api")
 local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 local CbtLog = require('CooldawnBuffTracker/util/cbt_log')
+local locale = require('CooldawnBuffTracker/locale')
 local helpers = {}
 local settingsOpened = false
 
@@ -63,6 +64,9 @@ function helpers.getSettings(cnv, playerCnv, targetCnv)
     if defaultSettings and defaultSettings.migrate then
         settings = defaultSettings.migrate(settings)
     end
+
+    -- 1.30.0: язык интерфейса живёт в настройках; держим locale в согласии с ним.
+    locale.applySettings(settings)
 
     -- Check and set default settings (глубокая копия: canvases/defaults не должны
     -- разделять таблицы с модулем defaults)
@@ -168,11 +172,14 @@ function helpers.resetSettingsToDefault()
 end
 
 -- Functions for working with UI
+-- 1.30.0: тексты виджетов переводятся здесь, поэтому существующие вызовы
+-- (createLabel/createButton) локализуются без правки каждой строки. Неизвестная
+-- строка (имя баффа, id, имя пресета) возвращается как есть.
 function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     local label = api.Interface:CreateWidget('label', id, parent)
     label:AddAnchor("TOPLEFT", offsetX, offsetY)
     label:SetExtent(255, 20)
-    label:SetText(text)
+    label:SetText(locale.L(text))
     
     -- Set color if available
     if FONT_COLOR and FONT_COLOR.TITLE then
@@ -229,12 +236,14 @@ function helpers.createButton(id, parent, text, x, y, tip)
     label.style:SetAlign(ALIGN.CENTER)
     label.style:SetFontSize(13)
     label.style:SetColor(0.87, 0.69, 0, 1)
-    label:SetText(text or "")
+    label:SetText(locale.L(text or ""))
     if label.Clickable then label:Clickable(false) end
     button.textLabel = label
 
+    -- Текст кнопки тоже идёт через L(): состояния вида "Lock: ON", "Debug: OFF"
+    -- и заголовки, которые переставляются после создания, локализуются сразу.
     function button:SetText(t)
-        if self.textLabel then self.textLabel:SetText(t or "") end
+        if self.textLabel then self.textLabel:SetText(locale.L(t or "")) end
     end
 
     -- Hover-подсветка через CbtWindow.Hover: тултип потом её не затирает.
@@ -372,7 +381,7 @@ function helpers.savePresetFromCurrent(presetName)
     settings.activePresetName = presetName
 
     pcall(function() api.SaveSettings() end)
-    CbtLog.success("Preset saved: " .. CbtLog.hl(presetName))
+    CbtLog.success("Preset saved: %s", CbtLog.hl(presetName))
     return true
 end
 
@@ -389,7 +398,7 @@ function helpers.deletePreset(presetName)
     end
 
     pcall(function() api.SaveSettings() end)
-    CbtLog.success("Preset deleted: " .. CbtLog.hl(presetName))
+    CbtLog.success("Preset deleted: %s", CbtLog.hl(presetName))
     return true
 end
 
@@ -400,7 +409,7 @@ function helpers.loadPreset(presetName)
     local preset = helpers.getPreset(presetName)
 
     if not preset then
-        CbtLog.error("Preset not found: " .. CbtLog.hl(presetName))
+        CbtLog.error("Preset not found: %s", CbtLog.hl(presetName))
         return false, "Preset not found"
     end
 
@@ -428,7 +437,7 @@ function helpers.loadPreset(presetName)
     settings.activePresetName = presetName
 
     pcall(function() api.SaveSettings() end)
-    CbtLog.success("Preset loaded: " .. CbtLog.hl(presetName))
+    CbtLog.success("Preset loaded: %s", CbtLog.hl(presetName))
     return true
 end
 

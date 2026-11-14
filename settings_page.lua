@@ -4,7 +4,10 @@ local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local iconSearch = require('CooldawnBuffTracker/icon_search_window')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
 local CbtLog = require('CooldawnBuffTracker/util/cbt_log')
+local locale = require('CooldawnBuffTracker/locale')
 local recordWindow = require('CooldawnBuffTracker/record_window')
+
+local L = locale.L
 
 -- Load module for working with buffs
 local BuffsToTrack = require("CooldawnBuffTracker/buffs_to_track")
@@ -47,6 +50,10 @@ local M = {}
 -- updateSettingsFields уйдёт в global).
 local syncFrameModeControls = function() end
 
+-- 1.30.0: пересборка окна настроек после смены языка (назначается в конце
+-- файла, где уже видны Unload/initSettingsPage/openSettingsWindow).
+local rebuildSettingsForLanguage
+
 -- Состояние формы Add custom entry: выбранный тип записи и путь иконки.
 -- Тип: "buff" (бафф/дебафф), "skill" (навык по боевому логу), "mana" (навык маунта).
 local newEntryKind = "buff"
@@ -84,7 +91,7 @@ local function onSkillIconFound(name, id, path)
     if settingsControls.customBuffIconPreview then
         F_SLOT.SetIconBackGround(settingsControls.customBuffIconPreview, path or "game/ui/icon/icon_buff_debuff.dds")
     end
-    CbtLog.info("skill icon: " .. CbtLog.hl(path or "?"))
+    CbtLog.info("skill icon: %s", CbtLog.hl(path or "?"))
 end
 M.onSkillIconFound = onSkillIconFound
 M.onIconDumpUpdated = function()
@@ -171,7 +178,7 @@ local function canvasName(index)
     local unit = currentUnitConfig()
     local cfg = unit and unit.canvases and unit.canvases[index]
     local name = cfg and cfg.name
-    if type(name) ~= "string" or name == "" then name = "Canvas " .. tostring(index) end
+    if type(name) ~= "string" or name == "" then name = L("Canvas %s", tostring(index)) end
     return name
 end
 
@@ -524,7 +531,7 @@ local function openIconSearchFor(initialQuery, applyFn)
     iconSearch.setPicker(function(path, name)
         if applyFn then applyFn(path, name) end
         if iconSearch.close then iconSearch.close() end
-        CbtLog.info("icon picked: " .. CbtLog.hl(name or "") .. " -> " .. CbtLog.hl(path or ""))
+        CbtLog.info("icon picked: %s -> %s", CbtLog.hl(name or ""), CbtLog.hl(path or ""))
     end)
     iconSearch.open(initialQuery or "")
 end
@@ -532,7 +539,7 @@ end
 -- Показать/скрыть панель ошибки формы Add custom entry.
 local function showCustomError(msg)
     if settingsControls.addCustomBuffError and settingsControls.customBuffErrorPanel then
-        settingsControls.addCustomBuffError:SetText(msg)
+        settingsControls.addCustomBuffError:SetText(L(msg))
         settingsControls.customBuffErrorPanel:Show(true)
     end
 end
@@ -570,7 +577,7 @@ local function addTrackedBuff()
 
     if buffId == "" then
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: enter a buff ID or the skill name")
+            settingsControls.addBuffError:SetText(L("Error: enter a buff ID or the skill name"))
             settingsControls.errorPanel:Show(true)
         end
         return
@@ -598,7 +605,8 @@ local function addTrackedBuff()
     if not resolvedId then
         -- Показываем ошибку, если баф не найден в списке кастомных бафов
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: '" .. buffId .. "' not found - add it as a custom buff first")
+            settingsControls.addBuffError:SetText(
+                L("Error: '%s' not found - add it as a custom buff first", buffId))
             settingsControls.errorPanel:Show(true)
         end
         return
@@ -644,7 +652,7 @@ local function addTrackedBuff()
     else
         -- Show message that buff already tracked
         if settingsControls.addBuffError and settingsControls.errorPanel then
-            settingsControls.addBuffError:SetText("Error: Buff already tracked or error occurred")
+            settingsControls.addBuffError:SetText(L("Error: Buff already tracked or error occurred"))
             settingsControls.errorPanel:Show(true)
         end
     end
@@ -654,7 +662,7 @@ end
 -- добавляет его в отслеживание для текущего типа юнита. Возвращает ok, message.
 local function addBuffFromSearch(buffId, unitType)
     if not buffId or buffId == "" then
-        return false, "Invalid buff ID"
+        return false, L("Invalid buff ID")
     end
     unitType = unitType or currentUnitType
 
@@ -702,9 +710,9 @@ local function addBuffFromSearch(buffId, unitType)
             settingsControls.updateVisibleItems()
         end
 
-        return true, "Added to " .. tostring(unitType)
+        return true, L("Added to %s", tostring(unitType))
     else
-        return false, "Already tracked (" .. tostring(unitType) .. ")"
+        return false, L("Already tracked (%s)", tostring(unitType))
     end
 end
 
@@ -712,7 +720,7 @@ end
 -- поправит вручную) и добавляет его в отслеживание текущего типа юнита.
 local function addCustomFromSpell(spellName, unitType)
     if not spellName or spellName == "" then
-        return false, "Invalid spell name"
+        return false, L("Invalid spell name")
     end
     unitType = unitType or currentUnitType
     settings = helpers.getSettings()
@@ -747,9 +755,9 @@ local function addCustomFromSpell(spellName, unitType)
         deactivateActivePreset()
         if helpers and helpers.updateSettings then helpers.updateSettings() end
         api:Emit("ADDON_CBT_BUFFS_CHANGED")
-        return true, "Added skill: " .. tostring(spellName)
+        return true, L("Added skill: %s", tostring(spellName))
     end
-    return false, "Already tracked: " .. tostring(spellName)
+    return false, L("Already tracked: %s", tostring(spellName))
 end
 
 -- Добавляет запись выбранного типа: бафф/дебафф, навык по боевому логу или
@@ -893,7 +901,7 @@ local function updateSettingsFields()
 
     -- Имя канваса в селекторе
     if canvasMenuButton then
-        canvasMenuButton:SetText("Canvas: " .. canvasName(unitSettings.selectedCanvas))
+        canvasMenuButton:SetText(L("Canvas: %s", canvasName(unitSettings.selectedCanvas)))
     end
 
     -- Update position fields
@@ -1117,8 +1125,7 @@ local function openCddDialog(buffId)
         pcall(function() typeValue.style:SetColor(0.95, 0.80, 0.25, 1) end)
         typeValue:Show(true)
         CbtWindow.Tooltip(typeValue,
-            "Entry type, fixed at creation. Delete and re-create the entry to change it. "
-                .. "Buff/Debuff has an aura, Skill is read from the combat log, Mana skill from pet mana.")
+            "Entry type, fixed at creation. Delete and re-create the entry to change it. Buff/Debuff has an aura, Skill is read from the combat log, Mana skill from pet mana.")
 
         local typeNote = helpers.createLabel('cbtCddTypeNote', wnd,
             '(set at creation, cannot be changed)', 240, 70, 11)
@@ -1264,7 +1271,7 @@ local function openCddDialog(buffId)
     local setEffVisible
 
     local function showEffError(message)
-        errorLabel:SetText("Error: " .. message)
+        errorLabel:SetText(L("Error: %s", L(message)))
         errorLabel:Show(true)
     end
 
@@ -1391,35 +1398,35 @@ local function openCddDialog(buffId)
         end
 
         if not preview then
-            refBase:SetText("Base CD: -")
-            refFlat:SetText("Flat total: -")
-            refPct:SetText("Percent total: -")
-            refEff:SetText("Effective now: -")
-            refPot:SetText("Potential: -")
-            if smartStatus then smartStatus:SetText("Not learned") end
+            refBase:SetText(L("Base CD: -"))
+            refFlat:SetText(L("Flat total: -"))
+            refPct:SetText(L("Percent total: -"))
+            refEff:SetText(L("Effective now: -"))
+            refPot:SetText(L("Potential: -"))
+            if smartStatus then smartStatus:SetText(L("Not learned")) end
             return
         end
 
-        refBase:SetText("Base CD: " .. num(preview.base) .. " s")
+        refBase:SetText(L("Base CD: %s s", num(preview.base)))
         local flatText = delta(preview.flat, " s")
         if #preview.flatList > 0 then
             flatText = flatText .. " (" .. sources(preview.flatList) .. ")"
         end
-        refFlat:SetText("Flat total: " .. flatText)
+        refFlat:SetText(L("Flat total: %s", flatText))
         local pctText = delta(preview.pct, "%")
         if #preview.pctList > 0 then
             pctText = pctText .. " (" .. sources(preview.pctList) .. ")"
         end
-        refPct:SetText("Percent total: " .. pctText)
-        local effectiveText = num(preview.effective) .. " s"
-        if not preview.hasTarget then effectiveText = effectiveText .. " (no target)" end
-        refEff:SetText("Effective now: " .. effectiveText)
-        refPot:SetText("Potential: " .. num(preview.potential) .. " s")
+        refPct:SetText(L("Percent total: %s", pctText))
+        local effectiveText = L("%s s", num(preview.effective))
+        if not preview.hasTarget then effectiveText = effectiveText .. L(" (no target)") end
+        refEff:SetText(L("Effective now: %s", effectiveText))
+        refPot:SetText(L("Potential: %s s", num(preview.potential)))
         if smartStatus then
             if preview.learned then
-                smartStatus:SetText("Learned for this target (+" .. num(preview.smartPct) .. "%)")
+                smartStatus:SetText(L("Learned for this target (+%s%%)", num(preview.smartPct)))
             else
-                smartStatus:SetText("Not learned")
+                smartStatus:SetText(L("Not learned"))
             end
         end
     end
@@ -1594,7 +1601,7 @@ local function openCddDialog(buffId)
             CbtWindow.TooltipDynamic(effRowSource[i], function()
                 local mod = row.modRef
                 if not mod then return nil end
-                return "Modifier source: " .. tostring(EffectiveCD.sourceLabel(mod, i)) .. "."
+                return L("Modifier source: %s.", tostring(EffectiveCD.sourceLabel(mod, i)))
             end)
             effRowType[i] = helpers.createButton('cbtCddEffType' .. i, row, 'Flat', 244, 1)
             effRowType[i]:SetExtent(68, 20)
@@ -1603,8 +1610,9 @@ local function openCddDialog(buffId)
                 local mod = row.modRef
                 if not mod then return nil end
                 local kind = mod.kind
-                local text = (kind == "percent" and "Percent") or (kind == "reset" and "Reset") or "Flat"
-                return "Type: " .. text .. ". Click to cycle Flat -> Percent -> Reset."
+                local text = (kind == "percent" and L("Percent"))
+                    or (kind == "reset" and L("Reset")) or L("Flat")
+                return L("Type: %s. Click to cycle Flat -> Percent -> Reset.", text)
             end)
             effRowValue[i] = helpers.createEdit('cbtCddEffValue' .. i, row, '', 318, 1)
             effRowValue[i]:SetExtent(54, 18)
@@ -1613,9 +1621,9 @@ local function openCddDialog(buffId)
                 local mod = row.modRef
                 if not mod then return nil end
                 if mod.kind == "percent" then
-                    return "Value: " .. tostring(tonumber(mod.value) or 0) .. " %."
+                    return L("Value: %s %%.", tostring(tonumber(mod.value) or 0))
                 end
-                return "Value: " .. tostring(tonumber(mod.value) or 0) .. " s."
+                return L("Value: %s s.", tostring(tonumber(mod.value) or 0))
             end)
             effRowCond[i] = helpers.createButton('cbtCddEffCond' .. i, row, 'On target', 378, 1)
             effRowCond[i]:SetExtent(92, 20)
@@ -1623,8 +1631,8 @@ local function openCddDialog(buffId)
             CbtWindow.TooltipDynamic(effRowCond[i], function()
                 local mod = row.modRef
                 if not mod then return nil end
-                local cond = (mod.condition == "always") and "Always" or "On target"
-                return "Condition: " .. cond .. " (click to toggle). On target counts only while the aura is up."
+                local cond = (mod.condition == "always") and L("Always") or L("On target")
+                return L("Condition: %s (click to toggle). On target counts only while the aura is up.", cond)
             end)
             local removeBtn = helpers.createButton('cbtCddEffDel' .. i, row, 'Remove', 476, 1)
             removeBtn:SetExtent(56, 20)
@@ -1698,8 +1706,7 @@ local function openCddDialog(buffId)
         CbtWindow.Tooltip(refPct,
             "Percent modifiers counted right now plus the learned Smart %, added together. Applied second.")
         CbtWindow.Tooltip(refEff,
-            "Effective cooldown right now: max(0, base - flat) x (1 - percent / 100). "
-                .. "'(no target)' means no aura snapshot, so only Always modifiers count.")
+            "Effective cooldown right now: max(0, base - flat) x (1 - percent / 100). '(no target)' means no aura snapshot, so only Always modifiers count.")
         CbtWindow.Tooltip(refPot,
             "Potential: every modifier counted with stacks 1 and auras assumed up - the best case for this build.")
 
@@ -1786,7 +1793,7 @@ local function openCddDialog(buffId)
                     local edit = effRowValue[i]
                     local value = tonumber(trimText(edit and edit:GetText() or tostring(mod.value or "")))
                     if value == nil or value < 0 then
-                        return "modifier " .. tostring(i) .. ": value must be a number >= 0"
+                        return L("modifier %s: value must be a number >= 0", tostring(i))
                     end
                 end
             end
@@ -1805,7 +1812,7 @@ local function openCddDialog(buffId)
     saveBtn:SetHandler("OnClick", function()
         local err = validate(editKind)
         if err then
-            errorLabel:SetText("Error: " .. err)
+            errorLabel:SetText(L("Error: %s", L(err)))
             errorLabel:Show(true)
             return
         end
@@ -1901,12 +1908,12 @@ local function openCddDialog(buffId)
                 end
             end
 
-            CbtLog.info(string.format("entry %s: type=%s CD=%s D=%s%s",
+            CbtLog.info("entry %s: type=%s CD=%s D=%s%s",
                 CbtLog.hl(cb.id), tostring(editKind), CbtLog.hl(cd), CbtLog.hl(toa),
-                (prevKind ~= editKind) and (" (was " .. tostring(prevKind) .. ")") or ""))
+                (prevKind ~= editKind) and L(" (was %s)", tostring(prevKind)) or "")
         else
             s.buffOverrides[key] = { cooldown = cd, timeOfAction = toa }
-            CbtLog.info(string.format("CD/D %s: CD=%s D=%s", CbtLog.hl(key), CbtLog.hl(cd), CbtLog.hl(toa)))
+            CbtLog.info("CD/D %s: CD=%s D=%s", CbtLog.hl(key), CbtLog.hl(cd), CbtLog.hl(toa))
         end
 
         api.SaveSettings()
@@ -2135,7 +2142,7 @@ local function openDeleteCanvasDialog()
     if not unit or not unit.canvases then return end
     if #unit.canvases <= 1 then
         if settingsControls.customBuffErrorPanel and settingsControls.addCustomBuffError then
-            settingsControls.addCustomBuffError:SetText("Error: the last canvas cannot be deleted")
+            settingsControls.addCustomBuffError:SetText(L("Error: the last canvas cannot be deleted"))
             settingsControls.customBuffErrorPanel:Show(true)
         end
         return
@@ -2156,13 +2163,13 @@ local function openDeleteCanvasDialog()
     deleteWindow = w
 
     local line1 = helpers.createLabel("cbtCanvasDeleteLine1", w,
-        'Delete canvas "' .. tostring(name) .. '" ?', 15, 46, 15)
+        L('Delete canvas "%s"?', tostring(name)), 15, 46, 15)
     line1:SetWidth(385)
     pcall(function() line1.style:SetColor(0.95, 0.55, 0.45, 1) end)
     line1:Show(true)
 
     local line2 = helpers.createLabel("cbtCanvasDeleteLine2", w,
-        tostring(count) .. ' tracked entries will be removed from this unit.', 15, 70, 13)
+        L("%s tracked entries will be removed from this unit.", tostring(count)), 15, 70, 13)
     line2:SetWidth(385)
     line2.style:SetColor(0.78, 0.80, 0.85, 1)
     line2:Show(true)
@@ -2185,6 +2192,93 @@ local function openDeleteCanvasDialog()
     w:Show(true)
 end
 
+-- =========================================================================
+-- Язык интерфейса (1.30.0)
+-- Кнопка «Language: <текущий>» в шапке окна открывает попап с пятью языками.
+-- Выбор сохраняется сразу и пересобирает окно: подписи, кнопки и подсказки
+-- строятся заново на новом языке, тултипы читают L() в момент наведения,
+-- а чат переводится в CbtLog. Перезагрузка аддона не нужна.
+-- =========================================================================
+local languagePopup = nil
+local languagePopupSeq = 0
+
+local function closeLanguagePopup()
+    if languagePopup then
+        pcall(function() CbtWindow.Destroy(languagePopup) end)
+        languagePopup = nil
+    end
+end
+
+local function applyLanguageChoice(code)
+    if not code then return end
+    settings = helpers.getSettings()
+    local applied = locale.persist(code, settings)
+    pcall(function() api.SaveSettings() end)
+    -- Строка печатается уже на новом языке: L() читает locale в момент вызова.
+    CbtLog.info("Language changed to %s", locale.native(applied))
+    closeLanguagePopup()
+    if rebuildSettingsForLanguage then
+        pcall(rebuildSettingsForLanguage)
+    end
+end
+
+local function openLanguagePopup()
+    if languagePopup then
+        closeLanguagePopup()
+        return
+    end
+    languagePopupSeq = languagePopupSeq + 1
+    local seq = languagePopupSeq
+    local langs = locale.LANGS
+    if type(langs) ~= "table" or #langs == 0 then langs = { { code = "en", native = "English" } } end
+    local w = CbtWindow.Create("cbtLanguagePopup" .. tostring(seq), "Language", 250,
+        78 + #langs * 26, closeLanguagePopup)
+    if not w then return end
+    languagePopup = w
+
+    local hint = helpers.createLabel("cbtLanguageHint" .. tostring(seq), w, "Select language:", 15, 42, 13)
+    hint:SetWidth(215)
+    hint.style:SetColor(0.72, 0.74, 0.80, 1)
+    hint:Show(true)
+
+    local active = locale.current()
+    for i, lang in ipairs(langs) do
+        -- Родное название языка не переводим: в словаре его нет, L() вернёт как есть.
+        local b = helpers.createButton("cbtLanguageOption_" .. tostring(lang.code) .. "_" .. tostring(seq),
+            w, lang.native, 15, 66 + (i - 1) * 26)
+        b:SetExtent(220, 22)
+        b:Show(true)
+        CbtWindow.Tooltip(b,
+            "Switch the interface, every hover tooltip and all chat messages to this language.")
+        if lang.code == active then
+            pcall(function() b.textLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
+        end
+        b:SetHandler("OnClick", function() applyLanguageChoice(lang.code) end)
+    end
+
+    w:Show(true)
+end
+
+-- Кнопка в шапке окна: «Language: English» (родное имя текущего языка).
+local function buildLanguageSelector()
+    if not settingsWindow or not settingsWindow.header then return end
+    local button = helpers.createButton('languageButton', settingsWindow,
+        L("Language: %s", locale.native(locale.current())), 0, 0)
+    if not button then return end
+    button:SetExtent(150, 22)
+    pcall(function() button.textLabel.style:SetFontSize(12) end)
+    button:RemoveAllAnchors()
+    -- Справа от заголовка, левее крестика: шапка остаётся рабочей ручкой drag.
+    button:AddAnchor("RIGHT", settingsWindow.header, -40, 0)
+    button:Show(true)
+    button:SetHandler("OnClick", function() openLanguagePopup() end)
+    CbtWindow.Tooltip(button,
+        "Interface language: the whole UI, every hover tooltip and all chat messages switch at once. The settings window rebuilds; no /reload needed.")
+    settingsControls.languageButton = button
+    settingsControls.closeLanguagePopup = closeLanguagePopup
+    return button
+end
+
 -- Строка выбора канваса: [Canvas: Main] [Add] [Rename] [Delete]
 local function buildCanvasSelector()
     -- 1.24.0: ряд канваса стоит на одном уровне с кнопками Unit (y=44), справа
@@ -2196,13 +2290,13 @@ local function buildCanvasSelector()
     CbtWindow.Tooltip(label, "Canvas: one independent icon panel. A unit can own several canvases.")
 
     canvasMenuButton = helpers.createButton('canvasMenuButton', settingsWindow,
-        'Canvas: ' .. canvasName(selectedCanvasIndex()), 394, 44)
+        L("Canvas: %s", canvasName(selectedCanvasIndex())), 394, 44)
     canvasMenuButton:SetExtent(150, 26)
     pcall(function() canvasMenuButton.textLabel.style:SetFontSize(12) end)
     canvasMenuButton:Show(true)
     canvasMenuButton:SetHandler("OnClick", function() openCanvasListPopup() end)
     CbtWindow.TooltipDynamic(canvasMenuButton, function(self)
-        return "Switch the canvas edited below. Shown: " .. buttonText(self) .. "."
+        return L("Switch the canvas edited below. Shown: %s.", buttonText(self))
     end)
     settingsControls.canvasMenuButton = canvasMenuButton
 
@@ -2465,7 +2559,7 @@ local function buildTrackedBuffsSection()
             buffRow:Show(true)
             CbtWindow.TooltipDynamic(buffRow, function()
                 local name = BuffList.GetBuffName(buffId) or ("Buff #" .. tostring(buffId))
-                return string.format("%s (id %s) on canvas %s.",
+                return L("%s (id %s) on canvas %s.",
                     name, tostring(buffId), canvasName(canvasIdx))
             end)
 
@@ -2559,8 +2653,8 @@ local function buildTrackedBuffsSection()
                 CbtWindow.TooltipDynamic(mirButton, function()
                     local on = settings.target and settings.target.mirror
                         and settings.target.mirror[mirrorKey]
-                    return "Mirror this player aura on the Target panel (buff/debuff only). Current: "
-                        .. (on and "ON" or "OFF") .. "."
+                    return L("Mirror this player aura on the Target panel (buff/debuff only). Current: %s.",
+                        on and L("ON") or L("OFF"))
                 end)
                 if mirrorOn then
                     pcall(function() mirButton.textLabel.style:SetColor(0.55, 0.95, 0.55, 1) end)
@@ -2656,7 +2750,7 @@ local function buildTrackedBuffsSection()
     buffPageIndicator.style:SetAlign(ALIGN.CENTER)
     buffPageIndicator:Show(true)
     CbtWindow.TooltipDynamic(buffPageIndicator, function(self)
-        return "Page " .. tostring(self:GetText() or "1/1") .. " - 9 entries per page."
+        return L("Page %s - 9 entries per page.", tostring(self:GetText() or "1/1"))
     end)
     settingsControls.buffPageIndicator = buffPageIndicator
 
@@ -2745,7 +2839,7 @@ local function buildNewBuffInput(buffsListContainer)
         end)
         CbtWindow.TooltipDynamic(row, function(self)
             if self.acValue ~= nil then
-                return "Use this custom entry: " .. tostring(self.acValue) .. "."
+                return L("Use this custom entry: %s.", tostring(self.acValue))
             end
             return "Use this custom entry."
         end)
@@ -2936,17 +3030,17 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffRow:Show(true)
             CbtWindow.TooltipDynamic(buffRow, function()
                 local kind = helpers.entryKind(buffData)
-                local kindText = (kind == "skill" and "Skill")
-                    or (kind == "mana" and "Mana skill") or "Buff/Debuff"
+                local kindText = (kind == "skill" and L("Skill"))
+                    or (kind == "mana" and L("Mana skill")) or L("Buff/Debuff")
                 local parts = { kindText }
-                parts[#parts + 1] = "CD " .. tostring(buffData.cooldown or 0) .. " s"
+                parts[#parts + 1] = L("CD %s s", tostring(buffData.cooldown or 0))
                 if kind == "buff" then
-                    parts[#parts + 1] = "D " .. tostring(buffData.timeOfAction or 0) .. " s"
+                    parts[#parts + 1] = L("D %s s", tostring(buffData.timeOfAction or 0))
                 elseif kind == "skill" then
-                    parts[#parts + 1] = "Spell " .. tostring(buffData.spellName or "-")
+                    parts[#parts + 1] = L("Spell %s", tostring(buffData.spellName or "-"))
                 else
-                    parts[#parts + 1] = "Mana " .. tostring(buffData.manaCost or 0)
-                    parts[#parts + 1] = "Mount " .. tostring(buffData.mountName or "-")
+                    parts[#parts + 1] = L("Mana %s", tostring(buffData.manaCost or 0))
+                    parts[#parts + 1] = L("Mount %s", tostring(buffData.mountName or "-"))
                 end
                 return table.concat(parts, " | ")
             end)
@@ -2979,7 +3073,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                 pcall(function() buffIdLabel.style:SetFontSize(13) end)
                 buffIdLabel:Show(true)
                 CbtWindow.TooltipDynamic(buffIdLabel, function()
-                    return "Entry ID (tracking key): " .. tostring(buffData.id) .. "."
+                    return L("Entry ID (tracking key): %s.", tostring(buffData.id))
                 end)
             end
 
@@ -2987,7 +3081,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffNameLabel:SetExtent(132, 20)
             buffNameLabel:Show(true)
             CbtWindow.TooltipDynamic(buffNameLabel, function()
-                return "Name shown on the canvas: " .. tostring(displayName) .. "."
+                return L("Name shown on the canvas: %s.", tostring(displayName))
             end)
 
             -- Cooldown
@@ -2995,7 +3089,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffCooldownLabel:SetExtent(34, 20)
             buffCooldownLabel:Show(true)
             CbtWindow.TooltipDynamic(buffCooldownLabel, function()
-                return "Cooldown: " .. tostring(buffData.cooldown or 0) .. " s."
+                return L("Cooldown: %s s.", tostring(buffData.cooldown or 0))
             end)
 
             -- timeOfAction
@@ -3003,7 +3097,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
             buffTimeOfActionLabel:SetExtent(34, 20)
             buffTimeOfActionLabel:Show(true)
             CbtWindow.TooltipDynamic(buffTimeOfActionLabel, function()
-                return "Duration: " .. tostring(buffData.timeOfAction or 0) .. " s."
+                return L("Duration: %s s.", tostring(buffData.timeOfAction or 0))
             end)
 
             -- Remove button
@@ -3078,7 +3172,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
                     helpers.updateSettings()
                 end
                 api:Emit("ADDON_CBT_BUFFS_CHANGED")
-                CbtLog.info("custom entry removed: " .. CbtLog.hl(removedId))
+                CbtLog.info("custom entry removed: %s", CbtLog.hl(removedId))
             end)
 
             table.insert(customBuffsList, buffRow)
@@ -3109,7 +3203,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
     customPageIndicator.style:SetAlign(ALIGN.CENTER)
     customPageIndicator:Show(true)
     CbtWindow.TooltipDynamic(customPageIndicator, function(self)
-        return "Page " .. tostring(self:GetText() or "1/1") .. " - 9 entries per page."
+        return L("Page %s - 9 entries per page.", tostring(self:GetText() or "1/1"))
     end)
     settingsControls.customPageIndicator = customPageIndicator
 
@@ -3194,8 +3288,8 @@ local function buildCustomBuffInputs(customBuffsListContainer)
         debugBuffButton:AddAnchor("TOPLEFT", settingsWindow, 1060, 44)
         debugBuffButton:SetExtent(110, 24)
         CbtWindow.TooltipDynamic(debugBuffButton, function(self)
-            return "Debug: print buff IDs, combat-log details and the buff journal to chat; shows Record. Current: "
-                .. buttonText(self) .. "."
+            return L("Debug: print buff IDs, combat-log details and the buff journal to chat; shows Record. Current: %s.",
+                buttonText(self))
         end)
     end
 
@@ -3619,8 +3713,8 @@ local function buildIconSection(customBuffErrorPanel)
     end)
     CbtWindow.TooltipDynamic(showLabelButton, function(self)
         local cfg = selectedCanvasCfg() or {}
-        return "Show the entry name under each icon of this canvas. Current: "
-            .. (cfg.showLabel and "ON" or "OFF") .. "."
+        return L("Show the entry name under each icon of this canvas. Current: %s.",
+            cfg.showLabel and L("ON") or L("OFF"))
     end)
     settingsControls.showLabel = showLabelButton
     return showLabelButton, iconSpacingLabel
@@ -3703,8 +3797,8 @@ local function buildPositionSection(showLabelButton, iconSpacingLabel)
         end)
     end
     CbtWindow.TooltipDynamic(lockButton, function(self)
-        return "Lock: ON disables dragging this panel with the mouse. Current: "
-            .. buttonText(self) .. "."
+        return L("Lock: ON disables dragging this panel with the mouse. Current: %s.",
+            buttonText(self))
     end)
     settingsControls.lockButton = lockButton
     return lockButton
@@ -4105,6 +4199,14 @@ end
 local function initSettingsPage()
     settings = helpers.getSettings()
 
+    -- 1.30.0: окно пересобирается после смены языка, поэтому прошлые ссылки на
+    -- виджеты и страницы списков сбрасываются — старые виджеты уже освобождены.
+    settingsControls = {}
+    trackedBuffsList = {}
+    customBuffsList = {}
+    buffListPage = 1
+    customBuffPage = 1
+
     -- Кастомное окно (как у BetterBars): пустое окно + тёмный ninepart-фон +
     -- собственная шапка с заголовком, крестиком и перетаскиванием.
     settingsWindow = api.Interface:CreateEmptyWindow("CooldawnBuffTrackerSettings")
@@ -4139,7 +4241,7 @@ local function initSettingsPage()
     titleLabel.style:SetFontSize(18)
     titleLabel.style:SetAlign(ALIGN.LEFT)
     titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
-    titleLabel:SetText("Cooldown Buff Tracker")
+    titleLabel:SetText(L("Cooldown Buff Tracker"))
 
     local closeBtn = header:CreateChildWidget("button", "cbtSettingsClose", 0, true)
     closeBtn:SetExtent(20, 20)
@@ -4166,6 +4268,7 @@ local function initSettingsPage()
     settingsWindow.header = header
     CbtWindow.Tooltip(header, "Drag to move the window.")
     CbtWindow.Tooltip(closeBtn, "Close the settings window (Esc).")
+    buildLanguageSelector()
 
     -- Тёмная подложка контента: дочерний виджет создан ДО секций, поэтому лежит
     -- над фоном окна и под остальными элементами.
@@ -4353,6 +4456,31 @@ local function openSettingsWindow()
         updateSettingsFields()
 
         settingsWindow:Show(true)
+        helpers.setSettingsPageOpened(true)
+    end
+end
+
+-- Смена языка: закрываем дочерние диалоги и строим окно настроек заново.
+-- Назначено здесь, потому что ниже видны Unload/initSettingsPage/openSettingsWindow.
+rebuildSettingsForLanguage = function()
+    pcall(closeLanguagePopup)
+    -- Окно поддержки живёт в своём модуле: закрываем, чтобы оно не осталось
+    -- с подписями старого языка.
+    pcall(function() pixelViewer.closePixelWindow() end)
+    pcall(Unload)
+    settingsWindow = nil
+    helpers.setSettingsPageOpened(false)
+    local ok, err = pcall(initSettingsPage)
+    if not ok then
+        CbtLog.error("settings window rebuild failed: %s", tostring(err))
+        return
+    end
+    -- Показываем окно явно: openSettingsWindow() считает уже существующее окно
+    -- открытым и закрыл бы только что собранное.
+    if settingsWindow then
+        pcall(updateSettingsFields)
+        pcall(updateCustomBuffsList)
+        pcall(function() settingsWindow:Show(true) end)
         helpers.setSettingsPageOpened(true)
     end
 end

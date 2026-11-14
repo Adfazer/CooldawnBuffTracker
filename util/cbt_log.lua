@@ -1,6 +1,10 @@
 -- Центральный логгер чата: каждое сообщение начинается с цветного [CBT],
 -- уровни красятся разными цветами. Только ASCII и цветовые коды |cAARRGGBB|r.
+-- 1.30.0: текст переводится централизованно (locale.L), а аргументы
+-- подставляются string.format — в шаблонах пишем "%s", значения передаём
+-- отдельными аргументами.
 local api = require("api")
+local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
 
@@ -53,14 +57,23 @@ local function emit(level, message)
     end
 end
 
-function M.info(message) emit("info", message) end
-function M.success(message) emit("success", message) end
-function M.warn(message) emit("warn", message) end
-function M.error(message) emit("error", message) end
+-- Перевод шаблона + подстановка аргументов: текст берётся из locale.L,
+-- поэтому строка без перевода печатается как есть (английский оригинал).
+local function format(message, ...)
+    if type(message) ~= "string" then return tostring(message) end
+    local args = { ... }
+    if #args == 0 then return locale.L(message) end
+    return locale.L(message, unpack(args))
+end
 
-function M.debug(message)
+function M.info(message, ...) emit("info", format(message, ...)) end
+function M.success(message, ...) emit("success", format(message, ...)) end
+function M.warn(message, ...) emit("warn", format(message, ...)) end
+function M.error(message, ...) emit("error", format(message, ...)) end
+
+function M.debug(message, ...)
     if not debugOn then return end
-    emit("debug", message)
+    emit("debug", format(message, ...))
 end
 
 return M

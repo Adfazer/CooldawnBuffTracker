@@ -5,6 +5,8 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
+local locale = require('CooldawnBuffTracker/locale')
+local L = locale.L
 
 local presetWindow = nil
 local presetControls = {}
@@ -34,7 +36,9 @@ end
 -- Показать / скрыть панель ошибок
 showError = function(message)
     if presetControls.errorLabel then
-        presetControls.errorLabel:SetText(tostring(message or ""))
+        -- Сообщения приходят английскими литералами (или уже переведёнными из
+        -- helpers): L оставляет неизвестную строку как есть.
+        presetControls.errorLabel:SetText(L(tostring(message or "")))
     end
     if presetControls.errorPanel then
         presetControls.errorPanel:Show(true)
@@ -52,10 +56,10 @@ updateActivePresetLabel = function()
     if not presetControls.activeLabel then return end
     local active = helpers.getActivePresetName()
     if active and active ~= "" then
-        presetControls.activeLabel:SetText("Active preset: " .. active)
+        presetControls.activeLabel:SetText(L("Active preset: %s", active))
         presetControls.activeLabel.style:SetColor(0.2, 1, 0.2, 1)
     else
-        presetControls.activeLabel:SetText("Active preset: None")
+        presetControls.activeLabel:SetText(L("Active preset: None"))
         presetControls.activeLabel.style:SetColor(0.87, 0.69, 0, 1)
     end
 end
@@ -73,7 +77,7 @@ local function onSaveClicked()
 
     -- Пресет с таким именем уже существует
     if helpers.getPreset(name) then
-        showError("Preset already exists: " .. name)
+        showError(L("Preset already exists: %s", name))
         return
     end
 
@@ -177,8 +181,8 @@ updatePresetList = function()
         row:AddAnchor("TOPLEFT", container, 10, yOffset)
         row:Show(true)
         CbtWindow.TooltipDynamic(row, function()
-            return "Preset " .. tostring(presetName) .. (isActive and " (active)" or "")
-                .. ": Load applies its layout to all units, Delete removes it."
+            return L("Preset %s%s: Load applies its layout to all units, Delete removes it.",
+                tostring(presetName), isActive and L(" (active)") or "")
         end)
 
         -- Имя пресета (со звёздочкой, если активен)
@@ -192,8 +196,11 @@ updatePresetList = function()
         loadButton:SetExtent(90, 20)
         loadButton:Show(true)
         CbtWindow.TooltipDynamic(loadButton, function()
-            return isActive and ("Re-apply the active preset " .. tostring(presetName) .. ".")
-                or ("Load preset " .. tostring(presetName) .. ": position, size, colours and tracked entries.")
+            if isActive then
+                return L("Re-apply the active preset %s.", tostring(presetName))
+            end
+            return L("Load preset %s: position, size, colours and tracked entries.",
+                tostring(presetName))
         end)
         loadButton:SetHandler("OnClick", function()
             onLoadClicked(presetName)
@@ -204,7 +211,7 @@ updatePresetList = function()
         deleteButton:SetExtent(90, 20)
         deleteButton:Show(true)
         CbtWindow.TooltipDynamic(deleteButton, function()
-            return "Delete preset " .. tostring(presetName) .. ". Cannot be undone."
+            return L("Delete preset %s. Cannot be undone.", tostring(presetName))
         end)
         deleteButton:SetHandler("OnClick", function()
             onDeleteClicked(presetName)
@@ -301,7 +308,7 @@ createPresetWindowUI = function()
     pageIndicator.style:SetAlign(ALIGN.CENTER)
     pageIndicator:Show(true)
     CbtWindow.TooltipDynamic(pageIndicator, function(self)
-        return "Page " .. tostring(self:GetText() or "1/1") .. " - 7 presets per page."
+        return L("Page %s - 7 presets per page.", tostring(self:GetText() or "1/1"))
     end)
     presetControls.pageIndicator = pageIndicator
 

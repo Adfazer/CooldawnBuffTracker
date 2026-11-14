@@ -11,6 +11,7 @@
 -- appears on the target (handled by main.lua).
 local BuffList = require("CooldawnBuffTracker/buff_helper")
 local helpers = require("CooldawnBuffTracker/helpers")
+local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
 
@@ -107,7 +108,7 @@ function M.sourceLabel(mod, index)
     end
     if name then return name end
     if id then return tostring(id) end
-    return "Unconditional " .. tostring(index or 1)
+    return locale.L("Unconditional %s", tostring(index or 1))
 end
 
 local function applyFormula(base, flat, pct)
@@ -184,7 +185,7 @@ function M.evaluate(entry, snapshot, opts)
 
     if learned then
         pct = pct + smartPct
-        pctList[#pctList + 1] = { label = "Smart", value = smartPct, stacks = 1, smart = true }
+        pctList[#pctList + 1] = { label = locale.L("Smart"), value = smartPct, stacks = 1, smart = true }
     end
     if potentialLearned then
         potPct = potPct + smartPct

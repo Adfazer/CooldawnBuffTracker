@@ -83,6 +83,9 @@ end
 
 local defaultSettings = {
     enabled = true,
+    -- 1.30.0: язык интерфейса (en/ru/zh/tr/ko). Старые конфиги без поля
+    -- мигрируют в en в migrate(); неверный код отсекает locale.normalize().
+    language = "en",
     buffOverrides = {},
     playerpet = {
         enabled = true,
@@ -331,6 +334,12 @@ function defaultSettings.migrate(settings)
     -- Верхнеуровневый enabled нужен списку аддонов (кнопка Options в ESC-меню)
     if settings.enabled == nil then
         settings.enabled = true
+    end
+
+    -- 1.30.0: язык интерфейса. У конфигов 1.29 и раньше поля нет — ставим en,
+    -- чтобы существующие настройки не меняли поведение аддона.
+    if type(settings.language) ~= "string" or settings.language == "" then
+        settings.language = "en"
     end
 
     -- Пользовательские CD/D для обычных (не кастомных) баффов

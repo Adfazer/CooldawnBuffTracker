@@ -29,10 +29,10 @@ local function PrintBuffId(buffId, unitId, event)
     local formattedBuffId = helpers.formatBuffId(buffId)
     
     -- Формируем и выводим сообщение в чат (только при Debug: ON)
-    CbtLog.debug(string.format("%s - buff ID: %s, unit: %s",
-                               event or "BUFF_EVENT",
-                               CbtLog.hl(formattedBuffId),
-                               CbtLog.hl(unitId or "unknown")))
+    CbtLog.debug("%s - buff ID: %s, unit: %s",
+                 event or "BUFF_EVENT",
+                 CbtLog.hl(formattedBuffId),
+                 CbtLog.hl(unitId or "unknown"))
 end
 
 -- Обработчик события наложения баффа на игрока
@@ -313,7 +313,7 @@ local function PrintAllActiveBuffs(unitId)
     local buffCount = api.Unit:UnitBuffCount(unitId) or 0
     local buffList = {}
     
-    CbtLog.debug(string.format("Active buffs for %s (%d):", CbtLog.hl(unitId), buffCount))
+    CbtLog.debug("Active buffs for %s (%d):", CbtLog.hl(unitId), buffCount)
     
     for i = 1, buffCount do
         local buff = api.Unit:UnitBuff(unitId, i)
@@ -338,7 +338,7 @@ local function PrintAllActiveBuffs(unitId)
                 
                 -- Выводим информацию о баффе
                 local formattedBuffId = helpers.formatBuffId(buffId)
-                CbtLog.debug(string.format("%d. buff ID: %s", i, CbtLog.hl(formattedBuffId)))
+                CbtLog.debug("%d. buff ID: %s", i, CbtLog.hl(formattedBuffId))
             end
         end
     end
@@ -347,7 +347,7 @@ local function PrintAllActiveBuffs(unitId)
     if unitId == "player" or unitId == "target" then
         local debuffCount = api.Unit:UnitDeBuffCount(unitId) or 0
         
-        CbtLog.debug(string.format("Active debuffs for %s (%d):", CbtLog.hl(unitId), debuffCount))
+        CbtLog.debug("Active debuffs for %s (%d):", CbtLog.hl(unitId), debuffCount)
         
         for i = 1, debuffCount do
             local debuff = api.Unit:UnitDeBuff(unitId, i)
@@ -372,7 +372,7 @@ local function PrintAllActiveBuffs(unitId)
                     
                     -- Выводим информацию о дебаффе
                     local formattedDebuffId = helpers.formatBuffId(debuffId)
-                    CbtLog.debug(string.format("%d. debuff ID: %s", i, CbtLog.hl(formattedDebuffId)))
+                    CbtLog.debug("%d. debuff ID: %s", i, CbtLog.hl(formattedDebuffId))
                 end
             end
         end

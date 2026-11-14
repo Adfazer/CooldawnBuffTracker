@@ -4,6 +4,8 @@ local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
 local helpers = require("CooldawnBuffTracker/helpers")
 local defaultSettings = require("CooldawnBuffTracker/default_settings")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
+local locale = require("CooldawnBuffTracker/locale")
+local L = locale.L
 
 -- Переменная для хранения ссылки на окно
 local importExportWindow = nil
@@ -324,7 +326,7 @@ local function exportConfiguration()
     end)
 
     if not success then
-        CbtLog.error("Failed to encode configuration: " .. CbtLog.hl(result))
+        CbtLog.error("Failed to encode configuration: %s", CbtLog.hl(result))
         return nil
     end
 
@@ -336,7 +338,7 @@ local function importConfiguration(configString, errorMsgLabel)
     -- Валидация входных данных
     if not configString or configString == "" then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Import field is empty - paste a configuration into the lower field first")
+            errorMsgLabel:SetText(L("Import field is empty - paste a configuration into the lower field first"))
         end
         CbtLog.warn("Import: the Import field is empty - paste a configuration into the lower field first")
         return false
@@ -349,16 +351,16 @@ local function importConfiguration(configString, errorMsgLabel)
     
     if not success or not config then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: Invalid JSON format")
+            errorMsgLabel:SetText(L("Error: Invalid JSON format"))
         end
-        CbtLog.error("Import failed: invalid JSON format - " .. CbtLog.hl(config))
+        CbtLog.error("Import failed: invalid JSON format - %s", CbtLog.hl(config))
         return false
     end
     
     -- Валидация структуры
     if type(config) ~= "table" then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: Configuration must be a table")
+            errorMsgLabel:SetText(L("Error: Configuration must be a table"))
         end
         CbtLog.error("Import failed: configuration must be a table")
         return false
@@ -366,7 +368,7 @@ local function importConfiguration(configString, errorMsgLabel)
     
     if config.customBuffs == nil or config.trackedBuffs == nil then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: Missing required fields (customBuffs, trackedBuffs)")
+            errorMsgLabel:SetText(L("Error: Missing required fields (customBuffs, trackedBuffs)"))
         end
         CbtLog.error("Import failed: missing required fields")
         return false
@@ -374,7 +376,7 @@ local function importConfiguration(configString, errorMsgLabel)
     
     if type(config.customBuffs) ~= "table" or type(config.trackedBuffs) ~= "table" then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: customBuffs and trackedBuffs must be tables")
+            errorMsgLabel:SetText(L("Error: customBuffs and trackedBuffs must be tables"))
         end
         CbtLog.error("Import failed: customBuffs and trackedBuffs must be tables")
         return false
@@ -382,7 +384,7 @@ local function importConfiguration(configString, errorMsgLabel)
     
     if config.trackedBuffs.playerpet == nil or config.trackedBuffs.player == nil or config.trackedBuffs.target == nil then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: Missing trackedBuffs fields (playerpet, player, target)")
+            errorMsgLabel:SetText(L("Error: Missing trackedBuffs fields (playerpet, player, target)"))
         end
         CbtLog.error("Import failed: missing trackedBuffs fields")
         return false
@@ -392,16 +394,16 @@ local function importConfiguration(configString, errorMsgLabel)
     for i, buff in ipairs(config.customBuffs) do
         if type(buff) ~= "table" then
             if errorMsgLabel then
-                errorMsgLabel:SetText("Error: Custom buff at index " .. i .. " is not a table")
+                errorMsgLabel:SetText(L("Error: Custom buff at index %s is not a table", i))
             end
-            CbtLog.error("Import failed: custom entry at index " .. CbtLog.hl(i) .. " is not a table")
+            CbtLog.error("Import failed: custom entry at index %s is not a table", CbtLog.hl(i))
             return false
         end
         if not buff.id or not buff.name or not buff.cooldown or not buff.timeOfAction then
             if errorMsgLabel then
-                errorMsgLabel:SetText("Error: Custom buff at index " .. i .. " missing required fields")
+                errorMsgLabel:SetText(L("Error: Custom buff at index %s missing required fields", i))
             end
-            CbtLog.error("Import failed: custom entry at index " .. CbtLog.hl(i) .. " missing required fields")
+            CbtLog.error("Import failed: custom entry at index %s missing required fields", CbtLog.hl(i))
             return false
         end
     end
@@ -412,9 +414,9 @@ local function importConfiguration(configString, errorMsgLabel)
         local trackedBuffs = config.trackedBuffs[unitType]
         if type(trackedBuffs) ~= "table" then
             if errorMsgLabel then
-                errorMsgLabel:SetText("Error: trackedBuffs." .. unitType .. " is not a table")
+                errorMsgLabel:SetText(L("Error: trackedBuffs.%s is not a table", unitType))
             end
-            CbtLog.error("Import failed: trackedBuffs." .. CbtLog.hl(unitType) .. " is not a table")
+            CbtLog.error("Import failed: trackedBuffs.%s is not a table", CbtLog.hl(unitType))
             return false
         end
         for j, buffId in ipairs(trackedBuffs) do
@@ -423,9 +425,10 @@ local function importConfiguration(configString, errorMsgLabel)
             -- баффа сломается -> "неизвестный бафф".
             if not tonumber(buffId) then
                 if errorMsgLabel then
-                    errorMsgLabel:SetText("Error: trackedBuffs." .. unitType .. " contains non-number at index " .. j)
+                    errorMsgLabel:SetText(L("Error: trackedBuffs.%s contains non-number at index %s", unitType, j))
                 end
-                CbtLog.error("Import failed: trackedBuffs." .. CbtLog.hl(unitType) .. " contains a non-number at index " .. CbtLog.hl(j))
+                CbtLog.error("Import failed: trackedBuffs.%s contains a non-number at index %s",
+                    CbtLog.hl(unitType), CbtLog.hl(j))
                 return false
             end
         end
@@ -435,7 +438,7 @@ local function importConfiguration(configString, errorMsgLabel)
     local settings = api.GetSettings("CooldawnBuffTracker")
     if not settings then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Error: Failed to get current settings")
+            errorMsgLabel:SetText(L("Error: Failed to get current settings"))
         end
         CbtLog.error("Import failed: could not read the current settings")
         return false
@@ -537,17 +540,17 @@ local CONFIG_DIR = "CooldawnBuffTracker/"
 -- Экспорт текущей конфигурации в файл. Возвращает путь к файлу или nil + ошибку.
 local function exportConfigurationToFile()
     local config = buildConfigTable()
-    if not config then return nil, "Failed to read settings" end
+    if not config then return nil, L("Failed to read settings") end
 
     local filename = makeExportFileName()
     local path = CONFIG_DIR .. filename
 
     local ok, err = pcall(function() api.File:Write(path, config) end)
     if not ok then
-        CbtLog.error("Failed to write config file: " .. CbtLog.hl(err))
-        return nil, "Failed to write file"
+        CbtLog.error("Failed to write config file: %s", CbtLog.hl(err))
+        return nil, L("Failed to write file")
     end
-    CbtLog.success("Configuration saved to file: " .. CbtLog.hl(path))
+    CbtLog.success("Configuration saved to file: %s", CbtLog.hl(path))
     return path
 end
 
@@ -556,7 +559,7 @@ end
 local function importConfigurationFromFile(filename, errorMsgLabel)
     filename = filename and (filename:gsub("^%s+", ""):gsub("%s+$", "")) or ""
     if filename == "" then
-        if errorMsgLabel then errorMsgLabel:SetText("Enter the name of the config file first") end
+        if errorMsgLabel then errorMsgLabel:SetText(L("Enter the name of the config file first")) end
         CbtLog.warn("Import from file: no file name entered")
         return false
     end
@@ -573,15 +576,16 @@ local function importConfigurationFromFile(filename, errorMsgLabel)
     local ok, config = pcall(function() return api.File:Read(path) end)
     if not ok or type(config) ~= "table" then
         if errorMsgLabel then
-            errorMsgLabel:SetText("Could not read file: " .. tostring(filename) .. " (put it into the CooldawnBuffTracker folder)")
+            errorMsgLabel:SetText(L("Could not read file: %s (put it into the CooldawnBuffTracker folder)",
+                tostring(filename)))
         end
-        CbtLog.error("Import from file failed: " .. CbtLog.hl(config))
+        CbtLog.error("Import from file failed: %s", CbtLog.hl(config))
         return false
     end
 
     local okEnc, jsonStr = pcall(function() return json.encode(config) end)
     if not okEnc or type(jsonStr) ~= "string" then
-        if errorMsgLabel then errorMsgLabel:SetText("File has an unexpected format") end
+        if errorMsgLabel then errorMsgLabel:SetText(L("File has an unexpected format")) end
         return false
     end
 
@@ -616,7 +620,7 @@ local function openImportExportWindow(onImportSuccess)
     local exportLabel = api.Interface:CreateWidget('label', 'exportLabel', importExportWindow)
     exportLabel:SetExtent(560, 25)
     exportLabel:AddAnchor("TOP", importExportWindow, 0, 44)
-    exportLabel:SetText("EXPORT - save your current setup to a file:")
+    exportLabel:SetText(L("EXPORT - save your current setup to a file:"))
     exportLabel.style:SetFontSize(17)
     exportLabel.style:SetColor(0.87, 0.69, 0, 1)
     exportLabel.style:SetAlign(ALIGN.LEFT)
@@ -643,10 +647,10 @@ local function openImportExportWindow(onImportSuccess)
         local path, err = exportConfigurationToFile()
         if path then
             fileStatus.style:SetColor(0.4, 1, 0.4, 1)
-            fileStatus:SetText("Saved to: " .. path)
+            fileStatus:SetText(L("Saved to: %s", path))
         else
             fileStatus.style:SetColor(1, 0.4, 0.4, 1)
-            fileStatus:SetText("Could not save file: " .. tostring(err or "error"))
+            fileStatus:SetText(L("Could not save file: %s", tostring(err or "error")))
         end
     end)
 
@@ -654,7 +658,7 @@ local function openImportExportWindow(onImportSuccess)
     local importLabel = api.Interface:CreateWidget('label', 'importLabel', importExportWindow)
     importLabel:SetExtent(560, 25)
     importLabel:AddAnchor("TOP", fileStatus, "BOTTOM", 0, 16)
-    importLabel:SetText("IMPORT - load a config you received")
+    importLabel:SetText(L("IMPORT - load a config you received"))
     importLabel.style:SetFontSize(17)
     importLabel.style:SetColor(0.87, 0.69, 0, 1)
     importLabel.style:SetAlign(ALIGN.LEFT)
@@ -663,7 +667,7 @@ local function openImportExportWindow(onImportSuccess)
     local fileNameHint = api.Interface:CreateWidget('label', 'cbtFileNameHint', importExportWindow)
     fileNameHint:SetExtent(560, 20)
     fileNameHint:AddAnchor("TOP", importLabel, "BOTTOM", 0, 6)
-    fileNameHint:SetText("File name (file must be in the CooldawnBuffTracker folder):")
+    fileNameHint:SetText(L("File name (file must be in the CooldawnBuffTracker folder):"))
     fileNameHint.style:SetFontSize(13)
     fileNameHint.style:SetColor(0.8, 0.8, 0.8, 1)
     fileNameHint.style:SetAlign(ALIGN.LEFT)

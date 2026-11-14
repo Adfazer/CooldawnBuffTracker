@@ -4,8 +4,10 @@
 local api = require("api")
 local helpers = require("CooldawnBuffTracker/helpers")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
+local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
+local L = locale.L
 
 local win
 local editBox
@@ -76,8 +78,8 @@ local function makeRow(index)
     end)
     CbtWindow.TooltipDynamic(row, function(self)
         if not self.iconPath then return nil end
-        return tostring(self.iconName or "") .. " - " .. tostring(self.iconPath)
-            .. ". Click to apply this icon."
+        return L("%s - %s. Click to apply this icon.",
+            tostring(self.iconName or ""), tostring(self.iconPath))
     end)
     row:SetHandler("OnClick", function(self)
         if picker and self.iconPath then
@@ -112,9 +114,9 @@ local function refresh()
 
     if countLabel then
         if total == 0 then
-            countLabel:SetText("Nothing found. Press Scan dump or change the query.")
+            countLabel:SetText(L("Nothing found. Press Scan dump or change the query."))
         else
-            countLabel:SetText("Found: " .. total .. " (click a row to apply the icon)")
+            countLabel:SetText(L("Found: %s (click a row to apply the icon)", total))
         end
     end
     if pageLabel then
@@ -151,7 +153,7 @@ local function buildWindow()
         "Filter by buff or skill name (English names). An empty field lists the whole dump.")
     editBox:SetExtent(380, 24)
     if editBox.CreateGuideText then
-        pcall(function() editBox:CreateGuideText("Start typing a skill or buff name...", ALIGN.LEFT) end)
+        pcall(function() editBox:CreateGuideText(L("Start typing a skill or buff name..."), ALIGN.LEFT) end)
     end
     editBox:SetHandler("OnTextChanged", function()
         page = 1
@@ -170,7 +172,7 @@ local function buildWindow()
             scanStarter()
         end
         if countLabel then
-            countLabel:SetText("Scan started... the database will refresh when done")
+            countLabel:SetText(L("Scan started... the database will refresh when done"))
         end
     end)
 
@@ -213,7 +215,7 @@ local function buildWindow()
     pageLabel:SetExtent(80, 20)
     setLabelColor(pageLabel, COLORS.text)
     CbtWindow.TooltipDynamic(pageLabel, function(self)
-        return "Page " .. tostring(self:GetText() or "1/1") .. " - 9 icons per page."
+        return L("Page %s - 9 icons per page.", tostring(self:GetText() or "1/1"))
     end)
 
     local nextBtn = helpers.createButton("cbtIconSearchNext", win, ">", 190, 448,

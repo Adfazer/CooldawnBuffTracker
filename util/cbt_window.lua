@@ -1,6 +1,7 @@
 -- Общий кастомный шелл окон аддона (тёмная тема в стиле BetterBars):
 -- пустое окно + ninepart-фон + своя шапка (заголовок, крестик, drag) + ESC.
 local api = require("api")
+local locale = require("CooldawnBuffTracker/locale")
 
 local M = {}
 local flatSeq = 0
@@ -50,7 +51,9 @@ function M.Create(id, title, w, h, onClose)
     titleLabel.style:SetFontSize(18)
     titleLabel.style:SetAlign(ALIGN.LEFT)
     titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
-    titleLabel:SetText(title or "")
+    -- Заголовок окна переводится здесь: CbtWindow.Create(id, title, ...) зовут
+    -- с английским текстом, а показывается он на текущем языке.
+    titleLabel:SetText(locale.L(title or ""))
     -- подпись не должна перехватывать мышь: иначе за заголовок окно не тянется
     if titleLabel.Clickable then titleLabel:Clickable(false) end
     pcall(function() titleLabel:EnablePick(false) end)
@@ -189,6 +192,8 @@ function M.TooltipDynamic(widget, textFn)
     chainHandler(widget, "OnEnter", function(self)
         local ok, text = pcall(textFn, self)
         if ok and type(text) == "string" and text ~= "" then
+            -- Перевод в момент наведения: смена языка видна на следующем ховере.
+            text = locale.L(text)
             pcall(function() api.Interface:SetTooltipOnPos(text, self, 0, -22) end)
         end
     end)
