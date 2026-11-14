@@ -97,6 +97,33 @@ shows only the fields of that type.
   you return to a unit; stale cache is cleared after 5 minutes.
 - Independent position/size/display settings.
 
+### Native frame display (1.23.0)
+Three optional display modes attach the panels to the game's own unit frames.
+They are off by default; turning one off restores the floating canvas with its
+saved position. Configure them in the settings window, right column,
+**Native frame display**:
+
+- **Under MP bar (Player)** — every player canvas merges into one icon strip
+  anchored under the player frame's MP bar (HP bar when mana is hidden). Canvas 1
+  entries come first, then canvas 2 and so on; **9 icons per row**, no name
+  labels, the canvas grid settings are ignored. Extra icons wrap downwards. Icon
+  size comes from the first player canvas (clamped to 16–40).
+- **Under HP/MP bar (Target)** — the same merged strip for all target canvases,
+  anchored under the target frame's MP bar (HP for mana-less targets).
+- **Overlay around target** — each target canvas is drawn as its own compact
+  overlay at the target's screen position (the same projection
+  TrackThatPlease uses), with its own `X`, `Y`, `Size` and `Per row` fields in
+  that canvas's layout. Overlay replaces the floating panel of that canvas; it
+  can be on together with **Under HP/MP bar** (both rows render).
+- **Avoid TrackThatPlease** (default ON) — when TrackThatPlease is loaded, the
+  overlay row is placed **above** its target row, using TTP's own
+  `targetBuffVerticalOffset` and `targetIconSize` (and the client UI scale).
+  `Gap` sets the space between the rows (default 4 px). With TTP absent the
+  overlay uses the canvas `X`/`Y` offsets from the target's screen position.
+- **Reserved Y** — extra space below the bar before the strip starts, for another
+  addon's row. The frame visibility and the target are re-checked twice a second;
+  the strip hides with the frame and with no target.
+
 ### Debugging
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
 
@@ -131,6 +158,34 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.23.0
+
+- **Native frame display modes** (all optional, off by default; floating
+  canvases return when a mode is off):
+  - **Player → Under MP bar**: all player canvases merge into one strip under the
+    player frame's MP bar (HP bar if mana is hidden). Canvas order is preserved
+    (canvas 1 entries, then canvas 2 …), max **9 icons per row**, no name labels,
+    the canvas grid is ignored and extra icons wrap downwards. Icon size comes
+    from the first player canvas (16–40).
+  - **Target → Under HP/MP bar**: the same merged strip for all target canvases,
+    below the target frame's MP bar (HP for mana-less targets).
+  - **Target → Overlay around target**: every target canvas renders as its own
+    overlay with per-canvas `X`, `Y`, `Size` (12–64) and `Per row` (1–12) fields,
+    at the target's screen position — the projection TrackThatPlease uses. Both
+    target modes can be enabled at once and render independently.
+  - **Avoid TrackThatPlease** (default ON) + **Gap above TTP** (default 4 px):
+    when TrackThatPlease is loaded its own `targetBuffVerticalOffset` /
+    `targetIconSize` (with the client UI scale) place our overlay row directly
+    above its target row. Without TTP the per-canvas offsets are used.
+  - **Reserved Y** for the under-bar strips (default 0) to clear another addon's
+    row. Frame visibility and target presence are checked ~twice per second; the
+    strip hides with the frame or with no target, and re-anchors when the native
+    frame or its MP/HP bar is recreated (never errors when `mpBar` is nil).
+- All new fields persist in settings, presets and Import/Export
+  (`player.underMp`, `target.overlay/underBars/avoidTTP/ttpGap/stripOffsetY`,
+  `canvases[i].overlayX/overlayY/overlaySize/overlayPerRow`) with migration
+  defaults for existing configurations.
 
 ### 1.22.0
 
@@ -880,7 +935,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.22.0
+**Current Version:** 1.23.0
 
 ## Credits
 

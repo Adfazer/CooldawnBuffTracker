@@ -34,7 +34,28 @@ local CANVAS_LAYOUT_DEFAULT = {
     timerFontSize = 16,
     timerX = 0,
     timerY = 0,
+    -- 1.23.0: оверлей вокруг фрейма цели. Поля есть у каждого канваса (в
+    -- настройках они показываются только для Target при включённом Overlay),
+    -- чтобы включение режима не меняло модель данных.
+    overlayX = 0,
+    overlayY = -30,
+    overlaySize = 26,
+    overlayPerRow = 6,
 }
+
+-- 1.23.0: режимы показа, привязанные к нативным фреймам юнита. Живут на
+-- уровне юнита, а не канваса: под полосой HP/MP все канвасы сливаются в одну
+-- строку, поэтому отдельных раскладок у них быть не может.
+local DISPLAY_FIELDS = { "underMp", "overlay", "underBars", "stripOffsetY", "avoidTTP", "ttpGap" }
+
+local function clampNumber(value, minValue, maxValue, fallback)
+    local n = tonumber(value)
+    if not n or n ~= n then return fallback end
+    n = math.floor(n + 0.5)
+    if n < minValue then n = minValue end
+    if n > maxValue then n = maxValue end
+    return n
+end
 
 local function cloneValue(value)
     if type(value) ~= "table" then
@@ -76,6 +97,8 @@ local defaultSettings = {
         selectedCanvas = 1,
         trackedBuffs = {},
         mirror = {},
+        underMp = false,        -- 1.23.0: слить канвасы в строку под полосой MP
+        stripOffsetY = 0,       -- запас под чужими строками (TrackWhatPlease и т.п.)
     },
     target = {
         enabled = true,
@@ -85,6 +108,11 @@ local defaultSettings = {
         trackedBuffs = {},
         mirror = {},
         cacheTimeout = 300,     -- 5 минут в секундах - время очистки кэша target
+        overlay = false,        -- 1.23.0: оверлей каждого канваса вокруг фрейма
+        underBars = false,      -- 1.23.0: слить канвасы в строку под HP/MP
+        stripOffsetY = 0,
+        avoidTTP = true,        -- ставить оверлей над рядом TrackThatPlease
+        ttpGap = 4,             -- зазор между нашим рядом и рядом TTP, px
     },
     customBuffs = {},           -- Таблица для хранения пользовательских баффов
     debugBuffId = false,        -- Флаг режима отладки баффов (отключен по умолчанию)
@@ -201,6 +229,20 @@ local function migrateUnit(unit, unitType)
         if maxIcons < 1 then maxIcons = 1 end
         if maxIcons > capacity then maxIcons = capacity end
         canvas.maxIcons = maxIcons
+
+        -- 1.23.0: поля оверлея цели. У сохранений до 1.23.0 их нет
+        -- (normalizeCanvas уже добил дефолты), но значения могли прийти
+        -- строками из импорта — приводим к числу и диапазону.
+        local ox = clampNumber(canvas.overlayX, -2000, 2000, 0)
+        local oy = clampNumber(canvas.overlayY, -2000, 2000, -30)
+        local osize = clampNumber(canvas.overlaySize, 12, 64, 26)
+        local oper = clampNumber(canvas.overlayPerRow, 1, 12, 6)
+        if canvas.overlayX ~= ox or canvas.overlayY ~= oy
+            or canvas.overlaySize ~= osize or canvas.overlayPerRow ~= oper then
+            changed = true
+        end
+        canvas.overlayX, canvas.overlayY = ox, oy
+        canvas.overlaySize, canvas.overlayPerRow = osize, oper
     end
 
     if type(unit.canvasOf) ~= "table" then
@@ -238,6 +280,33 @@ local function migrateUnit(unit, unitType)
     if unit.enabled == nil then
         unit.enabled = true
         changed = true
+    end
+
+    -- 1.23.0: режимы у нативных фреймов. У старых сохранений полей нет —
+    -- добиваем дефолтами юнита; выключенное пользователем значение (false)
+    -- сохраняется, потому что проверяем только nil.
+    local unitDefaults = defaultSettings[unitType]
+    if unitDefaults then
+        for _, field in ipairs(DISPLAY_FIELDS) do
+            if unitDefaults[field] ~= nil and unit[field] == nil then
+                unit[field] = unitDefaults[field]
+                changed = true
+            end
+        end
+    end
+    if unit.stripOffsetY ~= nil then
+        local offset = clampNumber(unit.stripOffsetY, -50, 300, 0)
+        if unit.stripOffsetY ~= offset then
+            unit.stripOffsetY = offset
+            changed = true
+        end
+    end
+    if unit.ttpGap ~= nil then
+        local gap = clampNumber(unit.ttpGap, 0, 200, 4)
+        if unit.ttpGap ~= gap then
+            unit.ttpGap = gap
+            changed = true
+        end
     end
 
     return changed
@@ -327,5 +396,6 @@ defaultSettings.cloneValue = cloneValue
 defaultSettings.newCanvas = newCanvas
 defaultSettings.normalizeCanvas = normalizeCanvas
 defaultSettings.normalizeUnit = migrateUnit
+defaultSettings.clampNumber = clampNumber
 
 return defaultSettings

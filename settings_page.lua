@@ -40,6 +40,10 @@ end
 local settings, settingsWindow
 local settingsControls = {}
 local M = {}
+-- 1.23.0: синхронизация секции "Native frame display"; назначается в
+-- buildFrameModeSection (forward declaration, иначе вызов из
+-- updateSettingsFields уйдёт в global).
+local syncFrameModeControls = function() end
 
 -- Состояние формы Add custom entry: выбранный тип записи и путь иконки.
 -- Тип: "buff" (бафф/дебафф), "skill" (навык по боевому логу), "mana" (навык маунта).
@@ -49,6 +53,16 @@ local newEntryIcon = ""
 local function trimText(t)
     t = tostring(t or "")
     return (t:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- Число из поля ввода с зажимом в диапазон (1.23.0: поля оверлея/строки).
+local function clampIntText(text, minValue, maxValue, fallback)
+    local n = tonumber(text)
+    if not n or n ~= n then return fallback end
+    n = math.floor(n + 0.5)
+    if n < minValue then n = minValue end
+    if n > maxValue then n = maxValue end
+    return n
 end
 
 -- Вызывается из main.lua, когда сканер нашёл навык по имени (spellId в логе = 0)
@@ -280,7 +294,11 @@ local function saveSettings()
         gridColumns = cfg.gridColumns,
         gridRows = cfg.gridRows,
         maxIcons = cfg.maxIcons,
-        gridRowSpacing = cfg.gridRowSpacing
+        gridRowSpacing = cfg.gridRowSpacing,
+        overlayX = cfg.overlayX,
+        overlayY = cfg.overlayY,
+        overlaySize = cfg.overlaySize,
+        overlayPerRow = cfg.overlayPerRow
     }
 
     -- Update icon size settings
@@ -342,6 +360,46 @@ local function saveSettings()
     -- Lock positioning is saved immediately on button click, use current canvas value
     if cfg.lockPositioning == nil then cfg.lockPositioning = false end
 
+    -- 1.23.0: режимы у нативных фреймов. Пишем только значения ВИДИМЫХ
+    -- контролов: скрытая секция другого юнита иначе затирала бы его поля.
+    if currentUnitType == "player" then
+        if settings.player then
+            settings.player.stripOffsetY = clampIntText(
+                settingsControls.stripOffsetY and settingsControls.stripOffsetY:GetText(), -50, 300, 0)
+            if settingsControls.stripOffsetY then
+                settingsControls.stripOffsetY:SetText(tostring(settings.player.stripOffsetY))
+            end
+        end
+    elseif currentUnitType == "target" then
+        if settings.target then
+            settings.target.stripOffsetY = clampIntText(
+                settingsControls.stripOffsetY and settingsControls.stripOffsetY:GetText(), -50, 300, 0)
+            settings.target.ttpGap = clampIntText(
+                settingsControls.ttpGap and settingsControls.ttpGap:GetText(), 0, 200, 4)
+            if settingsControls.stripOffsetY then
+                settingsControls.stripOffsetY:SetText(tostring(settings.target.stripOffsetY))
+            end
+            if settingsControls.ttpGap then
+                settingsControls.ttpGap:SetText(tostring(settings.target.ttpGap))
+            end
+            -- Поля оверлея относятся к ВЫБРАННОМУ канвасу цели.
+            if settings.target.overlay == true then
+                cfg.overlayX = clampIntText(
+                    settingsControls.overlayX and settingsControls.overlayX:GetText(), -2000, 2000, 0)
+                cfg.overlayY = clampIntText(
+                    settingsControls.overlayY and settingsControls.overlayY:GetText(), -2000, 2000, -30)
+                cfg.overlaySize = clampIntText(
+                    settingsControls.overlaySize and settingsControls.overlaySize:GetText(), 12, 64, 26)
+                cfg.overlayPerRow = clampIntText(
+                    settingsControls.overlayPerRow and settingsControls.overlayPerRow:GetText(), 1, 12, 6)
+                if settingsControls.overlayX then settingsControls.overlayX:SetText(tostring(cfg.overlayX)) end
+                if settingsControls.overlayY then settingsControls.overlayY:SetText(tostring(cfg.overlayY)) end
+                if settingsControls.overlaySize then settingsControls.overlaySize:SetText(tostring(cfg.overlaySize)) end
+                if settingsControls.overlayPerRow then settingsControls.overlayPerRow:SetText(tostring(cfg.overlayPerRow)) end
+            end
+        end
+    end
+
     -- Update timer settings (per canvas)
     if settingsControls.timerFontSize then
         cfg.timerFontSize = tonumber(settingsControls.timerFontSize:GetText())
@@ -366,7 +424,11 @@ local function saveSettings()
         or cfg.gridColumns ~= prevSnapshot.gridColumns
         or cfg.gridRows ~= prevSnapshot.gridRows
         or cfg.maxIcons ~= prevSnapshot.maxIcons
-        or cfg.gridRowSpacing ~= prevSnapshot.gridRowSpacing then
+        or cfg.gridRowSpacing ~= prevSnapshot.gridRowSpacing
+        or cfg.overlayX ~= prevSnapshot.overlayX
+        or cfg.overlayY ~= prevSnapshot.overlayY
+        or cfg.overlaySize ~= prevSnapshot.overlaySize
+        or cfg.overlayPerRow ~= prevSnapshot.overlayPerRow then
         deactivateActivePreset()
     end
 
@@ -929,6 +991,11 @@ local function updateSettingsFields()
 
     -- Update tracked buffs list (только записи выбранного канваса)
     updateTrackedBuffsList()
+
+    -- 1.23.0: режимы у нативных фреймов (видимость контролов + значения)
+    if syncFrameModeControls then
+        pcall(syncFrameModeControls)
+    end
 end
 
 -- Функция для добавления кнопки просмотра пиксельного изображения
@@ -3055,6 +3122,284 @@ local function buildTimerSection(lockButton)
     end)
 end
 
+-- =====================================================================
+-- 1.23.0: "Native frame display" — режимы, привязанные к юниту.
+--   Player: Under MP bar (+ Reserved Y).
+--   Target: Overlay around target, Under HP/MP bar, Avoid TrackThatPlease
+--           (+ Gap), Reserved Y и поля оверлея выбранного канваса.
+-- Один набор контролов на оба юнита: syncFrameModeControls() прячет лишние
+-- и подставляет значения выбранного юнита/канваса.
+-- =====================================================================
+local frameControlsSyncing = false
+
+local function showControl(control, visible)
+    if control and control.Show then
+        control:Show(visible and true or false)
+    end
+end
+
+local function anchorControl(control, x, y)
+    if not control then return end
+    control:RemoveAllAnchors()
+    control:AddAnchor("TOPLEFT", settingsWindow, x, y)
+end
+
+local function buildFrameModeSection()
+    local groupLabel = helpers.createLabel('frameModeGroupLabel', settingsWindow,
+                                           'Native frame display', 860, 408, 16)
+    groupLabel:SetWidth(320)
+    groupLabel:Show(true)
+    settingsControls.frameModeGroupLabel = groupLabel
+
+    -- Переключатель режима с сохранением и перерисовкой панелей.
+    local function onToggle(unitType, field)
+        return function(checked)
+            if frameControlsSyncing then return end
+            local us = settings and settings[unitType]
+            if not us then return end
+            us[field] = checked and true or false
+            deactivateActivePreset()
+            pcall(function() api.SaveSettings() end)
+            if helpers and helpers.updateSettings then
+                helpers.updateSettings()
+            end
+            pcall(syncFrameModeControls)
+        end
+    end
+
+    -- Player: строка под полосой MP
+    local underMpCheck = CbtWindow.CheckButton('cbtUnderMp', settingsWindow, onToggle("player", "underMp"))
+    if underMpCheck then
+        underMpCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 430)
+        underMpCheck:Show(false)
+        CbtWindow.Tooltip(underMpCheck,
+            "Merge every player canvas into one icon strip under the player frame's MP bar (HP if mana is hidden). 9 icons per row, no names; the canvas grid is ignored.")
+    end
+    settingsControls.underMpCheck = underMpCheck
+
+    local underMpLabel = helpers.createLabel('cbtUnderMpLabel', settingsWindow, 'Under MP bar', 882, 429, 13)
+    underMpLabel:SetWidth(150)
+    underMpLabel:Show(false)
+    settingsControls.underMpLabel = underMpLabel
+
+    -- Target: оверлей у цели
+    local overlayCheck = CbtWindow.CheckButton('cbtTargetOverlay', settingsWindow, onToggle("target", "overlay"))
+    if overlayCheck then
+        overlayCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 430)
+        overlayCheck:Show(false)
+        CbtWindow.Tooltip(overlayCheck,
+            "Draw each target canvas as a compact overlay at the target's screen position (same projection TrackThatPlease uses). When TTP is loaded the row is placed above its target row.")
+    end
+    settingsControls.overlayCheck = overlayCheck
+
+    local overlayLabel = helpers.createLabel('cbtTargetOverlayLabel', settingsWindow, 'Overlay around target', 882, 429, 13)
+    overlayLabel:SetWidth(190)
+    overlayLabel:Show(false)
+    settingsControls.overlayLabel = overlayLabel
+
+    -- Target: строка под HP/MP
+    local underBarsCheck = CbtWindow.CheckButton('cbtTargetUnderBars', settingsWindow, onToggle("target", "underBars"))
+    if underBarsCheck then
+        underBarsCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 454)
+        underBarsCheck:Show(false)
+        CbtWindow.Tooltip(underBarsCheck,
+            "Merge every target canvas into one icon strip under the target frame's MP bar (HP for mana-less targets). 9 icons per row, no names; the canvas grid is ignored. Works together with Overlay.")
+    end
+    settingsControls.underBarsCheck = underBarsCheck
+
+    local underBarsLabel = helpers.createLabel('cbtTargetUnderBarsLabel', settingsWindow, 'Under HP/MP bar', 882, 453, 13)
+    underBarsLabel:SetWidth(170)
+    underBarsLabel:Show(false)
+    settingsControls.underBarsLabel = underBarsLabel
+
+    -- Target: не наезжать на ряд TrackThatPlease
+    local avoidTTPCheck = CbtWindow.CheckButton('cbtAvoidTTP', settingsWindow, onToggle("target", "avoidTTP"))
+    if avoidTTPCheck then
+        avoidTTPCheck:AddAnchor("TOPLEFT", settingsWindow, 860, 478)
+        avoidTTPCheck:Show(false)
+        CbtWindow.Tooltip(avoidTTPCheck,
+            "Keep the target overlay above TrackThatPlease's target row. Read from TTP settings: targetBuffVerticalOffset, targetIconSize and the UI scale. Turn off to place the overlay with the canvas offsets instead.")
+    end
+    settingsControls.avoidTTPCheck = avoidTTPCheck
+
+    local avoidTTPLabel = helpers.createLabel('cbtAvoidTTPLabel', settingsWindow, 'Avoid TrackThatPlease', 882, 477, 13)
+    avoidTTPLabel:SetWidth(150)
+    avoidTTPLabel:Show(false)
+    settingsControls.avoidTTPLabel = avoidTTPLabel
+
+    local ttpGapLabel = helpers.createLabel('cbtTtpGapLabel', settingsWindow, 'Gap:', 1036, 477, 13)
+    ttpGapLabel:SetWidth(34)
+    ttpGapLabel:Show(false)
+    settingsControls.ttpGapLabel = ttpGapLabel
+    CbtWindow.Tooltip(ttpGapLabel, "Space between our overlay row and TrackThatPlease's row, px.")
+
+    local ttpGap = helpers.createEdit('cbtTtpGap', settingsWindow, '4', 1072, 476)
+    if ttpGap then
+        ttpGap:SetMaxTextLength(3)
+        ttpGap:SetWidth(45)
+        ttpGap:Show(false)
+    end
+    settingsControls.ttpGap = ttpGap
+    bindApplyOnEnter(ttpGap)
+
+    -- Общий для обоих юнитов "Reserved Y" под строкой (место под чужими рядами)
+    local stripOffsetLabel = helpers.createLabel('cbtStripOffsetLabel', settingsWindow, 'Reserved Y:', 860, 454, 13)
+    stripOffsetLabel:SetWidth(84)
+    stripOffsetLabel:Show(false)
+    settingsControls.stripOffsetLabel = stripOffsetLabel
+    CbtWindow.Tooltip(stripOffsetLabel,
+        "Extra space below the bar before the strip starts, px. Use it to clear another addon's row (for example TrackWhatPlease) without moving the native frame.")
+
+    local stripOffsetY = helpers.createEdit('cbtStripOffsetY', settingsWindow, '0', 946, 454)
+    if stripOffsetY then
+        stripOffsetY:SetMaxTextLength(4)
+        stripOffsetY:SetWidth(45)
+        stripOffsetY:Show(false)
+    end
+    settingsControls.stripOffsetY = stripOffsetY
+    bindApplyOnEnter(stripOffsetY)
+
+    -- Поля оверлея выбранного target-канваса (видны только при Overlay)
+    local overlayXLabel = helpers.createLabel('cbtOverlayXLabel', settingsWindow, 'X:', 860, 526, 13)
+    overlayXLabel:SetWidth(14)
+    overlayXLabel:Show(false)
+    settingsControls.overlayXLabel = overlayXLabel
+
+    local overlayX = helpers.createEdit('cbtOverlayX', settingsWindow, '0', 876, 526)
+    if overlayX then
+        overlayX:SetMaxTextLength(5)
+        overlayX:SetWidth(42)
+        overlayX:Show(false)
+    end
+    settingsControls.overlayX = overlayX
+    bindApplyOnEnter(overlayX)
+
+    local overlayYLabel = helpers.createLabel('cbtOverlayYLabel', settingsWindow, 'Y:', 926, 526, 13)
+    overlayYLabel:SetWidth(14)
+    overlayYLabel:Show(false)
+    settingsControls.overlayYLabel = overlayYLabel
+
+    local overlayY = helpers.createEdit('cbtOverlayY', settingsWindow, '-30', 942, 526)
+    if overlayY then
+        overlayY:SetMaxTextLength(5)
+        overlayY:SetWidth(42)
+        overlayY:Show(false)
+    end
+    settingsControls.overlayY = overlayY
+    bindApplyOnEnter(overlayY)
+
+    local overlaySizeLabel = helpers.createLabel('cbtOverlaySizeLabel', settingsWindow, 'Size:', 992, 526, 13)
+    overlaySizeLabel:SetWidth(32)
+    overlaySizeLabel:Show(false)
+    settingsControls.overlaySizeLabel = overlaySizeLabel
+
+    local overlaySize = helpers.createEdit('cbtOverlaySize', settingsWindow, '26', 1026, 526)
+    if overlaySize then
+        overlaySize:SetMaxTextLength(3)
+        overlaySize:SetWidth(42)
+        overlaySize:Show(false)
+    end
+    settingsControls.overlaySize = overlaySize
+    bindApplyOnEnter(overlaySize)
+
+    local overlayPerRowLabel = helpers.createLabel('cbtOverlayPerRowLabel', settingsWindow, 'Per row:', 1076, 526, 13)
+    overlayPerRowLabel:SetWidth(52)
+    overlayPerRowLabel:Show(false)
+    settingsControls.overlayPerRowLabel = overlayPerRowLabel
+
+    local overlayPerRow = helpers.createEdit('cbtOverlayPerRow', settingsWindow, '6', 1130, 526)
+    if overlayPerRow then
+        overlayPerRow:SetMaxTextLength(2)
+        overlayPerRow:SetWidth(42)
+        overlayPerRow:Show(false)
+    end
+    settingsControls.overlayPerRow = overlayPerRow
+    bindApplyOnEnter(overlayPerRow)
+
+    CbtWindow.Tooltip(overlayXLabel, "Overlay X offset from the target's screen position (ignored while Avoid TrackThatPlease is on).")
+    CbtWindow.Tooltip(overlaySizeLabel, "Icon size of the overlay, px (12..64).")
+    CbtWindow.Tooltip(overlayPerRowLabel, "Icons per overlay row (1..12). Extra icons wrap downwards.")
+
+    syncFrameModeControls = function()
+        if not settingsControls.frameModeGroupLabel then return end
+        local isPlayer = currentUnitType == "player"
+        local isTarget = currentUnitType == "target"
+        local show = isPlayer or isTarget
+
+        showControl(settingsControls.frameModeGroupLabel, show)
+        showControl(settingsControls.underMpCheck, isPlayer)
+        showControl(settingsControls.underMpLabel, isPlayer)
+
+        showControl(settingsControls.overlayCheck, isTarget)
+        showControl(settingsControls.overlayLabel, isTarget)
+        showControl(settingsControls.underBarsCheck, isTarget)
+        showControl(settingsControls.underBarsLabel, isTarget)
+        showControl(settingsControls.avoidTTPCheck, isTarget)
+        showControl(settingsControls.avoidTTPLabel, isTarget)
+        showControl(settingsControls.ttpGapLabel, isTarget)
+        showControl(settingsControls.ttpGap, isTarget)
+
+        showControl(settingsControls.stripOffsetLabel, show)
+        showControl(settingsControls.stripOffsetY, show)
+
+        local overlayFields = isTarget and settings.target and settings.target.overlay == true
+        showControl(settingsControls.overlayXLabel, overlayFields)
+        showControl(settingsControls.overlayX, overlayFields)
+        showControl(settingsControls.overlayYLabel, overlayFields)
+        showControl(settingsControls.overlayY, overlayFields)
+        showControl(settingsControls.overlaySizeLabel, overlayFields)
+        showControl(settingsControls.overlaySize, overlayFields)
+        showControl(settingsControls.overlayPerRowLabel, overlayFields)
+        showControl(settingsControls.overlayPerRow, overlayFields)
+        if not show then return end
+
+        -- "Reserved Y" стоит вторым рядом у Player и ниже у Target: у Target
+        -- над ним ещё два ряда чекбоксов.
+        anchorControl(settingsControls.stripOffsetLabel, 860, isTarget and 502 or 454)
+        anchorControl(settingsControls.stripOffsetY, 946, isTarget and 502 or 454)
+
+        frameControlsSyncing = true
+        if isPlayer and settings.player then
+            if settingsControls.underMpCheck then
+                pcall(function()
+                    settingsControls.underMpCheck:SetChecked(settings.player.underMp == true)
+                end)
+            end
+            if settingsControls.stripOffsetY then
+                settingsControls.stripOffsetY:SetText(tostring(settings.player.stripOffsetY or 0))
+            end
+        elseif isTarget and settings.target then
+            if settingsControls.overlayCheck then
+                pcall(function()
+                    settingsControls.overlayCheck:SetChecked(settings.target.overlay == true)
+                end)
+            end
+            if settingsControls.underBarsCheck then
+                pcall(function()
+                    settingsControls.underBarsCheck:SetChecked(settings.target.underBars == true)
+                end)
+            end
+            if settingsControls.avoidTTPCheck then
+                pcall(function()
+                    settingsControls.avoidTTPCheck:SetChecked(settings.target.avoidTTP ~= false)
+                end)
+            end
+            if settingsControls.ttpGap then
+                settingsControls.ttpGap:SetText(tostring(settings.target.ttpGap or 4))
+            end
+            if settingsControls.stripOffsetY then
+                settingsControls.stripOffsetY:SetText(tostring(settings.target.stripOffsetY or 0))
+            end
+            local cfg = selectedCanvasCfg() or {}
+            if settingsControls.overlayX then settingsControls.overlayX:SetText(tostring(cfg.overlayX or 0)) end
+            if settingsControls.overlayY then settingsControls.overlayY:SetText(tostring(cfg.overlayY or -30)) end
+            if settingsControls.overlaySize then settingsControls.overlaySize:SetText(tostring(cfg.overlaySize or 26)) end
+            if settingsControls.overlayPerRow then settingsControls.overlayPerRow:SetText(tostring(cfg.overlayPerRow or 6)) end
+        end
+        frameControlsSyncing = false
+    end
+end
+
 local function initSettingsPage()
     settings = helpers.getSettings()
 
@@ -3143,6 +3488,7 @@ local function initSettingsPage()
     local showLabelButton, iconSpacingLabel = buildIconSection(customBuffErrorPanel)
     local lockButton = buildPositionSection(settingsControls.gridBottomLabel or showLabelButton, iconSpacingLabel)
     buildTimerSection(lockButton)
+    buildFrameModeSection()
 
     -- Final check - call update one more time for confidence
     -- Force update list one more time

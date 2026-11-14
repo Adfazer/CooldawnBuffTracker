@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.22.0"
+  version = "1.23.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -90,6 +90,11 @@ local playerBuffData = {}
 -- живой виджет i-го канваса; раскладка лежит в settings[unitType].canvases[i].
 local unitCanvases = { playerpet = {}, player = {}, target = {} }
 local UNIT_TYPES = { "playerpet", "player", "target" }
+-- 1.23.0: режимы у нативных фреймов (строка под HP/MP, оверлей цели).
+-- Объявлены заранее, потому что hideUnitCanvases() должна гасить и их;
+-- присваиваются ниже, после функций отрисовки.
+local hideFrameModesForUnit
+local frameModeEnabled
 local CANVAS_BASE_ID = {
   playerpet = "MountBuffCanvas",
   player = "PlayerBuffCanvas",
@@ -1274,17 +1279,22 @@ end
 
 local function hideUnitCanvases(unitType)
   local list = unitCanvases[unitType]
-  if not list then return end
-  for _, canvas in ipairs(list) do
-    if canvas and canvas.Show then
-      -- не дёргаем Show(false) каждый кадр, если панель уже скрыта
-      local visible = true
-      if canvas.IsVisible then
-        local okVis, vis = pcall(function() return canvas:IsVisible() end)
-        if okVis then visible = vis and true or false end
+  if list then
+    for _, canvas in ipairs(list) do
+      if canvas and canvas.Show then
+        -- не дёргаем Show(false) каждый кадр, если панель уже скрыта
+        local visible = true
+        if canvas.IsVisible then
+          local okVis, vis = pcall(function() return canvas:IsVisible() end)
+          if okVis then visible = vis and true or false end
+        end
+        if visible then canvas:Show(false) end
       end
-      if visible then canvas:Show(false) end
     end
+  end
+  -- Привязанные к фрейму строка/оверлеи — часть показа этого юнита.
+  if hideFrameModesForUnit then
+    pcall(hideFrameModesForUnit, unitType)
   end
 end
 
@@ -1323,6 +1333,65 @@ local function ensureUnitCanvases(unitType)
     end
   end
   return created
+end
+
+-- Единый цветовой статус иконки: зелёный = активен, красный = кулдаун,
+-- прозрачный = готов. Вынесено из renderCanvas, чтобы строка под HP/MP и
+-- оверлей цели красились точно так же, как плавающий канвас.
+local function applyIconStatus(icon, status)
+  if not icon then return end
+  if status == "ready" then
+    if icon.statusOverlay then
+      icon.statusOverlay:SetColor(1, 1, 1, 0)
+    end
+    if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
+    if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
+    if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
+    if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
+    if icon.SetColor then
+      icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
+    end
+  elseif status == "active" then
+    if icon.statusOverlay then
+      icon.statusOverlay:SetColor(0, 1, 0, 0.3)
+    end
+    local r, g, b, a = 0, 1, 0, 0.8
+    if icon.topBorder then icon.topBorder:SetColor(r, g, b, a) end
+    if icon.bottomBorder then icon.bottomBorder:SetColor(r, g, b, a) end
+    if icon.leftBorder then icon.leftBorder:SetColor(r, g, b, a) end
+    if icon.rightBorder then icon.rightBorder:SetColor(r, g, b, a) end
+    if icon.SetColor then
+      icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
+    end
+  elseif status == "cooldown" then
+    if icon.statusOverlay then
+      icon.statusOverlay:SetColor(1, 0, 0, 0.3)
+    end
+    local r, g, b, a = 1, 0, 0, 0.8
+    if icon.topBorder then icon.topBorder:SetColor(r, g, b, a) end
+    if icon.bottomBorder then icon.bottomBorder:SetColor(r, g, b, a) end
+    if icon.leftBorder then icon.leftBorder:SetColor(r, g, b, a) end
+    if icon.rightBorder then icon.rightBorder:SetColor(r, g, b, a) end
+    if icon.SetColor then
+      icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
+    end
+  end
+end
+
+-- Текст таймера для иконки: остаток активного баффа или остаток кулдауна.
+local function iconTimerText(buff, status, currentTime)
+  if status == "active" and buff.activeUntil and buff.activeUntil ~= math.huge then
+    local remainingActive = buff.activeUntil - currentTime
+    if remainingActive > 0 then
+      return formatTimerSeconds(remainingActive)
+    end
+  elseif status == "cooldown" and buff.readyAt then
+    local remainingCooldown = buff.readyAt - currentTime
+    if remainingCooldown > 0 then
+      return formatTimerSeconds(remainingCooldown)
+    end
+  end
+  return ""
 end
 
 -- Рисует один канвас. activeBuffs — список записей ИМЕННО этого канваса.
@@ -1420,75 +1489,13 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
 
         -- Цвет статуса меняется редко: оверлей/рамки трогаем только при смене
         if relayout or icon.lastStatus ~= currentStatus then
-        if currentStatus == "ready" then
-          -- Для готового баффа - прозрачный оверлей (без подсветки)
-          if icon.statusOverlay then
-            icon.statusOverlay:SetColor(1, 1, 1, 0) -- Полностью прозрачный
-          end
-
-          -- Невидимая граница для состояния готовности
-          if icon.topBorder then icon.topBorder:SetColor(1, 1, 1, 0) end
-          if icon.bottomBorder then icon.bottomBorder:SetColor(1, 1, 1, 0) end
-          if icon.leftBorder then icon.leftBorder:SetColor(1, 1, 1, 0) end
-          if icon.rightBorder then icon.rightBorder:SetColor(1, 1, 1, 0) end
-
-          -- Также восстанавливаем нормальный белый цвет иконки
-          if icon.SetColor then
-            icon:SetColor(ICON_COLORS.READY[1], ICON_COLORS.READY[2], ICON_COLORS.READY[3], ICON_COLORS.READY[4])
-          end
-        elseif currentStatus == "active" then
-          -- Для активного баффа - зеленая подсветка
-          if icon.statusOverlay then
-            icon.statusOverlay:SetColor(0, 1, 0, 0.3) -- Полупрозрачный зеленый
-          end
-
-          -- Яркая зеленая граница для активного состояния
-          local borderColor = {0, 1, 0, 0.8} -- Яркий зеленый
-          if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-
-          -- Также устанавливаем зеленый цвет для иконки
-          if icon.SetColor then
-            icon:SetColor(ICON_COLORS.ACTIVE[1], ICON_COLORS.ACTIVE[2], ICON_COLORS.ACTIVE[3], ICON_COLORS.ACTIVE[4])
-          end
-        elseif currentStatus == "cooldown" then
-          -- Для баффа на кулдауне - красная подсветка
-          if icon.statusOverlay then
-            icon.statusOverlay:SetColor(1, 0, 0, 0.3) -- Полупрозрачный красный
-          end
-
-          -- Яркая красная граница для состояния кулдауна
-          local borderColor = {1, 0, 0, 0.8} -- Яркий красный
-          if icon.topBorder then icon.topBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.bottomBorder then icon.bottomBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.leftBorder then icon.leftBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-          if icon.rightBorder then icon.rightBorder:SetColor(borderColor[1], borderColor[2], borderColor[3], borderColor[4]) end
-
-          -- Также устанавливаем красный цвет для иконки
-          if icon.SetColor then
-            icon:SetColor(ICON_COLORS.COOLDOWN[1], ICON_COLORS.COOLDOWN[2], ICON_COLORS.COOLDOWN[3], ICON_COLORS.COOLDOWN[4])
-          end
-        end
+          applyIconStatus(icon, currentStatus)
           icon.lastStatus = currentStatus
         end
 
         -- Таймер: текст меняется не чаще 10 раз/с — SetText только по изменению
         if icon.timerLabel and us.showTimer then
-          local timerText = ""
-
-          if currentStatus == "active" and buff.activeUntil and buff.activeUntil ~= math.huge then
-            local remainingActive = buff.activeUntil - currentTime
-            if remainingActive > 0 then
-              timerText = formatTimerSeconds(remainingActive)
-            end
-          elseif currentStatus == "cooldown" and buff.readyAt then
-            local remainingCooldown = buff.readyAt - currentTime
-            if remainingCooldown > 0 then
-              timerText = formatTimerSeconds(remainingCooldown)
-            end
-          end
+          local timerText = iconTimerText(buff, currentStatus, currentTime)
 
           if relayout then
             -- Шрифт/позиция/цвет таймера — только при пересборке раскладки
@@ -1574,12 +1581,589 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
   canvas:Show(true)
 end
 
+-- =====================================================================
+-- 1.23.0: режимы показа, привязанные к юниту.
+--   * Player "Under MP bar" / Target "Under HP/MP bar" — все канвасы юнита
+--     сливаются в ОДНУ строку: сначала записи канваса 1 в их порядке, затем
+--     канваса 2 и т.д. Максимум 9 иконок в ряд, без имён, сетка канваса
+--     игнорируется, лишние иконки уходят вниз следующими рядами.
+--   * Target "Overlay" — каждый канвас рисуется у цели в экранных
+--     координатах (api.Unit:GetUnitScreenPosition), как это делает
+--     TrackThatPlease; при загруженном TTP строка ставится над его рядом.
+-- Плавающие канвасы при включённом режиме скрыты; выключение возвращает их
+-- на прежнее место (позиция в настройках не меняется).
+-- =====================================================================
+local MAX_STRIP_ICONS = 9
+local FRAME_CACHE_MS = 500      -- проверка фрейма/цели ~2 раза в секунду
+local TTP_ADDON_ID = "TrackThatPlease"
+local FRAME_ANCHOR_MAX_DIST = 100
+
+local frameStrips = {}    -- [unitType] = { wnd, icons, sig, bar, offset }
+local frameOverlays = {}  -- [index] = { wnd, icons, sig, ax, ay }
+local frameCache = {}     -- [unitType] = { frame, bar, visible, screenX/Y/z, at }
+
+frameModeEnabled = function(unitType)
+  local us = settings and settings[unitType]
+  if not us then return false end
+  if unitType == "player" then
+    return us.underMp == true
+  elseif unitType == "target" then
+    return us.underBars == true or us.overlay == true
+  end
+  return false
+end
+
+local function underBarModeFor(unitType)
+  local us = settings and settings[unitType]
+  if not us then return false end
+  if unitType == "player" then return us.underMp == true end
+  if unitType == "target" then return us.underBars == true end
+  return false
+end
+
+-- Нативная рамка юнита: только 20 разрешённых UIC id, поэтому pcall и nil.
+local function getUnitFrame(unitType)
+  local ok, frame = pcall(function()
+    if unitType == "player" then
+      return ADDON:GetContent(UIC.PLAYER_UNITFRAME)
+    end
+    return ADDON:GetContent(UIC.TARGET_UNITFRAME)
+  end)
+  if not ok then return nil end
+  return frame
+end
+
+-- Ошибка чтения не должна гасить строку: считаем виджет видимым.
+local function widgetVisible(widget)
+  if not widget then return false end
+  local ok, vis = pcall(function() return widget:IsVisible() end)
+  if not ok then return true end
+  return vis and true or false
+end
+
+-- Полоса, под которую ставим строку: MP, иначе HP (у существ без маны),
+-- иначе сама рамка — mpBar/hpBar могут быть nil в другой сборке клиента.
+local function unitBarOf(frame)
+  if not frame then return nil end
+  local mp = frame.mpBar
+  if mp and widgetVisible(mp) then return mp end
+  local hp = frame.hpBar
+  if hp then return hp end
+  return frame
+end
+
+-- Кэш положения/видимости: ~2 проверки в секунду, а не каждый кадр.
+local function refreshFrameCache(unitType, nowMs)
+  local cache = frameCache[unitType]
+  if not cache then
+    cache = {}
+    frameCache[unitType] = cache
+  end
+  if cache.at and (nowMs - cache.at) < FRAME_CACHE_MS then return cache end
+  cache.at = nowMs
+
+  local frame = getUnitFrame(unitType)
+  cache.frame = frame
+  cache.visible = frame ~= nil and widgetVisible(frame)
+  cache.bar = unitBarOf(frame)
+  cache.screenX, cache.screenY, cache.z = nil, nil, nil
+
+  if unitType == "target" then
+    local ok, x, y, z = pcall(function() return api.Unit:GetUnitScreenPosition("target") end)
+    if ok and type(x) == "number" and type(y) == "number" then
+      -- NaN не равен самому себе; Inf отвергаем руками
+      local finite = (x == x) and (y == y)
+        and x ~= math.huge and x ~= -math.huge
+        and y ~= math.huge and y ~= -math.huge
+      if finite then
+        cache.screenX, cache.screenY = x, y
+        if type(z) == "number" and z == z then cache.z = z end
+      end
+    end
+  end
+  return cache
+end
+
+local function uiScaleSafe()
+  local scale = 1
+  pcall(function()
+    local s = api.Interface:GetUIScale()
+    if type(s) == "number" and s > 0 then scale = s end
+  end)
+  return scale
+end
+
+-- Настройки TTP в пикселях устройства; его смещения — device px, а
+-- GetUnitScreenPosition говорит в UI-координатах.
+local function ttpPixels(value)
+  local n = tonumber(value)
+  if not n then return nil end
+  return n / uiScaleSafe()
+end
+
+-- Нижняя граница и высота target-ряда TrackThatPlease в UI-координатах.
+-- nil, если TTP не загружен (api.GetSettings вернёт nil) или ключей нет.
+local function ttpTargetBounds()
+  local ok, conf = pcall(function() return api.GetSettings(TTP_ADDON_ID) end)
+  if not ok or type(conf) ~= "table" then return nil end
+  local offset = ttpPixels(conf.targetBuffVerticalOffset)
+  local size = ttpPixels(conf.targetIconSize)
+  if not offset or not size then return nil end
+  return offset, size
+end
+
+-- Размер иконок строки: первый канвас юнита, зажатый в 16..40.
+local function stripIconSize(unitType)
+  local us = settings and settings[unitType]
+  local first = us and us.canvases and us.canvases[1]
+  local size = math.floor(tonumber(first and first.iconSize) or 40)
+  if size < 16 then size = 16 end
+  if size > 40 then size = 40 end
+  return size
+end
+
+-- Раскладка строки/оверлея. Сетка канваса не используется: только
+-- perRow иконок в ряд, без имён, таймер в оформлении первого канваса.
+local function attachedCfg(unitType, perRow, size, count)
+  local us = settings and settings[unitType]
+  local first = (us and us.canvases and us.canvases[1]) or {}
+  local spacing = math.floor(tonumber(first.iconSpacing) or 5)
+  if spacing < 0 then spacing = 0 end
+  if spacing > 12 then spacing = 12 end
+  local timerSize = math.floor(tonumber(first.timerFontSize) or 14)
+  local maxTimer = math.max(9, math.floor(size * 0.6))
+  if timerSize > maxTimer then timerSize = maxTimer end
+  if timerSize < 8 then timerSize = 8 end
+  local rows = 1
+  if count and count > 0 then
+    rows = math.ceil(count / perRow)
+    if rows < 1 then rows = 1 end
+  end
+  return {
+    iconSize = size,
+    iconSpacing = spacing,
+    gridColumns = perRow,
+    gridRows = rows,
+    maxIcons = math.max(1, count or 1),
+    gridRowSpacing = spacing,
+    showLabel = false,
+    labelFontSize = 12,
+    labelX = 0,
+    labelY = 0,
+    showTimer = first.showTimer ~= false,
+    timerFontSize = timerSize,
+    timerX = 0,
+    timerY = 0,
+    timerTextColor = first.timerTextColor or { r = 1, g = 1, b = 1, a = 1 },
+  }
+end
+
+local function attachedSig(cfg, buffs, count)
+  local parts = {
+    tostring(cfg.iconSize), tostring(cfg.iconSpacing), tostring(cfg.gridColumns),
+    tostring(cfg.gridRowSpacing), tostring(cfg.showTimer and "1" or "0"),
+    tostring(cfg.timerFontSize), colorSignature(cfg.timerTextColor), tostring(count)
+  }
+  for i = 1, count do
+    local info = buffs[i]
+    if info then
+      parts[#parts + 1] = tostring(info.id) .. "="
+        .. tostring(info.buff and info.buff.icon) .. "=" .. tostring(info.buff and info.buff.name)
+    end
+  end
+  return table.concat(parts, "|")
+end
+
+-- Создаёт окно-строку/оверлей с прозрачным фоном и без перехвата мыши.
+local function createAttachedWindow(id)
+  local wnd = api.Interface:CreateEmptyWindow(id)
+  if not wnd then return nil end
+  pcall(function() wnd:SetUILayer("game") end)
+  pcall(function() wnd:Clickable(false) end)
+  pcall(function() wnd:EnablePick(false) end)
+  wnd:Show(false)
+  return wnd
+end
+
+local function ensureFrameStrip(unitType)
+  local holder = frameStrips[unitType]
+  if holder and holder.wnd then return holder end
+  holder = { icons = {} }
+  frameStrips[unitType] = holder
+  holder.wnd = createAttachedWindow("CBTFrameStrip_" .. tostring(unitType))
+  if not holder.wnd then return nil end
+  holder.sig = nil
+  holder.bar = nil
+  holder.offset = nil
+  holder.shown = false
+  return holder
+end
+
+local function ensureFrameOverlay(index)
+  local holder = frameOverlays[index]
+  if holder and holder.wnd then return holder end
+  holder = { icons = {} }
+  frameOverlays[index] = holder
+  holder.wnd = createAttachedWindow("CBTFrameOverlay_" .. tostring(index))
+  if not holder.wnd then return nil end
+  holder.sig = nil
+  holder.ax = nil
+  holder.ay = nil
+  holder.shown = false
+  return holder
+end
+
+-- Show(true/false) только при смене состояния: строка перерисовывается
+-- каждые 50 мс, лишние вызовы движка здесь не нужны.
+local function setHolderShown(holder, shown)
+  if not holder or not holder.wnd then return end
+  shown = shown and true or false
+  if holder.shown == shown then return end
+  holder.shown = shown
+  pcall(function() holder.wnd:Show(shown) end)
+end
+
+local function destroyFrameOverlay(index)
+  local holder = frameOverlays[index]
+  if not holder then return end
+  frameOverlays[index] = nil
+  if holder.wnd then
+    pcall(function() holder.wnd:Show(false) end)
+    pcall(function() api.Interface:Free(holder.wnd) end)
+    holder.wnd = nil
+  end
+  holder.icons = {}
+end
+
+local function destroyFrameModes()
+  for unitType, holder in pairs(frameStrips) do
+    if holder.wnd then
+      pcall(function() holder.wnd:Show(false) end)
+      pcall(function() api.Interface:Free(holder.wnd) end)
+      holder.wnd = nil
+    end
+    holder.icons = {}
+    frameStrips[unitType] = nil
+  end
+  local idx = 1
+  while frameOverlays[idx] do
+    destroyFrameOverlay(idx)
+    idx = idx + 1
+  end
+  frameOverlays = {}
+  frameCache = {}
+end
+
+hideFrameModesForUnit = function(unitType)
+  setHolderShown(frameStrips[unitType], false)
+  if unitType == "target" then
+    for _, oh in pairs(frameOverlays) do
+      setHolderShown(oh, false)
+    end
+  end
+end
+
+-- Рисует icons holder'а по списку buffs (не больше MAX_GRID_ICONS).
+-- Имена не показываются, порядок — как в buffs; пересборка только при
+-- изменении подписи раскладки, статус/таймер — по изменению.
+local function renderAttachedIcons(holder, unitType, namespace, buffs, cfg)
+  if not holder or not holder.wnd then return end
+  local count = #buffs
+  if count > MAX_GRID_ICONS then count = MAX_GRID_ICONS end
+
+  local sig = attachedSig(cfg, buffs, count)
+  local relayout = (holder.sig ~= sig)
+
+  if #holder.icons < count then
+    for i = #holder.icons + 1, count do
+      local icon = addBuffIcon(holder.wnd, i, unitType, namespace, cfg)
+      if not icon then break end
+      holder.icons[i] = icon
+    end
+  end
+
+  local currentTime = tonumber(getCurrentTime()) or 0
+  for i = 1, #holder.icons do
+    local icon = holder.icons[i]
+    if icon and icon.Show then
+      if i <= count then
+        local info = buffs[i]
+        local buff = info.buff
+        if relayout then
+          icon:SetExtent(cfg.iconSize, cfg.iconSize)
+          anchorIconInGrid(icon, holder.wnd, i, cfg)
+          F_SLOT.SetIconBackGround(icon, buff.icon)
+          if icon.nameLabel then icon.nameLabel:Show(false) end
+          if icon.timerLabel then
+            icon.timerLabel.style:SetFontSize(cfg.timerFontSize or 14)
+            icon.timerLabel:RemoveAllAnchors()
+            icon.timerLabel:AddAnchor("CENTER", icon, cfg.timerX or 0, cfg.timerY or 0)
+            local c = cfg.timerTextColor or { r = 1, g = 1, b = 1, a = 1 }
+            icon.timerLabel.style:SetColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1)
+          end
+          if icon.timerBg then
+            icon.timerBg:SetExtent(cfg.iconSize, cfg.iconSize / 2)
+            icon.timerBg:RemoveAllAnchors()
+            icon.timerBg:AddAnchor("BOTTOM", icon, 0, 0)
+          end
+          icon:Show(true)
+        end
+
+        if icon.buffId ~= info.id then
+          icon.buffId = info.id
+        end
+
+        local status = buff.status
+        if buff.fixedTime then
+          status = checkBuffStatus(buff, currentTime)
+        end
+        if relayout or icon.lastStatus ~= status then
+          applyIconStatus(icon, status)
+          icon.lastStatus = status
+        end
+
+        local timerText = ""
+        if cfg.showTimer then
+          timerText = iconTimerText(buff, status, currentTime)
+        end
+        if icon.lastTimerText ~= timerText then
+          if icon.timerLabel then
+            icon.timerLabel:SetText(timerText)
+            icon.timerLabel:Show(timerText ~= "")
+          end
+          if icon.timerBg then icon.timerBg:Show(timerText ~= "") end
+          icon.lastTimerText = timerText
+        end
+      else
+        if icon.IsVisible == nil or icon:IsVisible() then
+          icon:Show(false)
+          if icon.timerLabel then icon.timerLabel:Show(false) end
+          if icon.timerBg then icon.timerBg:Show(false) end
+        end
+        icon.lastStatus = nil
+        icon.lastTimerText = nil
+      end
+    end
+  end
+
+  if relayout then
+    local cols = cfg.gridColumns
+    local usedCols = math.max(1, math.min(count, cols))
+    local rows = math.max(1, math.ceil(count / cols))
+    local width = usedCols * cfg.iconSize + (usedCols - 1) * cfg.iconSpacing
+    local height = rows * cfg.iconSize + (rows - 1) * cfg.gridRowSpacing
+    holder.wnd:SetExtent(width, height)
+    holder.sig = sig
+  end
+end
+
+-- Ставит строку под полосой. AddAnchor на обёртке полосы может не сработать
+-- в другой сборке клиента — тогда пробуем её statusBar и саму рамку.
+local function anchorStripUnder(holder, bar, frame, offset)
+  local candidates = {}
+  if bar then candidates[#candidates + 1] = bar end
+  if bar and bar.statusBar then candidates[#candidates + 1] = bar.statusBar end
+  if frame then candidates[#candidates + 1] = frame end
+  for _, target in ipairs(candidates) do
+    local ok = pcall(function()
+      holder.wnd:RemoveAllAnchors()
+      holder.wnd:AddAnchor("TOPLEFT", target, "BOTTOMLEFT", 0, -offset)
+    end)
+    if ok then
+      holder.anchorTarget = target
+      return true
+    end
+  end
+  holder.anchorTarget = nil
+  return false
+end
+
+-- Строка под полосой MP/HP нативной рамки.
+local function renderUnderBarStrip(unitType, merged)
+  local holder = frameStrips[unitType]
+  if not underBarModeFor(unitType) then
+    setHolderShown(holder, false)
+    return
+  end
+
+  local cache = frameCache[unitType]
+  if not (cache and cache.visible and cache.bar) then
+    setHolderShown(holder, false)
+    return
+  end
+  if unitType == "target" and getCurrentTargetId() == nil then
+    setHolderShown(holder, false)
+    return
+  end
+
+  if not holder then holder = ensureFrameStrip(unitType) end
+  if not holder or not holder.wnd then return end
+  if #merged == 0 then
+    setHolderShown(holder, false)
+    return
+  end
+
+  local us = settings[unitType]
+  local reserved = tonumber(us and us.stripOffsetY) or 0
+  local offset = 2 + reserved
+  local cfg = attachedCfg(unitType, MAX_STRIP_ICONS, stripIconSize(unitType), #merged)
+
+  if holder.bar ~= cache.bar or holder.offset ~= offset then
+    holder.bar = cache.bar
+    holder.offset = offset
+    holder.sig = nil
+    anchorStripUnder(holder, cache.bar, cache.frame, offset)
+  end
+
+  renderAttachedIcons(holder, unitType, 90, merged, cfg)
+  setHolderShown(holder, true)
+end
+
+-- Экранная позиция оверлея: x и НИЖНЯЯ граница ряда (якорь BOTTOM).
+-- TTP рисует свой target-ряд в мировых координатах, поэтому при загруженном
+-- TTP наша строка встаёт над его рядом (topY - gap), иначе — от экранной
+-- позиции цели с пользовательскими overlayX/overlayY.
+local function overlayScreenPosition(cfg, cache)
+  local us = settings and settings.target
+  local avoidTTP = not (us and us.avoidTTP == false)
+  if avoidTTP then
+    local ttpOffset, ttpSize = ttpTargetBounds()
+    if ttpOffset and ttpSize then
+      local gap = tonumber(us and us.ttpGap) or 4
+      if gap < 0 then gap = 0 end
+      if gap > 200 then gap = 200 end
+      local bottom = cache.screenY + ttpOffset
+      return cache.screenX, bottom - ttpSize - gap
+    end
+  end
+  local ox = tonumber(cfg and cfg.overlayX) or 0
+  local oy = tonumber(cfg and cfg.overlayY) or -30
+  return cache.screenX + ox, cache.screenY + oy
+end
+
+local function renderTargetOverlays(activeBuffs)
+  local us = settings and settings.target
+  local enabled = us and us.overlay == true
+  local canvases = (us and us.canvases) or {}
+
+  if not enabled then
+    for _, oh in pairs(frameOverlays) do
+      setHolderShown(oh, false)
+    end
+    return
+  end
+
+  local cache = frameCache.target
+  local baseVisible = cache and cache.visible and cache.screenX and cache.screenY
+  if baseVisible and cache.z then
+    -- z = глубина от камеры: отрицательная — цель за камерой, projection
+    -- там «взрывается», как и у TTP (тот тоже режет по z и по экрану).
+    if cache.z < 0 or cache.z > FRAME_ANCHOR_MAX_DIST then baseVisible = false end
+  end
+  if baseVisible and getCurrentTargetId() == nil then baseVisible = false end
+
+  for idx = 1, #canvases do
+    local cfg = canvases[idx] or {}
+    local holder = frameOverlays[idx]
+
+    local subset = {}
+    if baseVisible then
+      for _, info in ipairs(activeBuffs) do
+        if canvasIndexFor(us, info.id) == idx then
+          subset[#subset + 1] = info
+        end
+      end
+    end
+
+    if #subset == 0 then
+      setHolderShown(holder, false)
+    else
+      if not holder then holder = ensureFrameOverlay(idx) end
+      if holder and holder.wnd then
+        local size = math.floor(tonumber(cfg.overlaySize) or 26)
+        if size < 12 then size = 12 end
+        if size > 64 then size = 64 end
+        local perRow = math.floor(tonumber(cfg.overlayPerRow) or 6)
+        if perRow < 1 then perRow = 1 end
+        if perRow > 12 then perRow = 12 end
+
+        local x, bottomY = overlayScreenPosition(cfg, cache)
+        if not x or not bottomY then
+          setHolderShown(holder, false)
+        else
+          x = math.floor(x + 0.5)
+          bottomY = math.floor(bottomY + 0.5)
+          if holder.ax ~= x or holder.ay ~= bottomY then
+            holder.ax, holder.ay = x, bottomY
+            pcall(function()
+              holder.wnd:RemoveAllAnchors()
+              holder.wnd:AddAnchor("BOTTOM", "UIParent", "TOPLEFT", x, bottomY)
+            end)
+          end
+          local ocfg = attachedCfg("target", perRow, size, #subset)
+          renderAttachedIcons(holder, "target", 110 + idx, subset, ocfg)
+          setHolderShown(holder, true)
+        end
+      end
+    end
+  end
+
+  local idx = #canvases + 1
+  while frameOverlays[idx] do
+    destroyFrameOverlay(idx)
+    idx = idx + 1
+  end
+end
+
+-- Точка входа из updateBuffIcons: обновляет привязанный к юниту показ.
+local function renderFrameModes(unitType, activeBuffs)
+  if not settings then return end
+  local nowMs = 0
+  local ok, msec = pcall(function() return api.Time:GetUiMsec() end)
+  if ok and type(msec) == "number" then nowMs = msec end
+  refreshFrameCache(unitType, nowMs)
+
+  if unitType == "target" then
+    renderTargetOverlays(activeBuffs)
+  end
+
+  if underBarModeFor(unitType) then
+    local us = settings[unitType]
+    local canvasCount = (us and us.canvases and #us.canvases) or 1
+    if canvasCount < 1 then canvasCount = 1 end
+    local merged = {}
+    for idx = 1, canvasCount do
+      for _, info in ipairs(activeBuffs) do
+        if canvasIndexFor(us, info.id) == idx then
+          merged[#merged + 1] = info
+        end
+      end
+    end
+    if #merged > MAX_GRID_ICONS then
+      local trimmed = {}
+      for i = 1, MAX_GRID_ICONS do trimmed[i] = merged[i] end
+      merged = trimmed
+    end
+    renderUnderBarStrip(unitType, merged)
+  else
+    setHolderShown(frameStrips[unitType], false)
+  end
+end
+
 local function updateBuffIcons(unitType)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
 
   local unitSettings = settings and settings[unitType]
+  if not unitSettings then return end
   local canvasesForUnit = unitCanvases[unitType] or {}
-  if not unitSettings or #canvasesForUnit == 0 then return end
+  if #canvasesForUnit == 0 then
+    -- Режим у нативного фрейма рисует данные и без плавающего канваса:
+    -- создаём канвасы (они будут скрыты) ради одного сканирования аур.
+    if not (frameModeEnabled and frameModeEnabled(unitType)) then return end
+    ensureUnitCanvases(unitType)
+    canvasesForUnit = unitCanvases[unitType] or {}
+    if #canvasesForUnit == 0 then return end
+  end
 
   -- Данные юнита: одно сканирование аур на юнит, канвасы лишь делят записи.
   local buffDataTable
@@ -1717,6 +2301,10 @@ local function updateBuffIcons(unitType)
     end
   end
 
+  -- 1.23.0: включённый режим у нативного фрейма заменяет плавающую панель.
+  local underBarMode = underBarModeFor(unitType)
+  local overlayMode = (unitType == "target") and (unitSettings.overlay == true)
+
   -- Рисуем каждый канвас своим подмножеством записей (canvasOf).
   for idx = 1, #canvasesForUnit do
     local canvas = canvasesForUnit[idx]
@@ -1728,13 +2316,18 @@ local function updateBuffIcons(unitType)
           canvasBuffs[#canvasBuffs + 1] = buffInfo
         end
       end
-      if #canvasBuffs == 0 then
+      if underBarMode or overlayMode then
+        -- Строка под HP/MP и оверлей цели показывают записи канваса сами.
+        if canvas.IsVisible and canvas:IsVisible() then canvas:Show(false) end
+      elseif #canvasBuffs == 0 then
         canvas:Show(false)
       else
         renderCanvas(canvas, unitType, cfg, canvasBuffs)
       end
     end
   end
+
+  renderFrameModes(unitType, activeBuffs)
 end
 
 -- Создаёт/удаляет канвасы под настройки и перерисовывает иконки.
@@ -2909,7 +3502,8 @@ local function OnUpdate(dt)
   refreshUITimer = refreshUITimer + dt
   if refreshUITimer >= refreshUIInterval then
     for _, unitType in ipairs(UNIT_TYPES) do
-      if #(unitCanvases[unitType] or {}) > 0 then
+      if #(unitCanvases[unitType] or {}) > 0
+          or (frameModeEnabled and frameModeEnabled(unitType)) then
         updateBuffIcons(unitType)
       end
     end
@@ -3206,6 +3800,7 @@ local function OnUnload()
   targetCache = {}
 
   -- Очищаем все канвасы всех юнитов
+  destroyFrameModes()
   for _, unitType in ipairs(UNIT_TYPES) do
     destroyUnitCanvases(unitType)
   end
