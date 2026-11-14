@@ -6,10 +6,12 @@ local api = require("api")
 local M = {}
 
 local PATH = "CooldawnBuffTracker/cbt_debug.log"
+local FALLBACK_PATH = "CooldawnBuffTracker/cbt_debug_fallback.log"
 local CAP = 800
 local lines = {}
 local enabled = false
 local nextHeartbeat = 0
+local writeWarned = false
 
 local function nowMs()
     local ok, ms = pcall(function() return api.Time:GetUiMsec() end)
@@ -20,9 +22,22 @@ end
 local function writeAll()
     if not (api.File and api.File.Write) then return end
     local text = table.concat(lines, "\n")
-    pcall(function()
+    local ok = pcall(function()
         api.File:Write(PATH, { version = 1, count = #lines, dump = text .. "\n" })
     end)
+    if not ok then
+        -- A copied/locked file must not stop the diagnostics: try a second
+        -- file and tell the player once in chat.
+        local ok2 = pcall(function()
+            api.File:Write(FALLBACK_PATH, { version = 1, count = #lines, dump = text .. "\n" })
+        end)
+        if not ok2 and not writeWarned then
+            writeWarned = true
+            pcall(function()
+                api.Log:Info("|cFF87CEEB[CBT]|r |cFFFF5555debug log write failed; using fallback|r")
+            end)
+        end
+    end
 end
 
 local function append(level, message)
@@ -60,6 +75,11 @@ function M.heartbeat(extra)
     if ms < nextHeartbeat then return end
     nextHeartbeat = ms + 2000
     append("alive", extra or "UPDATE")
+    -- Visible even when the file is locked/copied; proves whether UPDATE is
+    -- still being invoked independently of the file writer.
+    pcall(function()
+        api.Log:Info("|cFF87CEEB[CBT]|r |cFF9E9E9Ealive: " .. tostring(extra or "UPDATE") .. "|r")
+    end)
 end
 
 return M
