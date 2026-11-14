@@ -3258,8 +3258,6 @@ local function buildCustomBuffInputs(customBuffsListContainer)
             -- Update button text
             debugBuffButton:SetText(settings.debugBuffId and "Debug: ON" or "Debug: OFF")
             CbtLog.setDebug(settings.debugBuffId)
-            local dbg = require("CooldawnBuffTracker/util/cbt_debuglog")
-            if dbg then dbg.setEnabled(settings.debugBuffId) end
         if settingsControls.recordButton then
             settingsControls.recordButton:Show(settings.debugBuffId and true or false)
         end

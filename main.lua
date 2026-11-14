@@ -8,7 +8,6 @@ local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
 local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
 local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
 local CbtIcon = require("CooldawnBuffTracker/util/cbt_icon")
-local CbtDebugLog = require("CooldawnBuffTracker/util/cbt_debuglog")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
@@ -848,10 +847,6 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
       and " (current target)" or " (cached)"
     CbtLog.debug("target skill: %s from %s -> cd %.1fs%s",
       tostring(buffId), tostring(sourceId), tonumber(cdUsed) or 0, where)
-    CbtDebugLog.info("target skill: " .. tostring(buffId) .. " from " .. tostring(sourceId)
-      .. " -> cd " .. tostring(cdUsed) .. "s" .. where
-      .. " fixed=" .. tostring(startedAt) .. " toa=" .. tostring(toa)
-      .. " readyAt=" .. tostring(startedAt + cdUsed))
   end
 end
 
@@ -1626,16 +1621,7 @@ local function ensureUnitCanvases(unitType)
       local windowId = baseId
       if i > 1 then windowId = baseId .. tostring(i) end
       list[i] = createPanelCanvas(windowId, unitType, i)
-      if list[i] then
-        created = true
-        -- Создаём пул иконок заранее, а не в момент появления второго баффа:
-        -- создание виджетов внутри UPDATE совпадает с замиранием панелей.
-        local cfg = unitSettings.canvases[i]
-        if cfg then
-          ensureIconPool(list[i], unitType, i, cfg,
-            math.min(getMaxIcons(cfg), MAX_GRID_ICONS))
-        end
-      end
+      if list[i] then created = true end
     end
   end
   return created
@@ -2522,7 +2508,6 @@ end
 -- Точка входа из updateBuffIcons: обновляет оверлей цели.
 local function renderFrameModes(unitType, activeBuffs)
   if not settings then return end
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
   local nowMs = 0
   local ok, msec = pcall(function() return api.Time:GetUiMsec() end)
   if ok and type(msec) == "number" then nowMs = msec end
@@ -2542,7 +2527,6 @@ end
 
 local function updateBuffIcons(unitType)
   unitType = unitType or "playerpet"  -- По умолчанию используем mount
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
 
   local unitSettings = settings and settings[unitType]
   if not unitSettings then return end
@@ -2731,27 +2715,6 @@ local function updateBuffIcons(unitType)
     end
   end
 
-  if unitType == "target" and settings and settings.debugBuffId then
-    local now = getCurrentTime()
-    if not lastRuntimeError.targetDrawAt or (now - lastRuntimeError.targetDrawAt) >= 0.5 then
-      lastRuntimeError.targetDrawAt = now
-      local parts = {}
-      for _, info in ipairs(activeBuffs) do
-        local b = info.buff
-        local calc = b.fixedTime and checkBuffStatus(b, now) or b.status
-        parts[#parts + 1] = tostring(info.id) .. ":status=" .. tostring(b.status)
-          .. ":calc=" .. tostring(calc)
-          .. ":fixed=" .. tostring(b.fixedTime) .. ":ready=" .. tostring(b.readyAt)
-          .. ":synthetic=" .. tostring(b.synthetic)
-      end
-      CbtDebugLog.info("target draw: id=" .. tostring(currentTargetId)
-        .. " tracked=" .. tostring(#trackedBuffIds)
-        .. " active=" .. tostring(#activeBuffs)
-        .. " canvases=" .. tostring(#canvasesForUnit)
-        .. " history=" .. tostring(targetActiveBuffs[currentTargetId] ~= nil)
-        .. " " .. table.concat(parts, "; "))
-    end
-  end
 
   renderFrameModes(unitType, activeBuffs)
 end
@@ -2839,7 +2802,6 @@ local function checkBuffs(unitType)
     -- Check if target changed
     if newTargetId ~= currentTargetId then
       CbtLog.debug("target switch: %s -> %s", tostring(currentTargetId), tostring(newTargetId))
-      CbtDebugLog.info("target switch: " .. tostring(currentTargetId) .. " -> " .. tostring(newTargetId))
       targetChanged = true
       -- Save current target data to cache before switching
       if currentTargetId and targetCache[currentTargetId] then
@@ -4030,7 +3992,7 @@ local function debugRecord(line)
   local okFmt, formatted = pcall(string.format, "%.1f %s",
     tonumber(getCurrentTime()) or 0, text)
   if not okFmt then
-    CbtDebugLog.error("debugRecord format failed: " .. tostring(formatted)
+    CbtLog.error("debugRecord format failed: " .. tostring(formatted)
       .. "; original type=" .. type(line))
     return
   end
@@ -4046,7 +4008,7 @@ local function debugRecordf(fmt, ...)
   if not ok then
     local types = {}
     for i = 1, #args do types[i] = type(args[i]) end
-    CbtDebugLog.error("debugRecord format failed: " .. tostring(text)
+    CbtLog.error("debugRecord format failed: " .. tostring(text)
       .. "; types=" .. table.concat(types, ","))
     return
   end
@@ -4143,8 +4105,6 @@ end
 
 local function updateStep(dt)
   if not live then return end
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
-  CbtDebugLog.heartbeat("UPDATE target=" .. tostring(currentTargetId))
   local scanOk, scanErr = pcall(processBuffIconScan)
   if not scanOk and not lastRuntimeError.scan then
     lastRuntimeError.scan = true
@@ -4344,7 +4304,6 @@ local function onCombatMessage(event, ...)
 end
 
 local function OnLoad()
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
   -- Загружаем настройки (миграция плоских полей в canvases уже внутри)
   if helpers then
     settings = helpers.getSettings()
@@ -4374,11 +4333,6 @@ local function OnLoad()
 
   -- Уровень debug в логгере: серые сообщения печатаются только при Debug ON
   CbtLog.setDebug(settings and settings.debugBuffId)
-  CbtTrace.reset(tostring(CooldawnBuffTracker.version))
-  CbtTrace.info("OnLoad version=" .. tostring(CooldawnBuffTracker.version)
-    .. " debug=" .. tostring(settings and settings.debugBuffId))
-  CbtDebugLog.reset()
-  CbtDebugLog.setEnabled(settings and settings.debugBuffId)
 
   -- helpers сохраняет позиции канвасов и пересобирает панели по этим хукам
   if helpers then
@@ -4501,39 +4455,13 @@ local function OnLoad()
     driver:AddAnchor("TOPLEFT", "UIParent", "TOPLEFT", 0, 0)
     pcall(function() driver:Clickable(false) end)
     pcall(function() driver:EnablePick(false) end)
-    driver:SetHandler("OnUpdate", function(_, dt)
-      local ok, err = pcall(OnUpdate, dt)
-      if not ok then
-        CbtTrace.error("driver OnUpdate failed: " .. tostring(err))
-      end
-    end)
+    driver:SetHandler("OnUpdate", OnUpdate)
     driver:Show(true)
     CooldawnBuffTracker.updateDriver = driver
-    CbtTrace.info("update driver: widget OnUpdate (1x1), api.On UPDATE disabled")
   else
-    CbtTrace.error("update driver creation failed; fallback api.On UPDATE")
     api.On("UPDATE", OnUpdate)
   end
 
-  -- Сторож независим от UPDATE: api:DoIn продолжает тикать, даже если
-  -- обработчик UPDATE перестал вызываться, и пишет это в trace-файл.
-  local function watchdogTick()
-    if not live then return end
-    local now = getCurrentTime()
-    local last = tonumber(lastRuntimeError.lastBeatAt) or 0
-    local age = now - last
-    CbtTrace.info("watchdog: updateAge=" .. string.format("%.1f", age)
-      .. " target=" .. tostring(currentTargetId))
-    if age > 5 and (not lastRuntimeError.reregisteredAt
-        or (now - lastRuntimeError.reregisteredAt) > 30) then
-      lastRuntimeError.reregisteredAt = now
-      CbtTrace.error("watchdog: UPDATE stale " .. string.format("%.1f", age)
-        .. "s; re-register")
-      pcall(function() api.On("UPDATE", OnUpdate) end)
-    end
-    api:DoIn(5000, watchdogTick)
-  end
-  api:DoIn(5000, watchdogTick)
 
   -- Приёмник боевого лога: триггер кастомных баффов по имени навыка
   combatEventWnd = api.Interface:CreateEmptyWindow("CBTCombatEvents")
@@ -4576,38 +4504,18 @@ local function OnLoad()
   end
 end
 
--- Guard the whole UPDATE body: an exception in one branch must not kill the
--- shared event handler and freeze every canvas while the settings UI still
--- works. One-shot file log makes the real fault visible.
+-- Guard the whole UPDATE body: a bad branch must not kill the update driver
+-- and freeze every canvas while the settings UI still works.
 OnUpdate = function(dt)
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
-  if not live then
-    if not lastRuntimeError.live then
-      lastRuntimeError.live = true
-      CbtTrace.info("UPDATE skipped: live=false")
-    end
-    return
-  end
-  lastRuntimeError.lastBeatAt = getCurrentTime()
-  if not lastRuntimeError.traceBeatAt or (lastRuntimeError.lastBeatAt - lastRuntimeError.traceBeatAt) >= 2 then
-    lastRuntimeError.traceBeatAt = lastRuntimeError.lastBeatAt
-    CbtTrace.info("UPDATE target=" .. tostring(currentTargetId)
-      .. " live=" .. tostring(live))
-  end
+  if not live then return end
   local ok, err = pcall(updateStep, dt)
   if not ok and not lastRuntimeError.update then
     lastRuntimeError.update = true
-    CbtTrace.error("UPDATE failed: " .. tostring(err))
     CbtLog.error("UPDATE failed: %s", tostring(err))
-    CbtDebugLog.error("UPDATE failed: " .. tostring(err))
-    CbtDebugLog.flush()
   end
 end
 
 local function OnUnload()
-  local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
-  CbtTrace.info("OnUnload called")
-  CbtTrace.flush()
   local driver = CooldawnBuffTracker.updateDriver
   if driver then
     pcall(function() driver:SetHandler("OnUpdate", function() return end) end)
@@ -4615,8 +4523,6 @@ local function OnUnload()
     pcall(function() api.Interface:Free(driver) end)
     CooldawnBuffTracker.updateDriver = nil
   end
-  CbtDebugLog.info("OnUnload called")
-  CbtDebugLog.flush()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
   pcall(flushAuraDump)
@@ -4666,8 +4572,6 @@ local function OnUnload()
   if settingsPage and settingsPage.Unload then
     settingsPage.Unload()
   end
-
-  pcall(function() CbtDebugLog.flush() end)
 
   -- Общий gametooltip (1.33.0) живёт на UIParent: освобождаем вместе с аддоном.
   pcall(function()
