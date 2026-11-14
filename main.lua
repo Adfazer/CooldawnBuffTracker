@@ -849,7 +849,9 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
     CbtLog.debug("target skill: %s from %s -> cd %.1fs%s",
       tostring(buffId), tostring(sourceId), tonumber(cdUsed) or 0, where)
     CbtDebugLog.info("target skill: " .. tostring(buffId) .. " from " .. tostring(sourceId)
-      .. " -> cd " .. tostring(cdUsed) .. "s" .. where)
+      .. " -> cd " .. tostring(cdUsed) .. "s" .. where
+      .. " fixed=" .. tostring(startedAt) .. " toa=" .. tostring(toa)
+      .. " readyAt=" .. tostring(startedAt + cdUsed))
   end
 end
 
@@ -2715,6 +2717,26 @@ local function updateBuffIcons(unitType)
       else
         renderCanvas(canvas, unitType, cfg, canvasBuffs)
       end
+    end
+  end
+
+  if unitType == "target" and settings and settings.debugBuffId then
+    local now = getCurrentTime()
+    if not lastRuntimeError.targetDrawAt or (now - lastRuntimeError.targetDrawAt) >= 2 then
+      lastRuntimeError.targetDrawAt = now
+      local parts = {}
+      for _, info in ipairs(activeBuffs) do
+        local b = info.buff
+        parts[#parts + 1] = tostring(info.id) .. ":status=" .. tostring(b.status)
+          .. ":fixed=" .. tostring(b.fixedTime) .. ":ready=" .. tostring(b.readyAt)
+          .. ":synthetic=" .. tostring(b.synthetic)
+      end
+      CbtDebugLog.info("target draw: id=" .. tostring(currentTargetId)
+        .. " tracked=" .. tostring(#trackedBuffIds)
+        .. " active=" .. tostring(#activeBuffs)
+        .. " canvases=" .. tostring(#canvasesForUnit)
+        .. " history=" .. tostring(targetActiveBuffs[currentTargetId] ~= nil)
+        .. " " .. table.concat(parts, "; "))
     end
   end
 
