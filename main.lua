@@ -13,6 +13,7 @@ local CbtIcon = require("CooldawnBuffTracker/util/cbt_icon")
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
 local cachedBuffStatus = {}
+local lastRuntimeError = {}
 
 -- Target tracking variables
 local targetBuffData = {}
@@ -1718,8 +1719,21 @@ local function renderCanvas(canvas, unitType, us, activeBuffs)
           icon:SetExtent(us.iconSize, us.iconSize)
           -- Позиция иконки в сетке (слева направо, сверху вниз)
           anchorIconInGrid(icon, canvas, i, us)
-          -- Устанавливаем изображение для иконки (skill_icons/*.png -> PNG-дравейбл)
-          CbtIcon.Paint(icon, buff.icon)
+          -- Устанавливаем изображение для иконки (skill_icons/*.png -> PNG-дравейбл).
+          -- A bad/custom icon must not abort the whole UPDATE loop (the old
+          -- behaviour froze every timer and stopped target switching).
+          local painted, paintErr = pcall(CbtIcon.Paint, icon, buff.icon)
+          if not painted then
+            pcall(function()
+              if F_SLOT and F_SLOT.SetIconBackGround then
+                F_SLOT.SetIconBackGround(icon, nil)
+              end
+            end)
+            if not lastRuntimeError.icon then
+              lastRuntimeError.icon = true
+              CbtLog.error("icon paint failed: %s", tostring(paintErr))
+            end
+          end
           -- Явно устанавливаем иконку видимой
           icon:Show(true)
         end
@@ -4093,9 +4107,16 @@ local function OnUpdate(dt)
 
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
-    checkBuffs("playerpet")  -- Проверяем баффы маунта
-    checkBuffs("player")     -- Проверяем баффы игрока
-    checkBuffs("target")     -- Проверяем баффы target
+    for _, unitType in ipairs(UNIT_TYPES) do
+      local okCheck, checkErr = pcall(checkBuffs, unitType)
+      if not okCheck then
+        local key = "check_" .. tostring(unitType)
+        if not lastRuntimeError[key] then
+          lastRuntimeError[key] = true
+          CbtLog.error("checkBuffs(%s) failed: %s", tostring(unitType), tostring(checkErr))
+        end
+      end
+    end
     updateTimer = 0
   end
 
@@ -4104,7 +4125,14 @@ local function OnUpdate(dt)
     for _, unitType in ipairs(UNIT_TYPES) do
       if #(unitCanvases[unitType] or {}) > 0
           or (frameModeEnabled and frameModeEnabled(unitType)) then
-        updateBuffIcons(unitType)
+        local okDraw, drawErr = pcall(updateBuffIcons, unitType)
+        if not okDraw then
+          local key = "draw_" .. tostring(unitType)
+          if not lastRuntimeError[key] then
+            lastRuntimeError[key] = true
+            CbtLog.error("updateBuffIcons(%s) failed: %s", tostring(unitType), tostring(drawErr))
+          end
+        end
       end
     end
 
@@ -4181,7 +4209,12 @@ local function onCombatMessage(event, ...)
     if logUnit then
       recordLoggedSpell(logUnit, parsed.spellName, getCurrentTime())
     end
-    triggerSpell(parsed.spellName, args[3], parsed.spellId, args, combatEvent)
+    local triggerOk, triggerErr = pcall(triggerSpell,
+      parsed.spellName, args[3], parsed.spellId, args, combatEvent)
+    if not triggerOk and not lastRuntimeError.trigger then
+      lastRuntimeError.trigger = true
+      CbtLog.error("skill trigger failed: %s", tostring(triggerErr))
+    end
   end
 end
 
