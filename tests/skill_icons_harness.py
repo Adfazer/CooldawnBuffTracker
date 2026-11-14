@@ -250,67 +250,35 @@ def asset_checks():
               "duplicate (name, file): %r" % name)
         names_files.add((name.lower(), file_name))
 
-    unique_files = sorted({r["file"] for r in rows})
-    check(len(unique_files) == len({r["file"][:-4] for r in rows}), "one file per unique icon")
-
-    png_sides = {}
-    dds_files = []
-    for file_name in unique_files:
+    custom_files = sorted({r["file"] for r in rows if r["pool_path"].endswith(".png")})
+    check(len(custom_files) == 2, "only two custom PNG fallbacks remain: %r" % custom_files)
+    for file_name in custom_files:
         full = os.path.join(SKILL_LIVE_DIR, file_name)
-        check(os.path.isfile(full), "missing PNG %s" % file_name)
+        check(os.path.isfile(full), "missing custom PNG %s" % file_name)
         info = png_info(full) if os.path.isfile(full) else None
-        check(info is not None, "invalid PNG %s" % file_name)
+        check(info is not None, "invalid custom PNG %s" % file_name)
         if info:
             check(info["w"] == info["h"] and info["w"] in PNG_SIDES,
                   "dimensions %dx%d for %s" % (info["w"], info["h"], file_name))
             check(info["depth"] == 8, "8-bit channel depth in %s" % file_name)
             check(info["color"] in (2, 6), "RGB/RGBA colour type in %s (%r)"
                   % (file_name, info["color"]))
-            check(info["size"] > 100, "PNG payload %d bytes in %s" % (info["size"], file_name))
-            png_sides[info["w"]] = png_sides.get(info["w"], 0) + 1
-        dds = os.path.join(SKILL_LIVE_DIR, file_name[:-4] + ".dds")
-        check(os.path.isfile(dds), "native DDS fallback missing for %s" % file_name)
-        dds_info_value = dds_info(dds) if os.path.isfile(dds) else None
-        check(dds_info_value is not None, "invalid DDS fallback for %s" % file_name)
-        if dds_info_value:
-            check((dds_info_value["w"], dds_info_value["h"]) == (DDS_SIZE, DDS_SIZE),
-                  "fallback DDS is 64x64 for %s" % file_name)
-            check(dds_info_value["size"] == DDS_BYTES,
-                  "fallback DDS payload for %s" % file_name)
-            dds_files.append(file_name)
 
     check(len(dump_rows) == len(ids), "dump ids are unique (%d/%d)" % (len(ids), len(dump_rows)))
     packaged_png = sorted(f for f in os.listdir(SKILL_LIVE_DIR) if f.lower().endswith(".png"))
     packaged_dds = sorted(f for f in os.listdir(SKILL_LIVE_DIR) if f.lower().endswith(".dds"))
-    check(packaged_png == unique_files,
-          "packaged PNG files match the manifest (%d/%d)" % (len(packaged_png), len(unique_files)))
-    check(len(packaged_dds) == len(unique_files),
-          "one DDS fallback per PNG (%d/%d)" % (len(packaged_dds), len(unique_files)))
+    check(packaged_png == custom_files,
+          "runtime PNGs are exactly the custom fallbacks (%d/%d)" % (len(packaged_png), len(custom_files)))
+    check(packaged_dds == [], "no unused DDS files: %r" % packaged_dds)
     extra = [f for f in os.listdir(SKILL_LIVE_DIR)
              if not f.endswith(".png") and not f.endswith(".dds")]
-    check(extra == ["manifest.tsv"], "runtime skill_icons/ holds PNG + DDS + manifest: %r" % extra)
+    check(extra == ["manifest.tsv"], "runtime skill_icons/ holds only PNG fallbacks + manifest: %r" % extra)
 
-    check(os.path.isdir(SKILL_SRC_DIR), "PNG sources kept in skill_icons_src/")
-    sources = sorted(f for f in os.listdir(SKILL_SRC_DIR) if f.lower().endswith(".png")) \
-        if os.path.isdir(SKILL_SRC_DIR) else []
-    check(sources == unique_files,
-          "the source folder mirrors the runtime PNG pool (%d/%d)" % (len(sources), len(unique_files)))
-    identical = 0
-    for file_name in sources:
-        live = os.path.join(SKILL_LIVE_DIR, file_name)
-        src = os.path.join(SKILL_SRC_DIR, file_name)
-        if os.path.isfile(live) and hashlib.sha256(open(live, "rb").read()).digest() == \
-                hashlib.sha256(open(src, "rb").read()).digest():
-            identical += 1
-    check(identical == len(sources),
-          "runtime PNGs are byte-identical to the sources (%d/%d)" % (identical, len(sources)))
-
-    print("assets: %d entries (%d active, %d passive), %d unique PNG (%s px), %d DDS fallbacks, "
+    print("assets: %d entries (%d active, %d passive), %d native DDS paths, %d custom PNG, "
           "%d trees, 0 skipped"
           % (len(rows), sum(1 for r in rows if r["type"] == "active"),
-             sum(1 for r in rows if r["type"] == "passive"), len(unique_files),
-             ", ".join("%d:%d" % (k, v) for k, v in sorted(png_sides.items())),
-             len(dds_files), len(per_tree)))
+             sum(1 for r in rows if r["type"] == "passive"), native_count,
+             len(custom_files), len(per_tree)))
     return valid_buffs, len(rows)
 
 
@@ -589,8 +557,8 @@ HOST.tests = function()
   end
 
   -- skill_icons/<name>.png is the pool the client now records.
-  local skillPath = "../Addon/CooldawnBuffTracker/skill_icons/Icon_skill_fight02.png"
-  check(CbtIcon.SkillFile(skillPath) == "Icon_skill_fight02",
+  local skillPath = "../Addon/CooldawnBuffTracker/skill_icons/Aac-radiant_revive.png"
+  check(CbtIcon.SkillFile(skillPath) == "Aac-radiant_revive",
     "dump path recognised as a skill icon: " .. tostring(CbtIcon.SkillFile(skillPath)))
   check(CbtIcon.SkillFile("game/ui/icon/icon_buff_debuff.dds") == nil,
     "game icons are not skill icons")
@@ -643,18 +611,18 @@ HOST.tests = function()
   local list2 = tgaList(d2)
   check(painted2 == true, "Paint still succeeds when the first candidates fail")
   check(list2[1] == skillPath, "candidate 1 is the dump-relative path: " .. tostring(list2[1]))
-  check(list2[2] == api.baseDir .. "/CooldawnBuffTracker/skill_icons/Icon_skill_fight02.png",
+  check(list2[2] == api.baseDir .. "/CooldawnBuffTracker/skill_icons/Aac-radiant_revive.png",
     "candidate 2 is api.baseDir + addon folder: " .. tostring(list2[2]))
-  check(list2[3] == api.baseDir .. "/skill_icons/Icon_skill_fight02.png",
+  check(list2[3] == api.baseDir .. "/skill_icons/Aac-radiant_revive.png",
     "candidate 3 is api.baseDir + /skill_icons/ (the literal form): " .. tostring(list2[3]))
   check(list2[4] == nil, "no fourth candidate: " .. tostring(list2[4]))
 
   -- bare relative form is recognised too
   local slot3 = newSlot("cbtPaintSlot3")
-  local painted3 = CbtIcon.Paint(slot3, "skill_icons/Icon_skill_fight01.png")
+  local painted3 = CbtIcon.Paint(slot3, "skill_icons/Aac-hollow_renewal.png")
   check(painted3 == true, "a bare skill_icons/... path is painted")
   check(tgaList(slot3._cbtSkillIcon)[1]
-    == "../Addon/CooldawnBuffTracker/skill_icons/Icon_skill_fight01.png",
+    == "../Addon/CooldawnBuffTracker/skill_icons/Aac-hollow_renewal.png",
     "a bare path gets the addon-relative prefix: " .. tostring(tgaList(slot3._cbtSkillIcon)[1]))
 
   -- a native skill icon path must go straight to F_SLOT (no PNG overlay)
@@ -685,14 +653,14 @@ HOST.tests = function()
   -- failure: no candidate loads -> native DDS fallback + exactly one warning
   local slot4 = newSlot("cbtPaintSlot4")
   tgaFail = 99
-  local painted5 = CbtIcon.Paint(slot4, "../Addon/CooldawnBuffTracker/skill_icons/Icon_skill_fight03.png")
+  local painted5 = CbtIcon.Paint(slot4, "../Addon/CooldawnBuffTracker/skill_icons/Aac-radiant_revive.png")
   tgaFail = 0
   check(painted5 == false, "a failed PNG load returns false")
   check(slot4._cbtSkillIconShown == false, "the overlay stays hidden after a failed load")
   check(slot4._cbtSkillIcon ~= nil and slot4._cbtSkillIcon._visible == false,
     "the drawable is hidden after a failed load")
   local fallback = lastIconCall() and lastIconCall().path or ""
-  check(fallback == api.baseDir .. "/CooldawnBuffTracker/skill_icons/Icon_skill_fight03.dds",
+  check(fallback == api.baseDir .. "/CooldawnBuffTracker/skill_icons/Aac-radiant_revive.dds",
     "falls back to the native 64x64 DDS path: " .. tostring(fallback))
   local warned, warnCount = false, 0
   for _, line in ipairs(chat) do
@@ -702,7 +670,7 @@ HOST.tests = function()
     end
   end
   check(warned, "a chat warning reports the failed PNG load")
-  CbtIcon.Paint(slot4, "../Addon/CooldawnBuffTracker/skill_icons/Icon_skill_fight04.png")
+  CbtIcon.Paint(slot4, "../Addon/CooldawnBuffTracker/skill_icons/Aac-hollow_renewal.png")
   local warnCount2 = 0
   for _, line in ipairs(chat) do
     if string.find(line, "skill icon paint failed", 1, true) then warnCount2 = warnCount2 + 1 end

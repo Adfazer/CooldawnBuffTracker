@@ -266,6 +266,14 @@ mount and target.
 
 ## Changelog
 
+### 1.36.1
+
+- Cleanup after 1.35: runtime `skill_icons/` now holds only the two custom PNG
+  fallbacks (`Radiant Revive`, `Hollow Renewal`) plus `manifest.tsv`. Removed the
+  321 unused DDS files, 319 unused PNGs and `skill_icons_src/`.
+- The 321 native `game/ui/icon/icon_skill_*.dds` paths were verified against the
+  client asset manifest: 0 missing.
+
 ### 1.36.0
 
 - Skill icons now use the game's native DDS paths (`game/ui/icon/icon_skill_*.dds`)
@@ -1428,7 +1436,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.36.0
+**Current Version:** 1.36.1
 
 ## Credits
 
