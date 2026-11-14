@@ -1626,7 +1626,16 @@ local function ensureUnitCanvases(unitType)
       local windowId = baseId
       if i > 1 then windowId = baseId .. tostring(i) end
       list[i] = createPanelCanvas(windowId, unitType, i)
-      if list[i] then created = true end
+      if list[i] then
+        created = true
+        -- Создаём пул иконок заранее, а не в момент появления второго баффа:
+        -- создание виджетов внутри UPDATE совпадает с замиранием панелей.
+        local cfg = unitSettings.canvases[i]
+        if cfg then
+          ensureIconPool(list[i], unitType, i, cfg,
+            math.min(getMaxIcons(cfg), MAX_GRID_ICONS))
+        end
+      end
     end
   end
   return created
@@ -2517,14 +2526,10 @@ local function renderFrameModes(unitType, activeBuffs)
   local nowMs = 0
   local ok, msec = pcall(function() return api.Time:GetUiMsec() end)
   if ok and type(msec) == "number" then nowMs = msec end
-  CbtTrace.stage("frame.before_cache." .. tostring(unitType))
   refreshFrameCache(unitType, nowMs)
-  CbtTrace.stage("frame.after_cache." .. tostring(unitType))
 
   if unitType == "target" then
-    CbtTrace.stage("frame.before_overlays")
     renderTargetOverlays(activeBuffs)
-    CbtTrace.stage("frame.after_overlays")
   end
 end
 
@@ -2748,9 +2753,7 @@ local function updateBuffIcons(unitType)
     end
   end
 
-  CbtTrace.stage("icons.before_frame." .. tostring(unitType))
   renderFrameModes(unitType, activeBuffs)
-  CbtTrace.stage("icons.after_frame." .. tostring(unitType))
 end
 
 -- Создаёт/удаляет канвасы под настройки и перерисовывает иконки.
@@ -4141,10 +4144,8 @@ end
 local function updateStep(dt)
   if not live then return end
   local CbtTrace = require("CooldawnBuffTracker/util/cbt_trace")
-  CbtTrace.stage("update.begin")
   CbtDebugLog.heartbeat("UPDATE target=" .. tostring(currentTargetId))
   local scanOk, scanErr = pcall(processBuffIconScan)
-  CbtTrace.stage("update.after_scan")
   if not scanOk and not lastRuntimeError.scan then
     lastRuntimeError.scan = true
     CbtLog.error("icon scan failed: %s", tostring(scanErr))
@@ -4156,9 +4157,7 @@ local function updateStep(dt)
   end
   -- 1.25.0: оверлей цели переставляется каждый кадр — баффы и рамка при этом
   -- не опрашиваются (их частота прежняя).
-  CbtTrace.stage("update.before_overlay")
   local overlayOk, overlayErr = pcall(updateTargetOverlayPositions)
-  CbtTrace.stage("update.after_overlay")
   if not overlayOk and not lastRuntimeError.overlay then
     lastRuntimeError.overlay = true
     CbtLog.error("overlay update failed: %s", tostring(overlayErr))
@@ -4175,7 +4174,6 @@ local function updateStep(dt)
     end
   end
 
-  CbtTrace.stage("update.before_debug")
   if settings and settings.debugBuffId then
     if not debugWasOn then
       debugWasOn = true
@@ -4228,11 +4226,9 @@ local function updateStep(dt)
     buffJournalTimer = 0
   end
 
-  CbtTrace.stage("update.before_checks")
   updateTimer = updateTimer + dt
   if updateTimer >= updateInterval then
     for _, unitType in ipairs(UNIT_TYPES) do
-      CbtTrace.stage("checks." .. tostring(unitType))
       local okCheck, checkErr = pcall(checkBuffs, unitType)
       if not okCheck then
         local key = "check_" .. tostring(unitType)
@@ -4245,13 +4241,11 @@ local function updateStep(dt)
     updateTimer = 0
   end
 
-  CbtTrace.stage("update.before_draw")
   refreshUITimer = refreshUITimer + dt
   if refreshUITimer >= refreshUIInterval then
     for _, unitType in ipairs(UNIT_TYPES) do
       if #(unitCanvases[unitType] or {}) > 0
           or (frameModeEnabled and frameModeEnabled(unitType)) then
-        CbtTrace.stage("draw." .. tostring(unitType))
         local okDraw, drawErr = pcall(updateBuffIcons, unitType)
         if not okDraw then
           local key = "draw_" .. tostring(unitType)
@@ -4264,7 +4258,6 @@ local function updateStep(dt)
     end
 
     -- Обновляем отладчик баффов, если он существует
-    CbtTrace.stage("update.before_buffdebugger")
     if BuffDebugger and BuffDebugger.Update then
       BuffDebugger.Update({
         playerCanvas = unitCanvases.player[1],
@@ -4274,11 +4267,9 @@ local function updateStep(dt)
       })
     end
 
-    CbtTrace.stage("update.after_buffdebugger")
     refreshUITimer = 0
   end
 
-  CbtTrace.stage("update.end")
   -- Target cache cleanup timer
   targetCacheCleanupTimer = targetCacheCleanupTimer + dt
   if targetCacheCleanupTimer >= targetCleanupInterval * 1000 then -- Convert to milliseconds
