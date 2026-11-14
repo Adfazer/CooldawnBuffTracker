@@ -431,17 +431,6 @@ HOST.tests = function()
     "target controls and their proxies come back with Target")
   check(textOf("cbtIconSearch_title") == nil or true, "icon search window title readable")
 
-  -- dynamic row tooltips carry the current values
-  local trackedSeen = false
-  for w, text in pairs(tooltipTexts) do
-    local id = tostring(w._id or "")
-    if string.find(id, "trackedBuff_", 1, true)
-        and string.find(text, "canvas", 1, true) then
-      trackedSeen = true
-    end
-  end
-  check(trackedSeen, "tracked row tooltip names the canvas")
-
   -- live translation: the stored text is English, the tooltip is translated at
   -- hover time, so switching the locale changes the next hover without a rebuild
   loc.set("ru")

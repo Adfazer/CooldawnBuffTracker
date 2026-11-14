@@ -99,12 +99,22 @@ M.onIconDumpUpdated = function()
     pcall(function() iconSearch.refresh() end)
 end
 local trackedBuffsList = {} -- For storing buff list widgets
+local visibleBuffs = {} -- Reused between refreshes so old rows can be freed
 local currentUnitType = "playerpet" -- By default, show settings for mount
 local buffListPage = 1 -- Текущая страница пагинации для списка баффов
 local buffsPerPage = 9 -- Количество записей на странице
 local customBuffsList = {} -- Для хранения виджетов списка пользовательских баффов
 local customBuffPage = 1 -- Текущая страница пагинации для списка пользовательских баффов
 local customsPerPage = 9 -- Количество custom записей на странице
+
+-- Освобождает виджеты строки/подписи, а не только прячет их. Иначе каждый
+-- refresh списка оставлял бы скрытые окна и кнопки в памяти.
+local function freeListWidget(widget)
+    if not widget then return end
+    pcall(function() widget:Show(false) end)
+    pcall(function() widget:RemoveAllAnchors() end)
+    pcall(function() api.Interface:Free(widget) end)
+end
 
 -- =========================================================================
 -- Модель канвасов (1.20)
@@ -207,11 +217,7 @@ end
 local function updateTrackedBuffsList(resetPage)
     -- Clear previous list elements
     for _, widget in ipairs(trackedBuffsList) do
-        if widget then
-            widget:Show(false)
-            widget:RemoveAllAnchors()
-            widget = nil
-        end
+        freeListWidget(widget)
     end
     trackedBuffsList = {}
 
@@ -254,11 +260,7 @@ end
 local function updateCustomBuffsList(resetPage)
     -- Очищаем предыдущие элементы списка
     for _, widget in ipairs(customBuffsList) do
-        if widget then
-            widget:Show(false)
-            widget:RemoveAllAnchors()
-            widget = nil
-        end
+        freeListWidget(widget)
     end
     customBuffsList = {}
 
@@ -2488,7 +2490,6 @@ local function buildTrackedBuffsSection()
 
     -- Текущая позиция прокрутки
     -- Храним отображаемые в данный момент элементы списка
-    local visibleBuffs = {}
 
     -- Функция обновления видимых элементов списка с пагинацией.
     -- Показываем только записи ВЫБРАННОГО канваса (canvasOf), порядок сохраняется.
@@ -2505,11 +2506,7 @@ local function buildTrackedBuffsSection()
 
         -- Очищаем предыдущие элементы
         for _, widget in ipairs(visibleBuffs) do
-            if widget then
-                widget:Show(false)
-                widget:RemoveAllAnchors()
-                widget = nil
-            end
+            freeListWidget(widget)
         end
         visibleBuffs = {}
 
@@ -2981,11 +2978,7 @@ local function buildCustomBuffsSection(newBuffIdLabel, trackedBuffsGroupLabel)
 
         -- Очищаем предыдущие элементы
         for _, widget in ipairs(customBuffsList) do
-            if widget then
-                widget:Show(false)
-                widget:RemoveAllAnchors()
-                widget = nil
-            end
+            freeListWidget(widget)
         end
         customBuffsList = {}
 

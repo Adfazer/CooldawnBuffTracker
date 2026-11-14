@@ -10,6 +10,7 @@ local previousPlayerBuffs = {}
 local previousPetBuffs = {}
 local previousTargetBuffs = {}  -- Added for target support
 local debugTimerActive = false
+local updateHandlerRegistered = false
 local isInitialized = false  -- Flag to prevent multiple initializations
 local lastUpdateTime = 0
 local updateInterval = 500 -- миллисекунды между проверками
@@ -217,6 +218,9 @@ end
 
 -- Обработчик таймера для проверки баффов
 local function OnDebugUpdateTimer(dt)
+    -- api.Off в клиенте нет: после выключения отладки обработчик остаётся в
+    -- UPDATE, но должен выходить сразу, не читая время и настройки.
+    if not debugTimerActive then return end
     -- Получаем текущее время
     local currentTime = api.Time:GetUiMsec() / 1000
     
@@ -265,21 +269,25 @@ function BuffDebugger.Initialize()
         -- Mark as initialized first to prevent re-entry
         isInitialized = true
         
-        -- Используем событие UPDATE для проверки баффов с интервалом
-        if not debugTimerActive then
+        -- Регистрируем UPDATE ровно один раз за жизнь аддона: api.Off нет,
+        -- поэтому повторный api.On после каждого Save плодил бы обработчики.
+        if not updateHandlerRegistered then
             api.On("UPDATE", OnDebugUpdateTimer)
+            updateHandlerRegistered = true
+        end
+        if not debugTimerActive then
             debugTimerActive = true
             lastUpdateTime = api.Time:GetUiMsec() / 1000
-            
+
             -- Очищаем предыдущие данные
             previousPlayerBuffs = {}
             previousPetBuffs = {}
             previousTargetBuffs = {}
-            
+
             -- Инициализируем первоначальное состояние
             CheckUnitBuffs("player")
             CheckUnitBuffs("playerpet")
-            
+
             -- Check target if exists
             local targetId = api.Unit:GetUnitId("target")
             if targetId then

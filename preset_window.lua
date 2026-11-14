@@ -136,8 +136,10 @@ updatePresetList = function()
     -- Очищаем ранее созданные элементы списка
     for _, widget in ipairs(presetListWidgets) do
         if widget then
-            widget:Show(false)
-            widget:RemoveAllAnchors()
+            pcall(function() widget:Show(false) end)
+            pcall(function() widget:RemoveAllAnchors() end)
+            -- Free, not just hide: rows are rebuilt on every page/list refresh.
+            pcall(function() api.Interface:Free(widget) end)
         end
     end
     presetListWidgets = {}

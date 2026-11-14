@@ -266,6 +266,14 @@ mount and target.
 
 ## Changelog
 
+### 1.36.5
+
+- Settings tracked/custom list rows and preset rows are now freed on refresh
+  instead of only hidden, so repeated unit/page switching does not accumulate
+  invisible widgets.
+- The buff debugger registers its UPDATE handler once and returns immediately
+  while disabled; saving settings no longer adds duplicate handlers.
+
 ### 1.36.4
 
 - Removed the redundant Save button from the main settings window: string
@@ -1457,7 +1465,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.36.4
+**Current Version:** 1.36.5
 
 ## Credits
 
