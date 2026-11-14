@@ -22,16 +22,16 @@ end
 local function writeAll()
     if not (api.File and api.File.Write) then return end
     local text = table.concat(lines, "\n")
-    local ok = pcall(function()
-        api.File:Write(PATH, { version = 1, count = #lines, dump = text .. "\n" })
+    local ok, res = pcall(function()
+        return api.File:Write(PATH, { version = 1, count = #lines, dump = text .. "\n" })
     end)
-    if not ok then
-        -- A copied/locked file must not stop the diagnostics: try a second
-        -- file and tell the player once in chat.
-        local ok2 = pcall(function()
-            api.File:Write(FALLBACK_PATH, { version = 1, count = #lines, dump = text .. "\n" })
+    -- api.File:Write can return false/nil without throwing; pcall alone is not
+    -- enough to know whether the file was actually written.
+    if not ok or res == false then
+        local ok2, res2 = pcall(function()
+            return api.File:Write(FALLBACK_PATH, { version = 1, count = #lines, dump = text .. "\n" })
         end)
-        if not ok2 and not writeWarned then
+        if (not ok2 or res2 == false) and not writeWarned then
             writeWarned = true
             pcall(function()
                 api.Log:Info("|cFF87CEEB[CBT]|r |cFFFF5555debug log write failed; using fallback|r")
