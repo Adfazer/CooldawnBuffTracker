@@ -45,6 +45,19 @@ local function paint(color, message)
 end
 
 local function emit(level, message)
+    -- Mirror every chat line into the file log. cbt_debuglog is intentionally
+    -- independent of this module (no cycle) and fails silently if File is
+    -- unavailable.
+    pcall(function()
+        local D = require("CooldawnBuffTracker/util/cbt_debuglog")
+        if D then
+            if level == "error" then D.error(message)
+            elseif level == "warn" then D.warn(message)
+            elseif level == "info" then D.info(message)
+            elseif level == "debug" then D.info("debug: " .. tostring(message))
+            end
+        end
+    end)
     local line = paint(BODY[level] or BODY.info, message)
     if level == "error" then
         if api and api.Log and api.Log.Err then

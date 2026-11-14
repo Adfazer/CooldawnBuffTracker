@@ -11,6 +11,7 @@ local previousPetBuffs = {}
 local previousTargetBuffs = {}  -- Added for target support
 local debugTimerActive = false
 local updateHandlerRegistered = false
+local debugTimerWarned = false
 local isInitialized = false  -- Flag to prevent multiple initializations
 local lastUpdateTime = 0
 local updateInterval = 500 -- миллисекунды между проверками
@@ -272,7 +273,13 @@ function BuffDebugger.Initialize()
         -- Регистрируем UPDATE ровно один раз за жизнь аддона: api.Off нет,
         -- поэтому повторный api.On после каждого Save плодил бы обработчики.
         if not updateHandlerRegistered then
-            api.On("UPDATE", OnDebugUpdateTimer)
+            api.On("UPDATE", function(dt)
+                local ok, err = pcall(OnDebugUpdateTimer, dt)
+                if not ok and not debugTimerWarned then
+                    debugTimerWarned = true
+                    CbtLog.error("debug UPDATE failed: %s", tostring(err))
+                end
+            end)
             updateHandlerRegistered = true
         end
         if not debugTimerActive then

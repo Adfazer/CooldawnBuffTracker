@@ -8,12 +8,14 @@ local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
 local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
 local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
 local CbtIcon = require("CooldawnBuffTracker/util/cbt_icon")
+local CbtDebugLog = require("CooldawnBuffTracker/util/cbt_debuglog")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
 local cachedPlayerBuffs = {}
 local cachedBuffStatus = {}
 local lastRuntimeError = {}
+local OnUpdate
 
 -- Target tracking variables
 local targetBuffData = {}
@@ -842,9 +844,12 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
     }
   end
   if settings and settings.debugBuffId then
+    local where = (currentTargetId and tostring(currentTargetId) == tostring(sourceId))
+      and " (current target)" or " (cached)"
     CbtLog.debug("target skill: %s from %s -> cd %.1fs%s",
-      tostring(buffId), tostring(sourceId), tonumber(cdUsed) or 0,
-      (currentTargetId and tostring(currentTargetId) == tostring(sourceId)) and " (current target)" or " (cached)")
+      tostring(buffId), tostring(sourceId), tonumber(cdUsed) or 0, where)
+    CbtDebugLog.info("target skill: " .. tostring(buffId) .. " from " .. tostring(sourceId)
+      .. " -> cd " .. tostring(cdUsed) .. "s" .. where)
   end
 end
 
@@ -2791,6 +2796,7 @@ local function checkBuffs(unitType)
     -- Check if target changed
     if newTargetId ~= currentTargetId then
       CbtLog.debug("target switch: %s -> %s", tostring(currentTargetId), tostring(newTargetId))
+      CbtDebugLog.info("target switch: " .. tostring(currentTargetId) .. " -> " .. tostring(newTargetId))
       targetChanged = true
       -- Save current target data to cache before switching
       if currentTargetId and targetCache[currentTargetId] then
@@ -3971,8 +3977,21 @@ local AURA_DUMP_PATH = "CooldawnBuffTracker/aura_dump.tbl"
 
 local function debugRecord(line)
   if #debugAuraLines > 20000 then table.remove(debugAuraLines, 1) end
-  debugAuraLines[#debugAuraLines + 1] = string.format("%.1f %s",
-    tonumber(getCurrentTime()) or 0, tostring(line))
+  -- The game log reported `bad argument to string` at this call. Keep the
+  -- diagnostic writer alive and record exactly what was passed instead of
+  -- letting one malformed debug value kill UPDATE.
+  local okText, text = pcall(tostring, line)
+  if not okText or type(text) ~= "string" then
+    text = "<" .. type(line) .. ">"
+  end
+  local okFmt, formatted = pcall(string.format, "%.1f %s",
+    tonumber(getCurrentTime()) or 0, text)
+  if not okFmt then
+    CbtDebugLog.error("debugRecord format failed: " .. tostring(formatted)
+      .. "; original type=" .. type(line))
+    return
+  end
+  debugAuraLines[#debugAuraLines + 1] = formatted
   debugAuraDirty = true
 end
 
@@ -4058,8 +4077,9 @@ local function watchTargetAuras()
   debugAuraState = now
 end
 
-local function OnUpdate(dt)
+local function updateStep(dt)
   if not live then return end
+  CbtDebugLog.heartbeat("UPDATE target=" .. tostring(currentTargetId))
   local scanOk, scanErr = pcall(processBuffIconScan)
   if not scanOk and not lastRuntimeError.scan then
     lastRuntimeError.scan = true
@@ -4288,6 +4308,8 @@ local function OnLoad()
 
   -- Уровень debug в логгере: серые сообщения печатаются только при Debug ON
   CbtLog.setDebug(settings and settings.debugBuffId)
+  CbtDebugLog.reset()
+  CbtDebugLog.setEnabled(settings and settings.debugBuffId)
 
   -- helpers сохраняет позиции канвасов и пересобирает панели по этим хукам
   if helpers then
@@ -4440,6 +4462,20 @@ local function OnLoad()
   end
 end
 
+-- Guard the whole UPDATE body: an exception in one branch must not kill the
+-- shared event handler and freeze every canvas while the settings UI still
+-- works. One-shot file log makes the real fault visible.
+OnUpdate = function(dt)
+  if not live then return end
+  local ok, err = pcall(updateStep, dt)
+  if not ok and not lastRuntimeError.update then
+    lastRuntimeError.update = true
+    CbtLog.error("UPDATE failed: %s", tostring(err))
+    CbtDebugLog.error("UPDATE failed: " .. tostring(err))
+    CbtDebugLog.flush()
+  end
+end
+
 local function OnUnload()
   -- Отключить OnUpdate: api.Off нет, поэтому гасим флагом
   live = false
@@ -4490,6 +4526,8 @@ local function OnUnload()
   if settingsPage and settingsPage.Unload then
     settingsPage.Unload()
   end
+
+  pcall(function() CbtDebugLog.flush() end)
 
   -- Общий gametooltip (1.33.0) живёт на UIParent: освобождаем вместе с аддоном.
   pcall(function()
