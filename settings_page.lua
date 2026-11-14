@@ -3235,8 +3235,12 @@ local function buildCustomBuffInputs(customBuffsListContainer)
                                                     'Add custom entry:', 0, 0, 16)
     customBuffInputsLabel:SetWidth(570)
     customBuffInputsLabel:Show(true)
-    CbtWindow.Tooltip(customBuffInputsLabel,
-        "Add a custom entry: pick the type first, the fields below follow it, then Add entry.")
+    -- This label is a CONTAINER for the type/debug/import/presets buttons and the
+    -- entry fields. A tooltip here would install a full-size hover proxy over it;
+    -- that proxy is Clickable(true) and would swallow every button click (the
+    -- 1.34-1.36 regression: Buff/Skill/Mana buttons stopped switching). No
+    -- tooltip on the container; each button carries its own.
+    if CbtWindow.MarkNoHoverProxy then CbtWindow.MarkNoHoverProxy(customBuffInputsLabel) end
     settingsControls.customBuffInputsLabel = customBuffInputsLabel
 
     -- Явно размещаем заголовок блока добавления пользовательских баффов

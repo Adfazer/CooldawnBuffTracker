@@ -300,6 +300,13 @@ function M.MarkNoHover(widget)
     return widget
 end
 
+-- Контейнерные подписи (на них лежат кнопки/поля) не должны получать
+-- полноразмерный hover-прокси: он Clickable(true) и съест клики детей.
+function M.MarkNoHoverProxy(widget)
+    if widget then widget._cbtNoHoverProxy = true end
+    return widget
+end
+
 -- Прозрачный hover-прокси поверх неинтерактивного виджета: пустой emptywidget
 -- с теми же границами (два анкора по углам — следует за SetWidth/SetExtent),
 -- Clickable(true) и БЕЗ OnClick: у подписей кликов нет, поэтому click-through
@@ -339,7 +346,7 @@ function M.TooltipDynamic(widget, textFn)
     end
     widget._cbtTooltipTextFn = textFn
     local host = widget
-    if widget._cbtNoHover then
+    if widget._cbtNoHover and not widget._cbtNoHoverProxy then
         host = M.HoverProxy(widget) or widget
     end
     chainHandler(host, "OnEnter", function(self)

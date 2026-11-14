@@ -266,6 +266,13 @@ mount and target.
 
 ## Changelog
 
+### 1.36.2
+
+- Fixed the Add custom entry type buttons (Buff/Debuff, Skill, Mana skill) not
+  switching: the large container label had a full-size hover proxy for its
+  tooltip, and that proxy swallowed every child button click. Container labels
+  now opt out of hover proxies; each button keeps its own tooltip.
+
 ### 1.36.1
 
 - Cleanup after 1.35: runtime `skill_icons/` now holds only the two custom PNG
@@ -1436,7 +1443,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.36.1
+**Current Version:** 1.36.2
 
 ## Credits
 
