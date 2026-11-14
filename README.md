@@ -133,10 +133,13 @@ and floating canvases stay exactly where the user put them.
 - **Debug mode** — print buff IDs to chat to identify new buffs to track.
 - **Record (Debug)** window (Debug mode ON) — one journal per unit, switched
   with `Player / Mount / Target`:
-  - **Buff log** — every buff/debuff seen since the last `Clear log`, one row
+  - **Buff log** — every buff/debuff seen since Debug was switched on, one row
     per buff: `name [id] (xN)`. `xN` counts how many times the buff appeared;
     a buff that fades and returns increases the counter instead of adding a
     second row. Active rows are gold, faded rows grey; `Add` works on both.
+    The journal is kept by the addon core while Debug is ON, so it accumulates
+    even with this window closed (sampled every 200 ms, up to 300 entries per
+    unit, reset on Debug OFF → ON).
   - **Log skills** — spells from the combat log, grouped by source name: your
     own casts go to Player, the mount/pet casts to Mount, casts by the current
     target to Target. Duplicates are counted (`xN`), each log keeps the last 200
@@ -173,6 +176,21 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.27.0
+
+- **The Record buff journal accumulates in the background.** While `Debug: ON`
+  the addon samples the active buffs/debuffs of Player, Mount and Target every
+  200 ms and keeps one journal per unit — the `Record (Debug)` window no longer
+  has to be open. Open it at any moment and it lists everything seen since
+  Debug was switched on: one row per buff, `name [id] (xN)`, newest first,
+  active rows gold and faded rows grey, up to 300 entries per unit. A buff that
+  fades and returns grows its counter instead of adding a row.
+- **Switching Debug OFF → ON resets the three journals**, exactly like the aura
+  dump; `Clear log` wipes the journal of the selected unit only. Nothing is
+  sampled while Debug is off, so the normal (non-debug) cost is unchanged.
+- The window's private copy of the log is gone: `Buff log` reads the per-unit
+  journal from the addon core, and `Clear log` clears that journal.
 
 ### 1.26.0
 
@@ -1031,7 +1049,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.26.0
+**Current Version:** 1.27.0
 
 ## Credits
 

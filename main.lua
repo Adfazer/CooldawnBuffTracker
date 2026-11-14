@@ -74,7 +74,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.26.0"
+  version = "1.27.0"
 }
 
 -- Simplified logging function that only logs during initialization
@@ -3105,6 +3105,118 @@ local function getActiveBuffs(unitType)
   return out
 end
 
+-- 1.27.0: фоновый журнал баффов по юниту. Копится в UPDATE, пока Debug: ON,
+-- даже если окно Record закрыто; окно только читает готовый журнал.
+-- Запись: { id, name, icon, count, last, active }; count растёт только при
+-- повторном появлении (пока бафф висит — не растёт).
+local BUFF_JOURNAL_CAP = 300
+local BUFF_JOURNAL_INTERVAL = 200 -- мс: чаще ауры не опрашиваем
+local buffJournals = {}
+local buffJournalTimer = 0
+
+local function buffJournalOf(unitType)
+  local j = buffJournals[unitType]
+  if not j then
+    j = { order = {}, map = {} }
+    buffJournals[unitType] = j
+  end
+  return j
+end
+
+-- Debug OFF -> ON: журналы трёх юнитов начинаются заново (как aura dump).
+local function resetBuffJournals()
+  buffJournals = {}
+  buffJournalTimer = 0
+end
+
+local function journalNowMsec()
+  local ok, ms = pcall(function() return api.Time:GetUiMsec() end)
+  if ok and type(ms) == "number" then return ms end
+  return 0
+end
+
+-- Один сэмпл активных аур юнита: новый id -> строка наверх (count=0),
+-- повторное появление -> count+1 и снова наверх; снятые остаются серыми.
+local function sampleBuffJournal(unitType)
+  local list = getActiveBuffs(unitType)
+  local j = buffJournalOf(unitType)
+  local seen = {}
+  local now
+  for _, it in ipairs(list) do
+    local key = tostring(it.id)
+    if not seen[key] then
+      seen[key] = true
+      local e = j.map[key]
+      if not e then
+        e = { id = it.id, name = it.name, icon = it.icon, count = 0, active = false }
+        j.map[key] = e
+        table.insert(j.order, 1, key)
+      end
+      if not e.active then
+        -- Не был активен в прошлом сэмпле — это новое появление.
+        e.count = (e.count or 0) + 1
+        if now == nil then now = journalNowMsec() end
+        e.last = now
+        for i = #j.order, 1, -1 do
+          if j.order[i] == key then
+            table.remove(j.order, i)
+            break
+          end
+        end
+        table.insert(j.order, 1, key)
+      end
+      e.name = it.name or e.name
+      e.icon = it.icon or e.icon
+      e.active = true
+    end
+  end
+  for key, e in pairs(j.map) do
+    if not seen[key] then e.active = false end
+  end
+  -- Потолок 300 записей на юнит. Сначала вытесняем погасшие записи (снизу —
+  -- самые старые), и только если все записи активны, самые старые вообще:
+  -- иначе активный бафф, выброшенный из журнала, возвращался бы на каждом
+  -- сэмпле как «новый» и прыгал наверх, ломая порядок.
+  while #j.order > BUFF_JOURNAL_CAP do
+    local victim = #j.order
+    for i = #j.order, 1, -1 do
+      local key = j.order[i]
+      local e = j.map[key]
+      if e and not e.active then
+        victim = i
+        break
+      end
+    end
+    local old = j.order[victim]
+    table.remove(j.order, victim)
+    j.map[old] = nil
+  end
+end
+
+-- Новейшие сверху; копия — окно не должно менять журнал.
+local function getBuffLog(unitType)
+  local out = {}
+  local j = buffJournals[unitType or "player"]
+  if not j then return out end
+  for i = 1, #j.order do
+    local e = j.map[j.order[i]]
+    if e then
+      out[#out + 1] = { id = e.id, name = e.name, icon = e.icon,
+                        count = e.count, last = e.last, active = e.active }
+    end
+  end
+  return out
+end
+
+-- Очистка журнала одного юнита (Clear log в окне Record); без юнита — всех.
+local function clearBuffLog(unitType)
+  if unitType then
+    buffJournals[unitType] = { order = {}, map = {} }
+    return
+  end
+  buffJournals = {}
+end
+
 -- Очистка журнала навыков выбранного юнита (кнопка Clear log в окне Record)
 local function clearLoggedSpells(unitType)
   local store = loggedSpells[unitType]
@@ -3145,6 +3257,8 @@ if settingsPage then
   settingsPage.searchIcons = searchIcons
   settingsPage.applyBuffOverride = applyBuffOverride
   settingsPage.getActiveBuffs = getActiveBuffs
+  settingsPage.getBuffLog = getBuffLog
+  settingsPage.clearBuffLog = clearBuffLog
   settingsPage.getLoggedSpells = getLoggedSpells
   settingsPage.clearLoggedSpells = clearLoggedSpells
   settingsPage.findIconByName = findIconByName
@@ -3470,6 +3584,8 @@ local function OnUpdate(dt)
       debugAuraState = {}
       debugAuraTarget = nil
       debugAuraDirty = true
+      -- 1.27.0: журналы журнала Record начинаются заново вместе с aura dump
+      resetBuffJournals()
       debugRecord("[session] aura dump started")
       flushAuraDump()
       safeLog("[CBT] aura dump -> " .. AURA_DUMP_PATH)
@@ -3484,6 +3600,15 @@ local function OnUpdate(dt)
       debugAuraFlushTimer = 0
       flushAuraDump()
     end
+    -- 1.27.0: журнал баффов для окна Record копится в фоне (5 Гц по трём
+    -- юнитам) даже при закрытом окне; чаще ауры не опрашиваем.
+    buffJournalTimer = buffJournalTimer + dt
+    if buffJournalTimer >= BUFF_JOURNAL_INTERVAL then
+      buffJournalTimer = 0
+      for _, unitType in ipairs(UNIT_TYPES) do
+        pcall(sampleBuffJournal, unitType)
+      end
+    end
   else
     if debugWasOn then
       flushAuraDump()
@@ -3492,6 +3617,8 @@ local function OnUpdate(dt)
     debugAuraState = {}
     debugAuraTarget = nil
     debugAuraTimer = 0
+    -- Журналы не сэмплим; сами записи держим — их сбросит OFF -> ON.
+    buffJournalTimer = 0
   end
 
   updateTimer = updateTimer + dt

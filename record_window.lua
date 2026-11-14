@@ -17,14 +17,14 @@ local modeButtons = {}
 local PER_PAGE = 8
 local page = 1
 local results = {}
-local buffLogs = {}   -- [unit] = { order = {...}, map = { [id] = entry } } seen since Clear
-local buffSeen = {}   -- [unit] = { [id] = true } active on the previous refresh
-
-local providerActive
+-- Журнал баффов больше не хранится в окне: его копит main.lua (UPDATE,
+-- пока Debug: ON), окно только читает готовый журнал юнита.
+local providerBuffLog
 local providerLog
 local addBuff
 local addSpell
-local clearLog
+local clearLog       -- очистка журнала навыков
+local clearBuffLog   -- очистка журнала баффов
 local clearBtn
 local refreshAcc = 0
 
@@ -39,74 +39,22 @@ local function setColor(widget, c)
     end
 end
 
--- Время последнего появления баффа в журнале (монотонные мс).
-local function nowMsec()
-    local ok, ms = pcall(function() return api.Time:GetUiMsec() end)
-    if ok and type(ms) == "number" then return ms end
-    return 0
-end
-
 local function refresh()
     if not win or not win:IsVisible() then return end
     results = {}
     local activeCount = 0
     if mode == "buff" then
+        -- Журнал копится в main.lua, пока Debug: ON, — окно показывает и то,
+        -- что было записано до его открытия (закрытое окно ничего не теряет).
         local list = {}
-        if providerActive then
-            local ok, l = pcall(providerActive, unit)
+        if providerBuffLog then
+            local ok, l = pcall(providerBuffLog, unit)
             if ok and type(l) == "table" then list = l end
         end
-        -- Журнал — одна строка на бафф (map по id), счётчик растёт только при
-        -- новом появлении: пока бафф висит, повторных строк нет.
-        local log = buffLogs[unit]
-        if not log then log = { order = {}, map = {} }; buffLogs[unit] = log end
-        local seen = buffSeen[unit]
-        if not seen then seen = {}; buffSeen[unit] = seen end
-        local active = {}
-        for _, it in ipairs(list) do
-            local key = tostring(it.id)
-            active[key] = true
-            activeCount = activeCount + 1
-            local e = log.map[key]
-            if not e then
-                e = { id = it.id, name = it.name, icon = it.icon, count = 0 }
-                log.map[key] = e
-                table.insert(log.order, 1, key)
-                if #log.order > 300 then
-                    local old = log.order[#log.order]
-                    log.order[#log.order] = nil
-                    log.map[old] = nil
-                end
-            end
-            if not seen[key] then
-                e.count = (e.count or 0) + 1
-                e.last = nowMsec()
-                -- Новое появление — наверх (свежие сверху, как в журнале навыков).
-                for i = #log.order, 1, -1 do
-                    if log.order[i] == key then
-                        table.remove(log.order, i)
-                        break
-                    end
-                end
-                table.insert(log.order, 1, key)
-            end
-            e.name = it.name or e.name
-            e.icon = it.icon or e.icon
-            e.active = true
+        for _, e in ipairs(list) do
+            if e.active then activeCount = activeCount + 1 end
         end
-        -- Снятый бафф остаётся в журнале (серым) и снова попадёт в счётчик
-        -- при следующем появлении.
-        for key, e in pairs(log.map) do
-            if not active[key] then e.active = false end
-        end
-        -- Снимок активных для следующего тика: «не видели раньше» = нет в снимке.
-        for key in pairs(seen) do seen[key] = nil end
-        for key in pairs(active) do seen[key] = true end
-        results = {}
-        for i = 1, #log.order do
-            local e = log.map[log.order[i]]
-            if e then results[#results + 1] = e end
-        end
+        results = list
     else
         -- Журнал навыков боевого лога — свой на каждый юнит (Player/Mount/Target).
         if providerLog then
@@ -292,8 +240,7 @@ local function build()
     clearBtn:Show(true)
     clearBtn:SetHandler("OnClick", function()
         if mode == "buff" then
-            buffLogs[unit] = { order = {}, map = {} }
-            buffSeen[unit] = {}
+            if clearBuffLog then clearBuffLog(unit) end
             if statusLabel then statusLabel:SetText("Buff log cleared") end
         else
             if clearLog then clearLog(unit) end
@@ -360,12 +307,15 @@ function M.getUnit()
     return unit
 end
 
-function M.setProviders(activeFn, logFn, addBuffFn, addSpellFn, clearFn)
-    providerActive = activeFn
+-- Провайдеры из settings_page: журнал навыков (logFn) и журнал баффов из
+-- main.lua (buffLogFn, копится, пока Debug: ON), плюс их очистка.
+function M.setProviders(logFn, addBuffFn, addSpellFn, clearFn, buffLogFn, clearBuffFn)
     providerLog = logFn
     addBuff = addBuffFn
     addSpell = addSpellFn
     clearLog = clearFn
+    providerBuffLog = buffLogFn
+    clearBuffLog = clearBuffFn
 end
 
 function M.open()

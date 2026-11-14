@@ -1764,11 +1764,12 @@ local function buildTrackedBuffsSection()
     recordButton:Show(settings and settings.debugBuffId and true or false)
     recordButton:SetHandler("OnClick", function()
         recordWindow.setProviders(
-            function(u) return M.getActiveBuffs and M.getActiveBuffs(u or currentUnitType) or {} end,
             function(u, lim) return M.getLoggedSpells and M.getLoggedSpells(u or currentUnitType, lim) or {} end,
             function(id) return addBuffFromSearch(id, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
             function(name) return addCustomFromSpell(name, recordWindow.getUnit and recordWindow.getUnit() or currentUnitType) end,
-            function(u) if M.clearLoggedSpells then M.clearLoggedSpells(u or currentUnitType) end end)
+            function(u) if M.clearLoggedSpells then M.clearLoggedSpells(u or currentUnitType) end end,
+            function(u) return M.getBuffLog and M.getBuffLog(u or currentUnitType) or {} end,
+            function(u) if M.clearBuffLog then M.clearBuffLog(u or currentUnitType) end end)
         recordWindow.scanStarter = function() if M.startScan then M.startScan("") end end
         recordWindow.open()
     end)
