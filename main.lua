@@ -3995,6 +3995,21 @@ local function debugRecord(line)
   debugAuraDirty = true
 end
 
+-- Safe formatter for debug journal rows: a malformed value from the client
+-- must never throw inside UPDATE (the game log showed `bad argument to string`).
+local function debugRecordf(fmt, ...)
+  local args = { ... }
+  local ok, text = pcall(string.format, fmt, unpack(args))
+  if not ok then
+    local types = {}
+    for i = 1, #args do types[i] = type(args[i]) end
+    CbtDebugLog.error("debugRecord format failed: " .. tostring(text)
+      .. "; types=" .. table.concat(types, ","))
+    return
+  end
+  debugRecord(text)
+end
+
 local function flushAuraDump()
   if not debugAuraDirty then return end
   debugAuraDirty = false
@@ -4055,11 +4070,11 @@ local function watchTargetAuras()
         now[key] = { stack = tonumber(b.stack) or 0, kind = kind }
         local prev = debugAuraState[key]
         if not prev then
-          debugRecord(string.format("+ %s id=%s name=%s stack=%s time=%s",
-            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
+          debugRecordf("+ %s id=%s name=%s stack=%s time=%s",
+            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft))
         elseif prev.stack ~= now[key].stack then
-          debugRecord(string.format("~ %s id=%s name=%s stack=%s time=%s",
-            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft)))
+          debugRecordf("~ %s id=%s name=%s stack=%s time=%s",
+            kind, key, debugAuraName(b.buff_id), tostring(b.stack), tostring(b.timeLeft))
         end
       end
     end
@@ -4071,7 +4086,7 @@ local function watchTargetAuras()
 
   for key, prev in pairs(debugAuraState) do
     if not now[key] then
-      debugRecord(string.format("- %s id=%s name=%s", prev.kind, key, debugAuraName(tonumber(key) or key)))
+      debugRecordf("- %s id=%s name=%s", prev.kind, key, debugAuraName(tonumber(key) or key))
     end
   end
   debugAuraState = now
