@@ -1,6 +1,7 @@
 local api = require("api")
 local defaultSettings = require('CooldawnBuffTracker/default_settings')
 local CbtWindow = require('CooldawnBuffTracker/util/cbt_window')
+local CbtLog = require('CooldawnBuffTracker/util/cbt_log')
 local helpers = {}
 local settingsOpened = false
 
@@ -188,7 +189,7 @@ function helpers.createLabel(id, parent, text, offsetX, offsetY, fontSize)
     return label
 end
 
-function helpers.createEdit(id, parent, text, offsetX, offsetY)
+function helpers.createEdit(id, parent, text, offsetX, offsetY, tip)
     local field = W_CTRL.CreateEdit(id, parent)
     field:SetExtent(100, 20)
     field:AddAnchor("TOPLEFT", offsetX, offsetY)
@@ -196,11 +197,12 @@ function helpers.createEdit(id, parent, text, offsetX, offsetY)
     field.style:SetAlign(ALIGN.LEFT)
     field:SetInitVal(tonumber(text) or 0)
     CbtWindow.StyleEdit(field)
+    if tip then CbtWindow.Tooltip(field, tip) end
 
     return field
 end
 
-function helpers.createButton(id, parent, text, x, y)
+function helpers.createButton(id, parent, text, x, y, tip)
     local button
     if parent and parent.CreateChildWidget then
         button = parent:CreateChildWidget("button", id, 0, true)
@@ -235,12 +237,16 @@ function helpers.createButton(id, parent, text, x, y)
         if self.textLabel then self.textLabel:SetText(t or "") end
     end
 
-    button:SetHandler("OnEnter", function()
+    -- Hover-подсветка через CbtWindow.Hover: тултип потом её не затирает.
+    CbtWindow.Hover(button, function()
         fill:SetColor(0.18, 0.19, 0.23, 0.95)
-    end)
-    button:SetHandler("OnLeave", function()
+    end, function()
         fill:SetColor(0.12, 0.13, 0.15, 0.95)
     end)
+
+    -- Подсказка ставится после ховер-подсветки: CbtWindow.Tooltip цепляет
+    -- прежние OnEnter/OnLeave, поэтому подсветка остаётся.
+    if tip then CbtWindow.Tooltip(button, tip) end
 
     return button
 end
@@ -366,7 +372,7 @@ function helpers.savePresetFromCurrent(presetName)
     settings.activePresetName = presetName
 
     pcall(function() api.SaveSettings() end)
-    api.Log:Info("[CBT] Preset saved: " .. presetName)
+    CbtLog.success("Preset saved: " .. CbtLog.hl(presetName))
     return true
 end
 
@@ -383,7 +389,7 @@ function helpers.deletePreset(presetName)
     end
 
     pcall(function() api.SaveSettings() end)
-    api.Log:Info("[CBT] Preset deleted: " .. presetName)
+    CbtLog.success("Preset deleted: " .. CbtLog.hl(presetName))
     return true
 end
 
@@ -394,7 +400,7 @@ function helpers.loadPreset(presetName)
     local preset = helpers.getPreset(presetName)
 
     if not preset then
-        api.Log:Err("[CBT] Preset not found: " .. tostring(presetName))
+        CbtLog.error("Preset not found: " .. CbtLog.hl(presetName))
         return false, "Preset not found"
     end
 
@@ -422,7 +428,7 @@ function helpers.loadPreset(presetName)
     settings.activePresetName = presetName
 
     pcall(function() api.SaveSettings() end)
-    api.Log:Info("[CBT] Preset loaded: " .. presetName)
+    CbtLog.success("Preset loaded: " .. CbtLog.hl(presetName))
     return true
 end
 

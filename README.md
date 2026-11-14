@@ -54,6 +54,17 @@ settings storage and all `require` paths.
   offset, and **Label color**.
 - **Timer** — font size and **Text color** for the countdown.
 
+### Interface
+- **Hover tooltips everywhere** — every button, field, list row and reference
+  label explains what it does, its units and its range (icon size `16-64 px`,
+  cooldowns in seconds, grid caps, overlay offsets). List rows use dynamic
+  tooltips: the text is built when you hover, so it shows the current name,
+  id, cooldown, duration, canvas or journal state.
+- **Coloured chat log** — every addon message starts with a colour-coded
+  `[CBT]` tag: white for information, green for successes, yellow for warnings,
+  red for errors and grey for `Debug`-only diagnostics. Key values (ids, names,
+  numbers) are highlighted.
+
 ### Configuration management
 - **Settings presets** — save the full layout (position, size, colors, grid, and
   tracked buffs) for all unit types as a named preset, and load it any time.
@@ -176,6 +187,33 @@ A configuration contains your custom buffs and the tracked-buff lists for player
 mount and target.
 
 ## Changelog
+
+### 1.29.0
+
+- **Hover tooltips on every control.** The settings window, the entry editor,
+  the Record window, Presets, Import/Export, the icon search and the support
+  window now explain their buttons, checkboxes, fields, colour pickers, icon
+  previews, pagers and list rows on hover. Numeric fields state their units and
+  ranges (`Icon size 16-64 px`, cooldowns in seconds, `Icons per row 1-20`,
+  overlay `12-64 px`, ...). Window headers answer with `Drag to move the
+  window.`; the close buttons say they close the window.
+- **Dynamic row tooltips.** Tracked rows, custom-entry rows, modifier rows,
+  record/skill rows, preset rows and icon-search rows build their tooltip text
+  at hover time, so it reflects the current name, id, cooldown, duration,
+  canvas, kind (buff/debuff, skill, mana skill), journal state or icon path.
+- **Tooltip helper.** `CbtWindow.Tooltip(widget, text)` and
+  `CbtWindow.TooltipDynamic(widget, fn)` share one implementation: `OnEnter`
+  shows the text via `api.Interface:SetTooltipOnPos`, `OnLeave` clears it with
+  `nil`, and the previous `OnEnter`/`OnLeave` handler (hover highlight) is
+  chained instead of replaced. Nothing runs per frame.
+- **One central chat logger** (`util/cbt_log.lua`). Every message starts with a
+  colour-coded `[CBT]` tag: `info` white, `success` green, `warn` yellow,
+  `error` red, `debug` grey and only printed while Debug is ON. Values can be
+  highlighted with `CbtLog.hl()`; only ASCII and `|cAARRGGBB...|r` codes are
+  used. All direct `api.Log` calls and the old `safeLog` wrapper were replaced
+  across `main`, `helpers`, `buff_debugger`, `settings_page`,
+  `import_export`, `record_window` and `icon_search_window` with the same
+  messages, wording and frequency as before.
 
 ### 1.28.1
 
@@ -1093,7 +1131,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.28.1
+**Current Version:** 1.29.0
 
 ## Credits
 

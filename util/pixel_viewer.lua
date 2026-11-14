@@ -59,6 +59,7 @@ local function openPixelWindow()
     addressEdit.style:SetAlign(ALIGN.CENTER)
     addressEdit.style:SetFontSize(14)
     CbtWindow.StyleEdit(addressEdit)
+    CbtWindow.Tooltip(addressEdit, "Donation address. Click the field, select it and copy with Ctrl+C.")
 
     -- Добавляем заголовок для USDT TON
     local tonTitleLabel = api.Interface:CreateWidget('label', 'tonTitleLabel', supportWindow)
@@ -78,6 +79,7 @@ local function openPixelWindow()
     tonAddressEdit.style:SetAlign(ALIGN.CENTER)
     tonAddressEdit.style:SetFontSize(14)
     CbtWindow.StyleEdit(tonAddressEdit)
+    CbtWindow.Tooltip(tonAddressEdit, "Donation address. Click the field, select it and copy with Ctrl+C.")
 
     -- Добавляем заголовок для USDT SOL
     local solTitleLabel = api.Interface:CreateWidget('label', 'solTitleLabel', supportWindow)
@@ -97,6 +99,7 @@ local function openPixelWindow()
     solAddressEdit.style:SetAlign(ALIGN.CENTER)
     solAddressEdit.style:SetFontSize(14)
     CbtWindow.StyleEdit(solAddressEdit)
+    CbtWindow.Tooltip(solAddressEdit, "Donation address. Click the field, select it and copy with Ctrl+C.")
 
     -- Добавляем заголовок для USDT ERC20
     local erc20TitleLabel = api.Interface:CreateWidget('label', 'erc20TitleLabel', supportWindow)
@@ -116,6 +119,7 @@ local function openPixelWindow()
     erc20AddressEdit.style:SetAlign(ALIGN.CENTER)
     erc20AddressEdit.style:SetFontSize(14)
     CbtWindow.StyleEdit(erc20AddressEdit)
+    CbtWindow.Tooltip(erc20AddressEdit, "Donation address. Click the field, select it and copy with Ctrl+C.")
 
     -- Добавляем заголовок для EthereumX (ETX)
     local etxTitleLabel = api.Interface:CreateWidget('label', 'etxTitleLabel', supportWindow)
@@ -135,6 +139,7 @@ local function openPixelWindow()
     etxAddressEdit.style:SetAlign(ALIGN.CENTER)
     etxAddressEdit.style:SetFontSize(14)
     CbtWindow.StyleEdit(etxAddressEdit)
+    CbtWindow.Tooltip(etxAddressEdit, "Donation address. Click the field, select it and copy with Ctrl+C.")
 
     -- Добавляем подсказку
     local hintLabel = api.Interface:CreateWidget('label', 'hintLabel', supportWindow)
@@ -170,6 +175,7 @@ local function createSupportButton(parent)
     local supportButton = helpers.createButton("supportButton", parent, "Support", 10, 10)
     supportButton:SetExtent(100, 30)
     supportButton:AddAnchor("BOTTOMLEFT", parent, 10, 10)
+    CbtWindow.Tooltip(supportButton, "Open the support window (donation addresses).")
     
     supportButton:SetHandler("OnClick", function()
         openPixelWindow()

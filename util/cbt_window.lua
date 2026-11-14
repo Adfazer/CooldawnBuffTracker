@@ -85,6 +85,9 @@ function M.Create(id, title, w, h, onClose)
         pcall(function() win:RegisterForDrag("LeftButton") end)
     end
     win.header = header
+    -- Шапка — единственная ручка перетаскивания: подсказываем это на ховере.
+    M.Tooltip(header, "Drag to move the window.")
+    M.Tooltip(closeBtn, "Close the window (Esc).")
 
     -- Тёмная подложка контента (первый ребёнок => под остальными элементами)
     local body = win:CreateChildWidget("emptywidget", id .. "_body", 0, false)
@@ -149,16 +152,57 @@ function M.CheckButton(id, parent, onChanged)
 end
 
 -- Всплывающая подсказка на ховере (SetTooltipOnPos: nil очищает).
-function M.Tooltip(widget, text)
-    if not widget or not text or text == "" then return widget end
-    widget:SetHandler("OnEnter", function(self)
-        pcall(function() api.Interface:SetTooltipOnPos(text, self, 0, -22) end)
+-- SetHandler заменяет обработчик, поэтому фабрики кнопок и строк списков
+-- кладут свой ховер-обработчик в поля _cbtHoverOnEnter/_cbtHoverOnLeave:
+-- тултип вызывает его первым и не гасит подсветку ховера.
+local HOVER_FIELD = {
+    OnEnter = "_cbtHoverOnEnter",
+    OnLeave = "_cbtHoverOnLeave",
+}
+
+local function chainHandler(widget, event, fn)
+    local prev = widget[HOVER_FIELD[event]]
+    widget:SetHandler(event, function(self, ...)
+        if prev then pcall(prev, self, ...) end
+        fn(self, ...)
     end)
-    widget:SetHandler("OnLeave", function(self)
+end
+
+-- Регистрирует ховер-обработчик виджета так, чтобы Tooltip мог его сохранить.
+function M.Hover(widget, onEnter, onLeave)
+    if not widget then return widget end
+    if onEnter then
+        widget._cbtHoverOnEnter = onEnter
+        widget:SetHandler("OnEnter", onEnter)
+    end
+    if onLeave then
+        widget._cbtHoverOnLeave = onLeave
+        widget:SetHandler("OnLeave", onLeave)
+    end
+    return widget
+end
+
+-- Динамическая подсказка: текст считается в момент наведения, поэтому строки
+-- списков (имя/id/значения) показывают актуальные данные без OnUpdate.
+function M.TooltipDynamic(widget, textFn)
+    if not widget or type(textFn) ~= "function" then return widget end
+    chainHandler(widget, "OnEnter", function(self)
+        local ok, text = pcall(textFn, self)
+        if ok and type(text) == "string" and text ~= "" then
+            pcall(function() api.Interface:SetTooltipOnPos(text, self, 0, -22) end)
+        end
+    end)
+    chainHandler(widget, "OnLeave", function(self)
         pcall(function() api.Interface:SetTooltipOnPos(nil, self, 0, 0) end)
     end)
     return widget
 end
+
+function M.Tooltip(widget, text)
+    if not widget or not text or text == "" then return widget end
+    return M.TooltipDynamic(widget, function() return text end)
+end
+
 
 -- Перекрашивает готовую кнопку в плоский тёмный стиль, сохраняя анкоры и OnClick.
 function M.FlattenButton(btn)

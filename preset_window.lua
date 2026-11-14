@@ -176,6 +176,10 @@ updatePresetList = function()
         row:RemoveAllAnchors()
         row:AddAnchor("TOPLEFT", container, 10, yOffset)
         row:Show(true)
+        CbtWindow.TooltipDynamic(row, function()
+            return "Preset " .. tostring(presetName) .. (isActive and " (active)" or "")
+                .. ": Load applies its layout to all units, Delete removes it."
+        end)
 
         -- Имя пресета (со звёздочкой, если активен)
         local displayName = (isActive and "* " or "") .. presetName
@@ -187,6 +191,10 @@ updatePresetList = function()
         local loadButton = helpers.createButton('cbtPresetLoadBtn_' .. i, row, isActive and "Active" or "Load", 260, 0)
         loadButton:SetExtent(90, 20)
         loadButton:Show(true)
+        CbtWindow.TooltipDynamic(loadButton, function()
+            return isActive and ("Re-apply the active preset " .. tostring(presetName) .. ".")
+                or ("Load preset " .. tostring(presetName) .. ": position, size, colours and tracked entries.")
+        end)
         loadButton:SetHandler("OnClick", function()
             onLoadClicked(presetName)
         end)
@@ -195,6 +203,9 @@ updatePresetList = function()
         local deleteButton = helpers.createButton('cbtPresetDelBtn_' .. i, row, 'Delete', 360, 0)
         deleteButton:SetExtent(90, 20)
         deleteButton:Show(true)
+        CbtWindow.TooltipDynamic(deleteButton, function()
+            return "Delete preset " .. tostring(presetName) .. ". Cannot be undone."
+        end)
         deleteButton:SetHandler("OnClick", function()
             onDeleteClicked(presetName)
         end)
@@ -214,6 +225,7 @@ createPresetWindowUI = function()
     local activeLabel = helpers.createLabel('cbtPresetActive', presetWindow, 'Active preset: None', 15, 38, 16)
     activeLabel:SetWidth(490)
     activeLabel:Show(true)
+    CbtWindow.Tooltip(activeLabel, "Preset currently applied to all three units.")
     presetControls.activeLabel = activeLabel
 
     -- Секция: сохранить текущие настройки как новый пресет
@@ -224,12 +236,15 @@ createPresetWindowUI = function()
     local nameInput = helpers.createEdit('cbtPresetNameInput', presetWindow, "", 160, 63)
     nameInput:SetWidth(200)
     nameInput:SetMaxTextLength(40)
+    CbtWindow.Tooltip(nameInput, "Name for the new preset, up to 40 characters. Must be unique.")
     nameInput:Show(true)
     presetControls.nameInput = nameInput
 
     local saveButton = helpers.createButton('cbtPresetSaveBtn', presetWindow, 'Save current', 375, 59)
     saveButton:SetExtent(125, 26)
     saveButton:Show(true)
+    CbtWindow.Tooltip(saveButton,
+        "Save the current layout of all units (position, size, colours, grid, tracked entries) as a preset.")
     saveButton:SetHandler("OnClick", onSaveClicked)
     presetControls.saveButton = saveButton
 
@@ -269,6 +284,7 @@ createPresetWindowUI = function()
     prevButton:SetExtent(30, 25)
     prevButton:RemoveAllAnchors()
     prevButton:AddAnchor("BOTTOMLEFT", listContainer, 10, -5)
+    CbtWindow.Tooltip(prevButton, "Previous page of presets.")
     prevButton:SetHandler("OnClick", function()
         if presetListPage > 1 then
             presetListPage = presetListPage - 1
@@ -284,12 +300,16 @@ createPresetWindowUI = function()
     pageIndicator:AddAnchor("LEFT", prevButton, "RIGHT", 5, 0)
     pageIndicator.style:SetAlign(ALIGN.CENTER)
     pageIndicator:Show(true)
+    CbtWindow.TooltipDynamic(pageIndicator, function(self)
+        return "Page " .. tostring(self:GetText() or "1/1") .. " - 7 presets per page."
+    end)
     presetControls.pageIndicator = pageIndicator
 
     local nextButton = helpers.createButton('cbtPresetNextBtn', listContainer, '>', 0, 0)
     nextButton:SetExtent(30, 25)
     nextButton:RemoveAllAnchors()
     nextButton:AddAnchor("LEFT", pageIndicator, "RIGHT", 5, 0)
+    CbtWindow.Tooltip(nextButton, "Next page of presets.")
     nextButton:SetHandler("OnClick", function()
         local names = helpers.getPresetNames()
         local totalPages = math.max(1, math.ceil(#names / presetsPerPage))

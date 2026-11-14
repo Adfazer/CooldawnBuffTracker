@@ -160,6 +160,8 @@ local function makeRow(index)
     local addBtn = helpers.createButton("cbtRecAdd" .. index, row, "Add", 330, 4)
     addBtn:SetExtent(80, 22)
     addBtn:Show(true)
+    CbtWindow.Tooltip(addBtn,
+        "Add to tracking on the current unit (creates a custom entry with a default CD/D when needed).")
     addBtn:SetHandler("OnClick", function()
         local item = row.item
         if not item then return end
@@ -175,11 +177,22 @@ local function makeRow(index)
         refresh()
     end)
 
-    row:SetHandler("OnEnter", function(self)
+    CbtWindow.Hover(row, function(self)
         if self.bg then self.bg:SetColor(0.16, 0.18, 0.22, 0.95) end
-    end)
-    row:SetHandler("OnLeave", function(self)
+    end, function(self)
         if self.bg then self.bg:SetColor(0.10, 0.11, 0.13, 0.92) end
+    end)
+    CbtWindow.TooltipDynamic(row, function(self)
+        local item = self.item
+        if not item then return nil end
+        local name = tostring(item.name or item.id or "")
+        if mode == "buff" then
+            return string.format("%s (id %s) - %s, seen %s time(s).",
+                name, tostring(item.id), item.active and "active" or "faded",
+                tostring(item.count or 1))
+        end
+        return string.format("%s - seen %s time(s) in the combat log.",
+            name, tostring(item.count or 1))
     end)
 
     row:Show(false)
@@ -195,15 +208,20 @@ local function build()
     modeButtons.buff = helpers.createButton("cbtRecModeBuff", win, "Buff log", 20, 42)
     modeButtons.buff:SetExtent(150, 26)
     modeButtons.buff:Show(true)
+    CbtWindow.Tooltip(modeButtons.buff,
+        "Buff journal: every buff/debuff seen while Debug is ON, active and faded, newest first.")
     modeButtons.buff:SetHandler("OnClick", function() setMode("buff") end)
 
     modeButtons.log = helpers.createButton("cbtRecModeLog", win, "Log skills", 180, 42)
     modeButtons.log:SetExtent(150, 26)
     modeButtons.log:Show(true)
+    CbtWindow.Tooltip(modeButtons.log,
+        "Skills seen in the combat log for the selected unit, newest first.")
     modeButtons.log:SetHandler("OnClick", function() setMode("log") end)
 
     local scanBtn = helpers.createButton("cbtRecScan", win, "Rescan dump", 340, 42)
     scanBtn:SetExtent(100, 26)
+    CbtWindow.Tooltip(scanBtn, "Scan the client buff table again and rebuild the icon/name dump.")
     scanBtn:Show(true)
     scanBtn:SetHandler("OnClick", function()
         if M.scanStarter then M.scanStarter() end
@@ -215,6 +233,7 @@ local function build()
     unitLabel:SetExtent(40, 18)
     setColor(unitLabel, COLORS.muted)
     unitLabel:Show(true)
+    CbtWindow.Tooltip(unitLabel, "Unit whose journal is listed below.")
 
     local unitButtons = {}
     local function setUnit(u)
@@ -229,6 +248,8 @@ local function build()
         local btn = helpers.createButton("cbtRecUnit_" .. u, win, (u == "playerpet") and "Mount" or (u == "player") and "Player" or "Target", ux, 72)
         btn:SetExtent(80, 22)
         btn:Show(true)
+        CbtWindow.Tooltip(btn, "Show the " .. ((u == "playerpet") and "Mount"
+            or (u == "player") and "Player" or "Target") .. " journal.")
         unitButtons[u] = btn
         btn:SetHandler("OnClick", function() setUnit(u) end)
         ux = ux + 86
@@ -238,6 +259,10 @@ local function build()
     clearBtn = helpers.createButton("cbtRecClear", win, "Clear log", 330, 72)
     clearBtn:SetExtent(110, 24)
     clearBtn:Show(true)
+    CbtWindow.TooltipDynamic(clearBtn, function()
+        return "Clear the " .. (mode == "buff" and "buff journal" or "skill log")
+            .. " of the selected unit."
+    end)
     clearBtn:SetHandler("OnClick", function()
         if mode == "buff" then
             if clearBuffLog then clearBuffLog(unit) end
@@ -254,6 +279,7 @@ local function build()
     countLabel:SetExtent(420, 18)
     setColor(countLabel, COLORS.muted)
     countLabel:Show(true)
+    CbtWindow.Tooltip(countLabel, "Entries in the current tab; buffs also show how many are active.")
 
     statusLabel = helpers.createLabel("cbtRecStatus", win, "", 20, 124, 13)
     statusLabel:SetExtent(420, 18)
@@ -267,6 +293,7 @@ local function build()
     local prev = helpers.createButton("cbtRecPrev", win, "<", 20, 446)
     prev:SetExtent(60, 26)
     prev:Show(true)
+    CbtWindow.Tooltip(prev, "Previous page.")
     prev:SetHandler("OnClick", function()
         if page > 1 then page = page - 1; refresh() end
     end)
@@ -275,15 +302,20 @@ local function build()
     pageLabel:SetExtent(80, 20)
     setColor(pageLabel, COLORS.text)
     pageLabel:Show(true)
+    CbtWindow.TooltipDynamic(pageLabel, function(self)
+        return "Page " .. tostring(self:GetText() or "1/1") .. " - 8 entries per page."
+    end)
 
     local nextBtn = helpers.createButton("cbtRecNext", win, ">", 170, 446)
     nextBtn:SetExtent(60, 26)
     nextBtn:Show(true)
+    CbtWindow.Tooltip(nextBtn, "Next page.")
     nextBtn:SetHandler("OnClick", function() page = page + 1; refresh() end)
 
     local closeBtn = helpers.createButton("cbtRecClose", win, "Close", 340, 446)
     closeBtn:SetExtent(100, 26)
     closeBtn:Show(true)
+    CbtWindow.Tooltip(closeBtn, "Close the Record window.")
     closeBtn:SetHandler("OnClick", function() win:Show(false) end)
 
     -- Живое обновление: список обновляется, пока окно открыто (не только по вкладкам)

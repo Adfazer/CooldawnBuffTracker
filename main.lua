@@ -5,6 +5,7 @@ local helpers = require("CooldawnBuffTracker/helpers")
 local settingsPage = require("CooldawnBuffTracker/settings_page")
 local BuffDebugger = require("CooldawnBuffTracker/buff_debugger")
 local EffectiveCD = require("CooldawnBuffTracker/effective_cd")
+local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
 
 -- Declare variables for caching buff states (add to the beginning of file after other variables)
 local cachedMountBuffs = {}
@@ -58,7 +59,7 @@ if not BuffsToTrack then
       return getTrackedBuffsFromSettings(unitType)
     end
   }
-  api.Log:Info("[CBT] Failed to load buffs_to_track.lua, using settings")
+  CbtLog.warn("Failed to load buffs_to_track.lua, using settings")
 end
 
 if not BuffList then
@@ -68,22 +69,15 @@ if not BuffList then
     GetBuffCooldown = function(id) return 0 end,
     GetBuffTimeOfAction = function(id) return 0 end
   }
-  api.Log:Info("[CBT] Failed to load buff_helper.lua, using placeholder")
+  CbtLog.warn("Failed to load buff_helper.lua, using placeholder")
 end
 
 local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.28.1"
+  version = "1.29.0"
 }
-
--- Simplified logging function that only logs during initialization
-local function safeLog(message)
-  if api and api.Log and api.Log.Info then
-    api.Log:Info(message)
-  end
-end
 
 local buffData = {}
 local playerBuffData = {}
@@ -284,7 +278,7 @@ local function initBuffData()
       if not trackedBuffsMap[buffId] then
         -- Если бафф больше не отслеживается, удаляем его из данных
         buffDataTable[buffId] = nil
-        safeLog("[CBT] " .. unitType .. " buff removed from tracking: " .. tostring(buffId))
+        CbtLog.info(unitType .. " buff removed from tracking: " .. CbtLog.hl(buffId))
       end
     end
 
@@ -333,7 +327,7 @@ local function initBuffData()
           status = "ready"
         }
 
-        safeLog("[CBT] " .. unitType .. " buff added for tracking: " .. tostring(buffId) .. " (" .. tostring(buffName) .. ")")
+        CbtLog.success(unitType .. " buff added for tracking: " .. CbtLog.hl(buffId) .. " (" .. CbtLog.hl(buffName) .. ")")
       end
     end
   end
@@ -460,7 +454,7 @@ local function setBuffStatus(buffId, status, currentTime, unitType, remainingTim
 
   -- Диагностика таймингов (Debug: ON): видно, от какого момента считается КД
   if settings and settings.debugBuffId and oldStatus ~= buff.status then
-    safeLog(string.format("[CBT] timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s",
+    CbtLog.debug(string.format("timer %s %s->%s now=%.2f D=%s CD=%s fixed=%s ready=%s rem=%s",
       tostring(buffId), tostring(oldStatus), tostring(buff.status),
       tonumber(currentTime) or 0, tostring(buff.timeOfAction), tostring(buff.cooldown),
       tostring(buff.fixedTime), tostring(buff.readyAt), tostring(remainingTime)))
@@ -589,8 +583,8 @@ local function applyEffectiveCD(cb, snapshot, now, targetId)
     local predicted = tonumber(state.predicted) or 0
     if actual > 0 and predicted > 0 and actual < predicted * 0.95 then
       state.learned = true
-      safeLog(string.format(
-        "[CBT] effective CD: smart %.1f%% learned for %s on target %s (applied after %.2f s < %.2f s)",
+      CbtLog.success(string.format(
+        "effective CD: smart %.1f%% learned for %s on target %s (applied after %.2f s < %.2f s)",
         smartPct, key, tostring(targetId), actual, predicted * 0.95))
     end
   end
@@ -617,7 +611,7 @@ local function maybeCheckTargetClass(targetId, now)
   local knownNow = (className ~= "Pending")
   if knownPrev and knownNow and className ~= prev then
     cache.smart = {}
-    safeLog("[CBT] effective CD: target " .. tostring(targetId) .. " class "
+    CbtLog.warn("effective CD: target " .. tostring(targetId) .. " class "
       .. tostring(prev) .. " -> " .. className .. ", smart reset for this target")
   end
   if knownNow or not knownPrev then
@@ -662,7 +656,7 @@ local function processTargetResets(snapshot, now, records, targetId)
                 rec.effCD = 0
                 changed = true
               end
-              safeLog("[CBT] effective CD: reset '" .. EffectiveCD.sourceLabel(mod, modIndex)
+              CbtLog.info("effective CD: reset '" .. EffectiveCD.sourceLabel(mod, modIndex)
                 .. "' zeroed " .. tostring(cb.id) .. " on target " .. tostring(targetId))
             end
           end
@@ -889,7 +883,7 @@ local function learnSkillIcon(cb, spellId)
   if cb.iconFile and cb.iconFile ~= "" then return end
   if not spellId then
     if settings.debugBuffId then
-      safeLog("[CBT] icon: no spellId in event for '" .. tostring(cb.id) .. "'")
+      CbtLog.debug("icon: no spellId in event for '" .. tostring(cb.id) .. "'")
     end
     return
   end
@@ -909,7 +903,7 @@ local function learnSkillIcon(cb, spellId)
   end
   if settings.debugBuffId then
     local errText = ok and "" or (" err=" .. tostring(info))
-    safeLog("[CBT] icon lookup id=" .. tostring(spellId)
+    CbtLog.debug("icon lookup id=" .. tostring(spellId)
       .. " -> path=" .. tostring(path) .. " name=" .. tostring(name) .. errText)
   end
   if not path or path == "" then
@@ -928,7 +922,7 @@ local function learnSkillIcon(cb, spellId)
     end
   end
   pcall(function() api.SaveSettings() end)
-  safeLog("[CBT] icon learned for spell " .. tostring(spellId) .. ": " .. tostring(path))
+  CbtLog.debug("icon learned for spell " .. tostring(spellId) .. ": " .. tostring(path))
 end
 
 -- Имя навыка из лога -> запуск/обновление таймера у виновника
@@ -955,8 +949,8 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         for i = 1, 14 do
           parts[#parts + 1] = tostring(i) .. "=" .. tostring(rawArgs[i])
         end
-        safeLog("[CBT] " .. tostring(combatEvent) .. " args: " .. table.concat(parts, " "))
-        safeLog("[CBT] parsed: spellId=" .. tostring(spellId)
+        CbtLog.debug(tostring(combatEvent) .. " args: " .. table.concat(parts, " "))
+        CbtLog.debug("parsed: spellId=" .. tostring(spellId)
           .. " spellName=" .. tostring(spellName))
       end
       learnSkillIcon(cb, spellId)
@@ -996,7 +990,7 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         if last and (now - last) < (blockWindow - 0.5) then
           blocked = true
           if settings.debugBuffId then
-            safeLog("[CBT] '" .. tostring(spellName) .. "': repeat trigger after "
+            CbtLog.debug("'" .. tostring(spellName) .. "': repeat trigger after "
               .. string.format("%.1f", now - last) .. " s - ignored (window " .. tostring(blockWindow) .. ")")
           end
         else
@@ -1015,18 +1009,18 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         end
         if settings.debugBuffId then
           if hits > 0 then
-            safeLog("[CBT] '" .. spellName .. "': self cast -> Player/Mount panels: " .. tostring(hits))
+            CbtLog.debug("'" .. spellName .. "': self cast -> Player/Mount panels: " .. tostring(hits))
           else
-            safeLog("[CBT] '" .. spellName .. "': self cast, but the buff is not tracked on Player/Mount")
+            CbtLog.debug("'" .. spellName .. "': self cast, but the buff is not tracked on Player/Mount")
           end
           if sourceId and currentTargetId and tostring(currentTargetId) == tostring(sourceId) then
-            safeLog("[CBT] '" .. spellName .. "': you are the current target -> recorded to Target")
+            CbtLog.debug("'" .. spellName .. "': you are the current target -> recorded to Target")
           end
         end
       elseif sourceId then
         triggerTargetCooldown(sourceId, cb.id, now, now)
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': cooldown recorded for " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
+          CbtLog.debug("'" .. spellName .. "': cooldown recorded for " .. tostring(srcKey) .. " (unit " .. tostring(sourceId) .. ")")
         end
       elseif srcKey then
         local p = pendingBySource[srcKey]
@@ -1036,11 +1030,11 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         end
         p[cb.id] = now
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': source " .. tostring(srcKey) .. " unknown, waiting for the first target")
+          CbtLog.debug("'" .. spellName .. "': source " .. tostring(srcKey) .. " unknown, waiting for the first target")
         end
       else
         if settings.debugBuffId then
-          safeLog("[CBT] '" .. spellName .. "': no source in the event")
+          CbtLog.debug("'" .. spellName .. "': no source in the event")
         end
       end
       end
@@ -1441,7 +1435,7 @@ local function cleanupTargetCache(now)
   for _, targetId in ipairs(keysToRemove) do
     targetCache[targetId] = nil
     if settings.debugBuffId then
-      safeLog("[CBT] Target cache cleaned: " .. tostring(targetId))
+      CbtLog.debug("Target cache cleaned: " .. tostring(targetId))
     end
   end
 
@@ -3256,7 +3250,7 @@ local function loadBuffDump()
   end
   if n > 0 then
     buffDump = { byName = byName, list = buildDumpList(entries), count = n }
-    safeLog("[CBT] buff dump: " .. n .. " buffs loaded from " .. tostring(usedPath))
+    CbtLog.info("buff dump: " .. n .. " buffs loaded from " .. tostring(usedPath))
   end
 end
 
@@ -3281,7 +3275,7 @@ local function applyDumpToCustomBuffs()
             cache.buffStates[cb.id].icon = e.path
           end
         end
-        safeLog("[CBT] icon from dump: " .. tostring(cb.spellName) .. " -> " .. e.path)
+        CbtLog.info("icon from dump: " .. tostring(cb.spellName) .. " -> " .. e.path)
       end
     end
   end
@@ -3316,7 +3310,7 @@ local function applyBuffIcon(nameKey, id, path)
   if settingsPage and settingsPage.onSkillIconFound then
     pcall(settingsPage.onSkillIconFound, nameKey, id, path)
   end
-  safeLog("[CBT] buff dump: '" .. nameKey .. "' -> id=" .. tostring(id)
+  CbtLog.info("buff dump: '" .. nameKey .. "' -> id=" .. tostring(id)
     .. " path=" .. tostring(path) .. " (entries updated: " .. applied .. ")")
 end
 
@@ -3340,7 +3334,7 @@ local function startBuffIconScan(name)
     errors = 0,
     firstError = nil,
   }
-  safeLog("[CBT] buff scan: dumping all buffs"
+  CbtLog.info("buff scan: dumping all buffs"
     .. (key ~= "" and (" + search '" .. name .. "'") or "")
     .. " (1..50000, 8000000..8001000)")
   return true
@@ -3592,7 +3586,7 @@ local function processBuffIconScan()
       end
     end
     buffDump = { byName = byName, list = buildDumpList(entries), count = #st.entries }
-    safeLog("[CBT] buff dump: " .. #st.entries .. " buffs, "
+    CbtLog.info("buff dump: " .. #st.entries .. " buffs, "
       .. (saved and "saved to buff_dump.tbl" or "NOT saved (api.File unavailable)")
       .. "; tables=" .. tostring(st.tables) .. " named=" .. tostring(st.named)
       .. " errors=" .. tostring(st.errors)
@@ -3602,7 +3596,7 @@ local function processBuffIconScan()
       if e then
         applyBuffIcon(st.target, e.id, e.path)
       else
-        safeLog("[CBT] buff dump: '" .. st.target .. "' not found")
+        CbtLog.warn("buff dump: '" .. st.target .. "' not found")
       end
     end
     if settingsPage and settingsPage.onIconDumpUpdated then
@@ -3746,7 +3740,7 @@ local function pollMountMana(dtSec)
         setBuffStatus(best.id, "active", getCurrentTime(), "playerpet", nil)
         if buffData[best.id] then buffData[best.id].synthetic = true end
         if settings.debugBuffId then
-          safeLog(string.format("[CBT] mana cast %s cost=%s spend=%.1f regen=%.1f mount=%s",
+          CbtLog.debug(string.format("mana cast %s cost=%s spend=%.1f regen=%.1f mount=%s",
             tostring(best.id), tostring(best.cost), spend, regen or 0, petName))
         end
       elseif settings.debugBuffId then
@@ -3755,7 +3749,7 @@ local function pollMountMana(dtSec)
           detail[#detail + 1] = string.format("%s(mount=%s,ready=%s)",
             tostring(e.cost), tostring(e.mount), tostring(e.ready))
         end
-        safeLog(string.format("[CBT] mana drop %.1f (regen %.1f) — no match; pet='%s'; mount-blocked=%d cd-blocked=%d; entries: %s",
+        CbtLog.debug(string.format("mana drop %.1f (regen %.1f) — no match; pet='%s'; mount-blocked=%d cd-blocked=%d; entries: %s",
           spend, regen or 0, petName, blockedByMount, blockedByCd, table.concat(detail, " | ")))
       end
     end
@@ -3788,7 +3782,7 @@ local function flushAuraDump()
   local ok = pcall(function()
     api.File:Write(AURA_DUMP_PATH, { dump = table.concat(debugAuraLines, "\n") })
   end)
-  if not ok then safeLog("[CBT] aura dump: write failed") end
+  if not ok then CbtLog.error("aura dump: write failed") end
 end
 
 local function debugAuraName(buffId)
@@ -3894,7 +3888,7 @@ local function OnUpdate(dt)
       resetBuffJournals()
       debugRecord("[session] aura dump started")
       flushAuraDump()
-      safeLog("[CBT] aura dump -> " .. AURA_DUMP_PATH)
+      CbtLog.debug("aura dump -> " .. AURA_DUMP_PATH)
     end
     debugAuraTimer = debugAuraTimer + dt
     if debugAuraTimer >= 100 then
@@ -3973,14 +3967,14 @@ local function initializeUI()
 
   for _, unitType in ipairs(unitTypes) do
     local shouldShowUI = hasTrackedBuffs(unitType)
-    safeLog("[CBT] UI initialization for " .. unitType .. ": " .. (shouldShowUI and "show" or "hide"))
+    CbtLog.info("UI initialization for " .. unitType .. ": " .. (shouldShowUI and "show" or "hide"))
 
     if shouldShowUI then
       local created = ensureUnitCanvases(unitType)
       if created or #(unitCanvases[unitType] or {}) > 0 then
         updateBuffIcons(unitType)
       else
-        safeLog("[CBT] Error creating canvases for " .. unitType)
+        CbtLog.error("Error creating canvases for " .. unitType)
 
         -- Повторная попытка создания канвасов с задержкой
         api:DoIn(1000, function()
@@ -3989,7 +3983,7 @@ local function initializeUI()
           if retryCreated or #(unitCanvases[unitType] or {}) > 0 then
             updateBuffIcons(unitType)
           else
-            safeLog("[CBT] Repeated error creating canvases for " .. unitType)
+            CbtLog.error("Repeated error creating canvases for " .. unitType)
           end
         end)
       end
@@ -4006,7 +4000,7 @@ local function onCombatMessage(event, ...)
   local ok, parsed = pcall(ParseCombatMessage, combatEvent, unpack(args, 5))
   if not ok or type(parsed) ~= "table" then return end
   if settings and settings.debugBuffId then
-    safeLog(string.format("[CBT] msg %s src=%s tgt=%s spell=%s id=%s",
+    CbtLog.debug(string.format("msg %s src=%s tgt=%s spell=%s id=%s",
       tostring(combatEvent), tostring(args[3]), tostring(args[4]),
       tostring(parsed.spellName), tostring(parsed.spellId)))
   end
@@ -4025,7 +4019,7 @@ local function OnLoad()
   if helpers then
     settings = helpers.getSettings()
   else
-    safeLog("[CBT] Helpers module not loaded, using basic settings")
+    CbtLog.warn("Helpers module not loaded, using basic settings")
     settings = {
       playerpet = {
         canvases = { { name = "Main", posX = defaultPositionX, posY = defaultPositionY,
@@ -4047,6 +4041,9 @@ local function OnLoad()
       }
     }
   end
+
+  -- Уровень debug в логгере: серые сообщения печатаются только при Debug ON
+  CbtLog.setDebug(settings and settings.debugBuffId)
 
   -- helpers сохраняет позиции канвасов и пересобирает панели по этим хукам
   if helpers then
@@ -4073,7 +4070,7 @@ local function OnLoad()
   -- Диагностика кастомных баффов: видно, чем они ключуются и какие CD/D у них
   if settings and settings.debugBuffId then
     for _, cb in ipairs(settings.customBuffs or {}) do
-      safeLog("[CBT] custom: id=" .. tostring(cb.id)
+      CbtLog.debug("custom: id=" .. tostring(cb.id)
         .. " name=" .. tostring(cb.name)
         .. " spell=" .. tostring(cb.spellName)
         .. " CD=" .. tostring(cb.cooldown)
@@ -4139,11 +4136,12 @@ local function OnLoad()
     end
   end)
 
-  safeLog("[CBT] Loading CooldawnBuffTracker " .. CooldawnBuffTracker.version .. " by " .. CooldawnBuffTracker.author)
+  CbtLog.success("Loading CooldawnBuffTracker " .. CbtLog.hl(CooldawnBuffTracker.version)
+    .. " by " .. CbtLog.hl(CooldawnBuffTracker.author))
 
   -- Модель канвасов уже нормализована helpers.getSettings()/default_settings.migrate():
   -- плоские поля юнитов переехали в canvases[1] ("Main"), ничего не потеряно.
-  safeLog("[CBT] Canvas model ready: playerpet=" .. tostring(#(settings.playerpet.canvases or {}))
+  CbtLog.info("Canvas model ready: playerpet=" .. CbtLog.hl(#(settings.playerpet.canvases or {}))
     .. " player=" .. tostring(#(settings.player.canvases or {}))
     .. " target=" .. tostring(#(settings.target.canvases or {})))
 
@@ -4168,7 +4166,7 @@ local function OnLoad()
       if event == "SPELLCAST_START" then
         local spellName, castingTime, caster = ...
         if settings and settings.debugBuffId then
-          safeLog(string.format("[CBT] cast %s by %s (%sms)",
+          CbtLog.debug(string.format("cast %s by %s (%sms)",
             tostring(spellName), tostring(caster), tostring(castingTime)))
         end
         return
@@ -4276,7 +4274,7 @@ CooldawnBuffTracker.OnSettingToggle = OnSettingToggle
 -- (своё событие addon'а, шлётся через api:Emit из buffs_to_track/presets/import)
 api.On("ADDON_CBT_BUFFS_CHANGED", function()
   if not live then return end
-  safeLog("[CBT] Received buff list update event")
+  CbtLog.info("Received buff list update event")
 
   -- Обновляем данные баффов (включая удаление ненужных)
   local oldMountBuffsCount = 0
@@ -4295,8 +4293,8 @@ api.On("ADDON_CBT_BUFFS_CHANGED", function()
   local newPlayerBuffsCount = 0
   for _ in pairs(playerBuffData) do newPlayerBuffsCount = newPlayerBuffsCount + 1 end
 
-  safeLog("[CBT] Mount buff list updated: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
-  safeLog("[CBT] Player buff list updated: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
+  CbtLog.info("Mount buff list updated: was " .. oldMountBuffsCount .. ", now " .. newMountBuffsCount)
+  CbtLog.info("Player buff list updated: was " .. oldPlayerBuffsCount .. ", now " .. newPlayerBuffsCount)
 
   -- Пересобираем канвасы всех юнитов: набор записей и их привязка к канвасам
   -- могли измениться (добавление/удаление/перенос/пресет/импорт).

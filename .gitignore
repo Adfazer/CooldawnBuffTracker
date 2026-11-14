@@ -5,4 +5,7 @@
 .clinerules/
 .idea/
 # Ignore PowerShell scripts
-*.ps1 
+*.ps1
+# Python caches from the offline test harnesses
+__pycache__/
+*.pyc

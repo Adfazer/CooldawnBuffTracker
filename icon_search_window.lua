@@ -65,15 +65,19 @@ local function makeRow(index)
     if label.Clickable then label:Clickable(false) end
     row.nameLabel = label
 
-    row:SetHandler("OnEnter", function(self)
+    CbtWindow.Hover(row, function(self)
         if self.bg then
             self.bg:SetColor(COLORS.rowHover[1], COLORS.rowHover[2], COLORS.rowHover[3], COLORS.rowHover[4])
         end
-    end)
-    row:SetHandler("OnLeave", function(self)
+    end, function(self)
         if self.bg then
             self.bg:SetColor(COLORS.row[1], COLORS.row[2], COLORS.row[3], COLORS.row[4])
         end
+    end)
+    CbtWindow.TooltipDynamic(row, function(self)
+        if not self.iconPath then return nil end
+        return tostring(self.iconName or "") .. " - " .. tostring(self.iconPath)
+            .. ". Click to apply this icon."
     end)
     row:SetHandler("OnClick", function(self)
         if picker and self.iconPath then
@@ -143,7 +147,8 @@ local function buildWindow()
     end)
     if not win then return end
 
-    editBox = helpers.createEdit("cbtIconSearchEdit", win, "", 20, 44)
+    editBox = helpers.createEdit("cbtIconSearchEdit", win, "", 20, 44,
+        "Filter by buff or skill name (English names). An empty field lists the whole dump.")
     editBox:SetExtent(380, 24)
     if editBox.CreateGuideText then
         pcall(function() editBox:CreateGuideText("Start typing a skill or buff name...", ALIGN.LEFT) end)
@@ -156,7 +161,8 @@ local function buildWindow()
         if self and self.ClearFocus then self:ClearFocus() end
     end)
 
-    local scanButton = helpers.createButton("cbtIconSearchScan", win, "Scan dump", 410, 44)
+    local scanButton = helpers.createButton("cbtIconSearchScan", win, "Scan dump", 410, 44,
+        "Scan the client buff table and rebuild the icon dump (takes a moment).")
     scanButton:SetExtent(126, 24)
     scanButton:Show(true)
     scanButton:SetHandler("OnClick", function()
@@ -171,9 +177,11 @@ local function buildWindow()
     countLabel = helpers.createLabel("cbtIconSearchCount", win, "", 20, 74, 14)
     countLabel:SetExtent(380, 18)
     setLabelColor(countLabel, COLORS.muted)
+    CbtWindow.Tooltip(countLabel, "Matches for the current query. Click a row to apply its icon.")
 
     -- Опция: вместе с иконкой подставлять и Spell (имя выбранного баффа)
-    local spellToggle = helpers.createButton("cbtIconSearchSpell", win, "Spell: OFF", 410, 72)
+    local spellToggle = helpers.createButton("cbtIconSearchSpell", win, "Spell: OFF", 410, 72,
+        "Also fill the entry's Spell field with the picked buff name.")
     spellToggle:SetExtent(126, 24)
     spellToggle:Show(true)
     spellToggle:SetHandler("OnClick", function()
@@ -190,7 +198,8 @@ local function buildWindow()
         rows[i] = makeRow(i)
     end
 
-    local prev = helpers.createButton("cbtIconSearchPrev", win, "<", 20, 448)
+    local prev = helpers.createButton("cbtIconSearchPrev", win, "<", 20, 448,
+        "Previous page of results.")
     prev:SetExtent(70, 26)
     prev:Show(true)
     prev:SetHandler("OnClick", function()
@@ -203,8 +212,12 @@ local function buildWindow()
     pageLabel = helpers.createLabel("cbtIconSearchPage", win, "1/1", 100, 452, 14)
     pageLabel:SetExtent(80, 20)
     setLabelColor(pageLabel, COLORS.text)
+    CbtWindow.TooltipDynamic(pageLabel, function(self)
+        return "Page " .. tostring(self:GetText() or "1/1") .. " - 9 icons per page."
+    end)
 
-    local nextBtn = helpers.createButton("cbtIconSearchNext", win, ">", 190, 448)
+    local nextBtn = helpers.createButton("cbtIconSearchNext", win, ">", 190, 448,
+        "Next page of results.")
     nextBtn:SetExtent(70, 26)
     nextBtn:Show(true)
     nextBtn:SetHandler("OnClick", function()
@@ -212,7 +225,8 @@ local function buildWindow()
         refresh()
     end)
 
-    local closeBtn = helpers.createButton("cbtIconSearchClose", win, "Close", 436, 448)
+    local closeBtn = helpers.createButton("cbtIconSearchClose", win, "Close", 436, 448,
+        "Close the icon search without changing the icon.")
     closeBtn:SetExtent(100, 26)
     closeBtn:Show(true)
     closeBtn:SetHandler("OnClick", function()

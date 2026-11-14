@@ -1,5 +1,6 @@
 local api = require("api")
 local helpers = require('CooldawnBuffTracker/helpers')
+local CbtLog = require('CooldawnBuffTracker/util/cbt_log')
 
 -- Модуль отладки баффов
 local BuffDebugger = {}
@@ -27,16 +28,11 @@ local function PrintBuffId(buffId, unitId, event)
     -- Форматируем ID баффа, чтобы большие числа отображались полностью без экспоненты
     local formattedBuffId = helpers.formatBuffId(buffId)
     
-    -- Формируем и выводим сообщение в чат
-    local message = string.format("[CBT] %s - Buff ID: %s, Unit: %s", 
-                                 event or "BUFF_EVENT", 
-                                 formattedBuffId, 
-                                 unitId or "unknown")
-    
-    -- Выводим сообщение в чат
-    if api.Log then
-        api.Log:Info(message)
-    end
+    -- Формируем и выводим сообщение в чат (только при Debug: ON)
+    CbtLog.debug(string.format("%s - buff ID: %s, unit: %s",
+                               event or "BUFF_EVENT",
+                               CbtLog.hl(formattedBuffId),
+                               CbtLog.hl(unitId or "unknown")))
 end
 
 -- Обработчик события наложения баффа на игрока
@@ -257,7 +253,7 @@ end
 function BuffDebugger.Initialize()
     -- Prevent multiple initializations
     if isInitialized then
-        api.Log:Info("[CBT] Debug mode already initialized, skipping.")
+        CbtLog.debug("Debug mode already initialized, skipping.")
         return
     end
     
@@ -292,7 +288,7 @@ function BuffDebugger.Initialize()
         end
         
         -- Выводим сообщение о включении режима отладки
-        api.Log:Info("[CBT] Buff debug mode enabled. Buff IDs will be displayed in chat.")
+        CbtLog.info("Buff debug mode enabled. Buff IDs will be displayed in chat.")
     end
 end
 
@@ -309,7 +305,7 @@ function BuffDebugger.Shutdown()
     previousPetBuffs = {}
     previousTargetBuffs = {}
     
-    api.Log:Info("[CBT] Buff debug mode disabled.")
+    CbtLog.info("Buff debug mode disabled.")
 end
 
 -- Выводит список всех активных баффов для юнита
@@ -317,7 +313,7 @@ local function PrintAllActiveBuffs(unitId)
     local buffCount = api.Unit:UnitBuffCount(unitId) or 0
     local buffList = {}
     
-    api.Log:Info(string.format("[CBT] Active buffs for %s (%d):", unitId, buffCount))
+    CbtLog.debug(string.format("Active buffs for %s (%d):", CbtLog.hl(unitId), buffCount))
     
     for i = 1, buffCount do
         local buff = api.Unit:UnitBuff(unitId, i)
@@ -342,7 +338,7 @@ local function PrintAllActiveBuffs(unitId)
                 
                 -- Выводим информацию о баффе
                 local formattedBuffId = helpers.formatBuffId(buffId)
-                api.Log:Info(string.format("[CBT] %d. Buff ID: %s", i, formattedBuffId))
+                CbtLog.debug(string.format("%d. buff ID: %s", i, CbtLog.hl(formattedBuffId)))
             end
         end
     end
@@ -351,7 +347,7 @@ local function PrintAllActiveBuffs(unitId)
     if unitId == "player" or unitId == "target" then
         local debuffCount = api.Unit:UnitDeBuffCount(unitId) or 0
         
-        api.Log:Info(string.format("[CBT] Active debuffs for %s (%d):", unitId, debuffCount))
+        CbtLog.debug(string.format("Active debuffs for %s (%d):", CbtLog.hl(unitId), debuffCount))
         
         for i = 1, debuffCount do
             local debuff = api.Unit:UnitDeBuff(unitId, i)
@@ -376,20 +372,20 @@ local function PrintAllActiveBuffs(unitId)
                     
                     -- Выводим информацию о дебаффе
                     local formattedDebuffId = helpers.formatBuffId(debuffId)
-                    api.Log:Info(string.format("[CBT] %d. Debuff ID: %s", i, formattedDebuffId))
+                    CbtLog.debug(string.format("%d. debuff ID: %s", i, CbtLog.hl(formattedDebuffId)))
                 end
             end
         end
         
         -- Если дебаффов нет, выводим соответствующее сообщение
         if debuffCount == 0 then
-            api.Log:Info("[CBT] No active debuffs")
+            CbtLog.debug("No active debuffs")
         end
     end
     
     -- Если баффов нет, выводим соответствующее сообщение
     if buffCount == 0 then
-        api.Log:Info("[CBT] No active buffs")
+        CbtLog.debug("No active buffs")
     end
 end
 
@@ -398,7 +394,7 @@ function BuffDebugger.PrintCurrentBuffs()
     local settings = helpers.getSettings()
     if not settings or not settings.debugBuffId then
         -- Проверяем, включен ли режим отладки
-        api.Log:Info("[CBT] Buff debug mode is disabled. Enable it in settings.")
+        CbtLog.warn("Buff debug mode is disabled. Enable it in settings.")
         return
     end
     
@@ -411,7 +407,7 @@ function BuffDebugger.PrintCurrentBuffs()
     if targetId then
         PrintAllActiveBuffs("target")
     else
-        api.Log:Info("[CBT] No target selected")
+        CbtLog.debug("No target selected")
     end
 end
 

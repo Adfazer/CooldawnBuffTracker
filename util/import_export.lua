@@ -1,5 +1,6 @@
 -- Модуль для Import/Export конфигурации баффов
 local api = require("api")
+local CbtLog = require("CooldawnBuffTracker/util/cbt_log")
 local helpers = require("CooldawnBuffTracker/helpers")
 local defaultSettings = require("CooldawnBuffTracker/default_settings")
 local CbtWindow = require("CooldawnBuffTracker/util/cbt_window")
@@ -279,7 +280,7 @@ end
 local function buildConfigTable()
     local settings = api.GetSettings("CooldawnBuffTracker")
     if not settings then
-        api.Log:Err("[CBT] Failed to get settings for export")
+        CbtLog.error("Failed to get settings for export")
         return nil
     end
 
@@ -323,7 +324,7 @@ local function exportConfiguration()
     end)
 
     if not success then
-        api.Log:Err("[CBT] Failed to encode configuration: " .. tostring(result))
+        CbtLog.error("Failed to encode configuration: " .. CbtLog.hl(result))
         return nil
     end
 
@@ -337,7 +338,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Import field is empty - paste a configuration into the lower field first")
         end
-        api.Log:Info("[CBT] Import: the Import field is empty - paste a configuration into the lower field first")
+        CbtLog.warn("Import: the Import field is empty - paste a configuration into the lower field first")
         return false
     end
     
@@ -350,7 +351,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: Invalid JSON format")
         end
-        api.Log:Err("[CBT] Import failed: Invalid JSON format - " .. tostring(config))
+        CbtLog.error("Import failed: invalid JSON format - " .. CbtLog.hl(config))
         return false
     end
     
@@ -359,7 +360,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: Configuration must be a table")
         end
-        api.Log:Err("[CBT] Import failed: Configuration must be a table")
+        CbtLog.error("Import failed: configuration must be a table")
         return false
     end
     
@@ -367,7 +368,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: Missing required fields (customBuffs, trackedBuffs)")
         end
-        api.Log:Err("[CBT] Import failed: Missing required fields")
+        CbtLog.error("Import failed: missing required fields")
         return false
     end
     
@@ -375,7 +376,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: customBuffs and trackedBuffs must be tables")
         end
-        api.Log:Err("[CBT] Import failed: customBuffs and trackedBuffs must be tables")
+        CbtLog.error("Import failed: customBuffs and trackedBuffs must be tables")
         return false
     end
     
@@ -383,7 +384,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: Missing trackedBuffs fields (playerpet, player, target)")
         end
-        api.Log:Err("[CBT] Import failed: Missing trackedBuffs fields")
+        CbtLog.error("Import failed: missing trackedBuffs fields")
         return false
     end
     
@@ -393,14 +394,14 @@ local function importConfiguration(configString, errorMsgLabel)
             if errorMsgLabel then
                 errorMsgLabel:SetText("Error: Custom buff at index " .. i .. " is not a table")
             end
-            api.Log:Err("[CBT] Import failed: Custom buff at index " .. i .. " is not a table")
+            CbtLog.error("Import failed: custom entry at index " .. CbtLog.hl(i) .. " is not a table")
             return false
         end
         if not buff.id or not buff.name or not buff.cooldown or not buff.timeOfAction then
             if errorMsgLabel then
                 errorMsgLabel:SetText("Error: Custom buff at index " .. i .. " missing required fields")
             end
-            api.Log:Err("[CBT] Import failed: Custom buff at index " .. i .. " missing required fields")
+            CbtLog.error("Import failed: custom entry at index " .. CbtLog.hl(i) .. " missing required fields")
             return false
         end
     end
@@ -413,7 +414,7 @@ local function importConfiguration(configString, errorMsgLabel)
             if errorMsgLabel then
                 errorMsgLabel:SetText("Error: trackedBuffs." .. unitType .. " is not a table")
             end
-            api.Log:Err("[CBT] Import failed: trackedBuffs." .. unitType .. " is not a table")
+            CbtLog.error("Import failed: trackedBuffs." .. CbtLog.hl(unitType) .. " is not a table")
             return false
         end
         for j, buffId in ipairs(trackedBuffs) do
@@ -424,7 +425,7 @@ local function importConfiguration(configString, errorMsgLabel)
                 if errorMsgLabel then
                     errorMsgLabel:SetText("Error: trackedBuffs." .. unitType .. " contains non-number at index " .. j)
                 end
-                api.Log:Err("[CBT] Import failed: trackedBuffs." .. unitType .. " contains non-number at index " .. j)
+                CbtLog.error("Import failed: trackedBuffs." .. CbtLog.hl(unitType) .. " contains a non-number at index " .. CbtLog.hl(j))
                 return false
             end
         end
@@ -436,7 +437,7 @@ local function importConfiguration(configString, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Error: Failed to get current settings")
         end
-        api.Log:Err("[CBT] Import failed: Failed to get current settings")
+        CbtLog.error("Import failed: could not read the current settings")
         return false
     end
     
@@ -505,7 +506,7 @@ local function importConfiguration(configString, errorMsgLabel)
     -- Отправляем события для обновления списков баффов
     api:Emit("ADDON_CBT_BUFFS_CHANGED")
     
-    api.Log:Info("[CBT] Configuration imported successfully")
+    CbtLog.success("Configuration imported successfully")
     return true
 end
 
@@ -543,10 +544,10 @@ local function exportConfigurationToFile()
 
     local ok, err = pcall(function() api.File:Write(path, config) end)
     if not ok then
-        api.Log:Err("[CBT] Failed to write config file: " .. tostring(err))
+        CbtLog.error("Failed to write config file: " .. CbtLog.hl(err))
         return nil, "Failed to write file"
     end
-    api.Log:Info("[CBT] Configuration saved to file: " .. path)
+    CbtLog.success("Configuration saved to file: " .. CbtLog.hl(path))
     return path
 end
 
@@ -556,7 +557,7 @@ local function importConfigurationFromFile(filename, errorMsgLabel)
     filename = filename and (filename:gsub("^%s+", ""):gsub("%s+$", "")) or ""
     if filename == "" then
         if errorMsgLabel then errorMsgLabel:SetText("Enter the name of the config file first") end
-        api.Log:Info("[CBT] Import from file: no file name entered")
+        CbtLog.warn("Import from file: no file name entered")
         return false
     end
 
@@ -574,7 +575,7 @@ local function importConfigurationFromFile(filename, errorMsgLabel)
         if errorMsgLabel then
             errorMsgLabel:SetText("Could not read file: " .. tostring(filename) .. " (put it into the CooldawnBuffTracker folder)")
         end
-        api.Log:Err("[CBT] Import from file failed: " .. tostring(config))
+        CbtLog.error("Import from file failed: " .. CbtLog.hl(config))
         return false
     end
 
@@ -626,6 +627,8 @@ local function openImportExportWindow(onImportSuccess)
     saveFileButton:RemoveAllAnchors()
     saveFileButton:AddAnchor("TOP", exportLabel, "BOTTOM", 0, 12)
     saveFileButton:SetExtent(280, 30)
+    CbtWindow.Tooltip(saveFileButton,
+        "Write the whole configuration (custom entries, tracked lists, layouts) to a JSON file in the addon folder.")
 
     local fileStatus = api.Interface:CreateWidget('label', 'cbtFileStatus', importExportWindow)
     fileStatus:SetExtent(560, 22)
@@ -667,6 +670,8 @@ local function openImportExportWindow(onImportSuccess)
 
     local importFileEdit = W_CTRL.CreateEdit("importFileEdit", importExportWindow)
     importFileEdit:SetExtent(360, 26)
+    CbtWindow.Tooltip(importFileEdit,
+        "File name inside the CooldawnBuffTracker folder; the extension is optional.")
     importFileEdit:AddAnchor("TOPLEFT", fileNameHint, "BOTTOMLEFT", 0, 4)
     importFileEdit.style:SetAlign(ALIGN.LEFT)
     importFileEdit.style:SetFontSize(12)
@@ -679,6 +684,8 @@ local function openImportExportWindow(onImportSuccess)
     loadFileButton:RemoveAllAnchors()
     loadFileButton:AddAnchor("LEFT", importFileEdit, "RIGHT", 12, 0)
     loadFileButton:SetExtent(185, 30)
+    CbtWindow.Tooltip(loadFileButton,
+        "Read the file and apply it: replaces custom entries, tracked lists and unit layouts.")
 
     -- Панель ошибок для импорта
     local errorPanel = api.Interface:CreateWidget('window', 'importErrorPanel', importExportWindow)
@@ -714,7 +721,7 @@ local function openImportExportWindow(onImportSuccess)
         if success then
             errorPanel:Show(false)
             importExportWindow:Show(false)
-            api.Log:Info("[CBT] Configuration imported from file - window closed")
+            CbtLog.success("Configuration imported from file - window closed")
             if onImportSuccess then onImportSuccess() end
         else
             errorPanel:Show(true)
