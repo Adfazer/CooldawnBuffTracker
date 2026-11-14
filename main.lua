@@ -995,12 +995,20 @@ local function triggerSpell(spellName, sourceName, spellId, rawArgs, combatEvent
         local actLeft = (tonumber(entry.activeUntil) or 0) - now
         if actLeft > 0.5 then blockWindow = actLeft + 0.5 end
       end
+      -- A skill can emit two damage components for one hit (same spell name,
+      -- same timestamp, different damage). With Duration=0 the active window
+      -- is empty, so the old debounce did nothing and the second component
+      -- restarted the cooldown indefinitely. Keep a short burst guard for
+      -- skill entries.
+      if helpers.entryKind(cb) == "skill" and blockWindow < 0.25 then
+        blockWindow = 0.25
+      end
 
       local blocked = false
-      if blockWindow > 0.5 then
+      if blockWindow > 0 then
         local tkey = tostring(srcKey or "self") .. "|" .. tostring(cb.id)
         local last = lastTriggerTimes[tkey]
-        if last and (now - last) < (blockWindow - 0.5) then
+        if last and (now - last) < blockWindow then
           blocked = true
           if settings.debugBuffId then
             CbtLog.debug("'%s': repeat trigger after %.1f s - ignored (window %s)",
@@ -4034,9 +4042,15 @@ end
 
 local function logTargetClass()
   local id = api.Unit:GetUnitId("target")
-  debugRecord("[target] id=" .. tostring(id) .. " name=" .. tostring(api.Unit:UnitName("target")))
-  debugRecord("[class] UnitClass=" .. tostring(api.Unit:UnitClass("target"))
-    .. " GetUnitClassName=" .. tostring(api.Ability:GetUnitClassName("target")))
+  -- Capture each API result before tostring: these functions can return ZERO
+  -- values in the client (not even nil), and `tostring(f())` with zero returns
+  -- becomes `tostring()` -> "bad argument #1 (value expected)", killing UPDATE.
+  local targetName = api.Unit:UnitName("target")
+  local targetClass = api.Unit:UnitClass("target")
+  local targetClassName = api.Ability:GetUnitClassName("target")
+  debugRecord("[target] id=" .. tostring(id) .. " name=" .. tostring(targetName or "nil"))
+  debugRecord("[class] UnitClass=" .. tostring(targetClass or "nil")
+    .. " GetUnitClassName=" .. tostring(targetClassName or "nil"))
   if not id then return end
   local ok, info = pcall(api.Unit.GetUnitInfoById, api.Unit, id)
   if ok and type(info) == "table" and type(info.class) == "table" then
