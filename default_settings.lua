@@ -149,14 +149,14 @@ local function normalizeCanvas(canvas, index, fallbackPosY)
 end
 
 -- Тип кастомной записи: "buff" (бафф/дебафф), "skill" (навык по боевому логу)
--- или "mana" (навык маунта, который тратит ману). У записей до 1.22.0 поля
--- kind нет — выводим тип из данных записи.
+-- или "mana" (навык маунта, который тратит ману). У записей 1.5.0 и раньше поля
+-- kind нет: по решению автора все они мигрируют в Buff/Debuff. Поле spellName
+-- при этом сохраняется — старая запись продолжает работать как combat-log
+-- trigger, хотя Edit показывает только поля баффа.
 local function entryKind(cb)
     if type(cb) ~= "table" then return "buff" end
     local k = cb.kind
     if k == "buff" or k == "skill" or k == "mana" then return k end
-    if (tonumber(cb.manaCost) or 0) > 0 then return "mana" end
-    if type(cb.spellName) == "string" and cb.spellName ~= "" then return "skill" end
     return "buff"
 end
 
@@ -400,6 +400,13 @@ function defaultSettings.migrate(settings)
         for _, cb in ipairs(settings.customBuffs) do
             if type(cb) == "table" then
                 cb.kind = entryKind(cb)
+                -- 1.5.0 entries should already carry these, but keep the
+                -- migration total for hand-edited/old imported files.
+                cb.cooldown = tonumber(cb.cooldown) or 0
+                cb.timeOfAction = tonumber(cb.timeOfAction) or 0
+                if (cb.name == nil or cb.name == "") and cb.id ~= nil then
+                    cb.name = tostring(cb.id)
+                end
                 if cb.effectiveCDs == nil then cb.effectiveCDs = false end
                 local smart = tonumber(cb.smartPct)
                 if smart == nil or smart ~= smart then smart = 0 end

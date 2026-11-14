@@ -75,10 +75,10 @@ if not BuffList then
 end
 
 local CooldawnBuffTracker = {
-  name = "Cooldown Buff Tracker",
+  name = "CooldawnBuffTracker",
   author = "Adfazer & Claude",
-  desc = "Addon for tracking buffs",
-  version = "1.36.5"
+  desc = "Track buffs, debuffs and skill cooldowns with panels, target overlay and custom entries.",
+  version = "2.0.0"
 }
 
 local buffData = {}
@@ -4231,11 +4231,11 @@ local function OnLoad()
     end
   end
   if type(ESCMenu) == "table" and type(ESCMenu.RegisterAddonBtn) == "function" then
-    pcall(ESCMenu.RegisterAddonBtn, ESCMenu, "Cooldown Buff Tracker", openFromEscMenu, "System", "optimizer")
+    pcall(ESCMenu.RegisterAddonBtn, ESCMenu, "CooldawnBuffTracker", openFromEscMenu, "System", "optimizer")
   else
     ESCMenu = ESCMenu or {}
     ESCMenu.queue = ESCMenu.queue or {}
-    table.insert(ESCMenu.queue, { name = "Cooldown Buff Tracker", callback = openFromEscMenu, category = "System" })
+    table.insert(ESCMenu.queue, { name = "CooldawnBuffTracker", callback = openFromEscMenu, category = "System" })
   end
 
   -- Дефолтное ESC-меню: панель «Addon Options» (конвенция michaelClient).
@@ -4278,7 +4278,7 @@ local function OnLoad()
       end
     end
     if configMenu.michaelClient.AddAddon then
-      configMenu.michaelClient:AddAddon("Cooldown Buff Tracker", openFromEscMenu)
+      configMenu.michaelClient:AddAddon("CooldawnBuffTracker", openFromEscMenu)
     end
   end)
 

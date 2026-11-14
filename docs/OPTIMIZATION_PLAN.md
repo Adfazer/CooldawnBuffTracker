@@ -352,7 +352,7 @@ id (`8000211`, `8000049`, `8000405`, `8000033`, `15067`) в этой базе о
   папку/id/репозиторий нельзя: это сломает `addons.txt` у пользователей, ключ настроек
   (`api.GetSettings` санитизирует имя папки), `require("CooldawnBuffTracker/…")` и манифест CAM.
   Правим только человекочитаемые подписи: `name` в `main.lua`, `alias` в CAM yaml, заголовок
-  README — «Cooldown Buff Tracker».
+  README — «CooldawnBuffTracker».
 
 ---
 

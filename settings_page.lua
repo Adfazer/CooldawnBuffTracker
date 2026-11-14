@@ -1851,7 +1851,10 @@ local function openCddDialog(buffId)
                 cb.mountName = mount
                 cb.spellName = nil
             else
-                cb.spellName = nil
+                -- A 1.5.0 Buff/Debuff entry may carry a legacy `spellName`
+                -- combat-log trigger. The typed form does not show that field,
+                -- so preserve it instead of silently breaking the old trigger.
+                -- New buff entries simply never have it.
                 cb.manaCost = nil
                 cb.mountName = nil
             end
@@ -4226,7 +4229,7 @@ local function initSettingsPage()
     titleLabel.style:SetFontSize(18)
     titleLabel.style:SetAlign(ALIGN.LEFT)
     titleLabel.style:SetColor(0.87, 0.69, 0.0, 1)
-    titleLabel:SetText(L("Cooldown Buff Tracker"))
+    titleLabel:SetText(L("CooldawnBuffTracker"))
 
     local closeBtn = header:CreateChildWidget("button", "cbtSettingsClose", 0, true)
     closeBtn:SetExtent(20, 20)

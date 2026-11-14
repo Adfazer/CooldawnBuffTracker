@@ -132,7 +132,7 @@ Configuration imported successfully	Конфигурация успешно им
 Configuration saved to file: %s	Конфигурация сохранена в файл: %s
 Containers not found!	Контейнеры не найдены!
 Cooldown / Duration are seconds; 0 is valid. Icon is optional.	Cooldown / Duration в секундах; 0 допустим. Иконка необязательна.
-Cooldown Buff Tracker	Трекер баффов и КД
+CooldawnBuffTracker	CooldawnBuffTracker
 Cooldown in seconds, 0 is allowed.	КД в секундах, 0 допустим.
 Cooldown must be a number >= 0	КД должен быть числом >= 0
 Cooldown:	КД:
@@ -460,6 +460,7 @@ Thank you for supporting the development!	Спасибо за поддержку
 Thank you for your hard work!	Спасибо за вашу работу!
 Timer font size in pixels (8-40). Applies on Enter.	Размер шрифта таймера в пикселях (8-40). Применяется по Enter.
 Timer settings	Настройки таймера
+Track buffs, debuffs and skill cooldowns with panels, target overlay and custom entries.	Отслеживание баффов, дебаффов и откатов навыков с панелями, оверлеем цели и кастомными записями.
 Track this ID/name on the current unit and canvas.	Отслеживать этот ID/имя на текущем юните и канвасе.
 Tracked entries:	Отслеживаемые записи:
 Tracking key of this entry; it cannot be changed here.	Ключ отслеживания этой записи; здесь его изменить нельзя.
@@ -630,7 +631,7 @@ Configuration imported successfully	Yapılandırma başarıyla içe aktarıldı
 Configuration saved to file: %s	Yapılandırma dosyaya kaydedildi: %s
 Containers not found!	Kapsayıcılar bulunamadı!
 Cooldown / Duration are seconds; 0 is valid. Icon is optional.	Cooldown / Duration saniyedir; 0 geçerlidir. Simge isteğe bağlıdır.
-Cooldown Buff Tracker	Buff ve Bekleme Takipçisi
+CooldawnBuffTracker	CooldawnBuffTracker
 Cooldown in seconds, 0 is allowed.	Bekleme süresi saniye, 0 geçerlidir.
 Cooldown must be a number >= 0	Bekleme süresi 0 veya daha büyük bir sayı olmalı
 Cooldown:	Bekleme:
@@ -958,6 +959,7 @@ Thank you for supporting the development!	Geliştirmeyi desteklediğiniz için t
 Thank you for your hard work!	Emeğiniz için teşekkürler!
 Timer font size in pixels (8-40). Applies on Enter.	Geri sayım yazı boyutu piksel (8-40). Enter ile uygulanır.
 Timer settings	Geri sayım ayarları
+Track buffs, debuffs and skill cooldowns with panels, target overlay and custom entries.	Paneller, hedef kaplaması ve özel girdilerle büff, debuff ve beceri bekleme sürelerini izleyin.
 Track this ID/name on the current unit and canvas.	Bu ID/adı geçerli birim ve tuvalde izler.
 Tracked entries:	İzlenen kayıtlar:
 Tracking key of this entry; it cannot be changed here.	Bu kaydın izleme anahtarı; burada değiştirilemez.
@@ -1127,7 +1129,7 @@ Configuration imported successfully	구성을 성공적으로 가져왔습니다
 Configuration saved to file: %s	구성을 파일로 저장했습니다: %s
 Containers not found!	컨테이너를 찾을 수 없습니다!
 Cooldown / Duration are seconds; 0 is valid. Icon is optional.	Cooldown / Duration은 초 단위이며 0도 유효합니다. 아이콘은 선택 사항입니다.
-Cooldown Buff Tracker	버프 및 재사용 대기시간 추적기
+CooldawnBuffTracker	CooldawnBuffTracker
 Cooldown in seconds, 0 is allowed.	재사용 대기시간(초), 0도 유효합니다.
 Cooldown must be a number >= 0	재사용 대기시간은 0 이상의 숫자여야 합니다
 Cooldown:	재사용 대기시간:
@@ -1455,6 +1457,7 @@ Thank you for supporting the development!	개발을 후원해 주셔서 감사�
 Thank you for your hard work!	노고에 감사드립니다!
 Timer font size in pixels (8-40). Applies on Enter.	카운트다운 글꼴 크기(픽셀, 8-40). Enter로 적용됩니다.
 Timer settings	카운트다운 설정
+Track buffs, debuffs and skill cooldowns with panels, target overlay and custom entries.	패널, 대상 오버레이 및 사용자 정의 항목으로 버프, 디버프 및 스킬 재사용 대기시간을 추적합니다.
 Track this ID/name on the current unit and canvas.	현재 유닛과 캔버스에서 이 ID/이름을 추적합니다.
 Tracked entries:	추적 항목:
 Tracking key of this entry; it cannot be changed here.	이 항목의 추적 키이며 여기서는 변경할 수 없습니다.
