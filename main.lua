@@ -2790,6 +2790,7 @@ local function checkBuffs(unitType)
     -- We have a target
     -- Check if target changed
     if newTargetId ~= currentTargetId then
+      CbtLog.debug("target switch: %s -> %s", tostring(currentTargetId), tostring(newTargetId))
       targetChanged = true
       -- Save current target data to cache before switching
       if currentTargetId and targetCache[currentTargetId] then
@@ -4059,7 +4060,11 @@ end
 
 local function OnUpdate(dt)
   if not live then return end
-  processBuffIconScan()
+  local scanOk, scanErr = pcall(processBuffIconScan)
+  if not scanOk and not lastRuntimeError.scan then
+    lastRuntimeError.scan = true
+    CbtLog.error("icon scan failed: %s", tostring(scanErr))
+  end
   -- Мастер-выключатель из списка аддонов (ESC-меню), поле settings.enabled
   if settings and settings.enabled == false then
     hideAllCanvases()
@@ -4077,7 +4082,11 @@ local function OnUpdate(dt)
   if manaTimer >= 100 then
     local step = manaTimer / 1000
     manaTimer = 0
-    pollMountMana(step)
+    local manaOk, manaErr = pcall(pollMountMana, step)
+    if not manaOk and not lastRuntimeError.mana then
+      lastRuntimeError.mana = true
+      CbtLog.error("mana poll failed: %s", tostring(manaErr))
+    end
   end
 
   if settings and settings.debugBuffId then
@@ -4096,7 +4105,11 @@ local function OnUpdate(dt)
     debugAuraTimer = debugAuraTimer + dt
     if debugAuraTimer >= 100 then
       debugAuraTimer = 0
-      watchTargetAuras()
+      local auraOk, auraErr = pcall(watchTargetAuras)
+      if not auraOk and not lastRuntimeError.aura then
+        lastRuntimeError.aura = true
+        CbtLog.error("aura watcher failed: %s", tostring(auraErr))
+      end
     end
     debugAuraFlushTimer = debugAuraFlushTimer + dt
     if debugAuraFlushTimer >= 1000 then
@@ -4109,7 +4122,11 @@ local function OnUpdate(dt)
     if buffJournalTimer >= BUFF_JOURNAL_INTERVAL then
       buffJournalTimer = 0
       for _, unitType in ipairs(UNIT_TYPES) do
-        pcall(sampleBuffJournal, unitType)
+        local journalOk, journalErr = pcall(sampleBuffJournal, unitType)
+        if not journalOk and not lastRuntimeError.journal then
+          lastRuntimeError.journal = true
+          CbtLog.error("buff journal failed: %s", tostring(journalErr))
+        end
       end
     end
   else
@@ -4171,7 +4188,11 @@ local function OnUpdate(dt)
   -- Target cache cleanup timer
   targetCacheCleanupTimer = targetCacheCleanupTimer + dt
   if targetCacheCleanupTimer >= targetCleanupInterval * 1000 then -- Convert to milliseconds
-    cleanupTargetCache()
+    local cleanOk, cleanErr = pcall(cleanupTargetCache)
+    if not cleanOk and not lastRuntimeError.cache then
+      lastRuntimeError.cache = true
+      CbtLog.error("target cache cleanup failed: %s", tostring(cleanErr))
+    end
     targetCacheCleanupTimer = 0
   end
 end
