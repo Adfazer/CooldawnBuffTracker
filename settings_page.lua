@@ -3954,6 +3954,11 @@ end
 local function showControl(control, visible)
     if control and control.Show then
         control:Show(visible and true or false)
+        -- Подпись с тултипом несёт отдельный hover-прокси; он не прячется
+        -- вместе с ней автоматически и иначе ловит мышь на пустом месте.
+        if CbtWindow.SetHoverProxyVisible then
+            CbtWindow.SetHoverProxyVisible(control, visible and true or false)
+        end
     end
 end
 

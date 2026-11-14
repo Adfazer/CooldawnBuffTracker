@@ -266,6 +266,13 @@ mount and target.
 
 ## Changelog
 
+### 1.36.3
+
+- Target-only tooltips no longer hover over empty space when Mount/Player is
+  selected: hover proxies now follow their label's Show/Hide.
+- Completed the Russian/Turkish/Korean translation of the Buff/Debuff type
+  tooltip (previously English fallback).
+
 ### 1.36.2
 
 - Fixed the Add custom entry type buttons (Buff/Debuff, Skill, Mana skill) not
@@ -1443,7 +1450,7 @@ Skill audit fixes (aac-addon-dev):
 
 ## Version
 
-**Current Version:** 1.36.2
+**Current Version:** 1.36.3
 
 ## Credits
 

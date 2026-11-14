@@ -326,12 +326,33 @@ function M.HoverProxy(widget)
     proxy:RemoveAllAnchors()
     proxy:AddAnchor("TOPLEFT", widget, 0, 0)
     proxy:AddAnchor("BOTTOMRIGHT", widget, 0, 0)
-    proxy:Clickable(true)
-    pcall(function() proxy:EnablePick(true) end)
-    proxy:Show(true)
+    -- Прокси — отдельный sibling, поэтому сам он не скрывается вместе с
+    -- подписью. Стартуем в состоянии видимости подписи; showControl дальше
+    -- синхронизирует его через SetHoverProxyVisible.
+    local visible = true
+    pcall(function() visible = widget:IsVisible() end)
+    proxy:Clickable(visible)
+    pcall(function() proxy:EnablePick(visible) end)
+    proxy:Show(visible)
     proxy._cbtHoverProxyOf = widget
     widget._cbtHoverProxy = proxy
     return proxy
+end
+
+-- Скрыть/показать hover-прокси вместе с его подписью. Без этого прокси
+-- невидимого target-контрола оставался бы кликабельным и показывал подсказку
+-- поверх пустого места при выбранном Mount/Player.
+function M.SetHoverProxyVisible(widget, visible)
+    if not widget then return end
+    local proxy = widget._cbtHoverProxy
+    if not proxy then return end
+    visible = visible and true or false
+    pcall(function() proxy:Show(visible) end)
+    if proxy.Clickable then
+        pcall(function() proxy:Clickable(visible) end)
+    end
+    pcall(function() proxy:EnablePick(visible) end)
+    if not visible and hideTooltip then hideTooltip() end
 end
 
 -- Динамическая подсказка: текст считается в момент наведения, поэтому строки

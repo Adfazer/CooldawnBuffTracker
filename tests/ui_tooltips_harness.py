@@ -410,6 +410,25 @@ HOST.tests = function()
   -- emptied native text (checked through the dynamic canvas tooltip above)
   check(textOf("mountButton") ~= nil, "unit tab (Mount) has a tooltip")
   check(textOf("cbtCddKey") ~= nil, "entry editor label has a tooltip")
+
+  -- Switch to Mount: every target-only label is hidden, so its hover proxy
+  -- must be hidden too; otherwise empty space still shows target tooltips.
+  check(click("mountButton"), "Mount unit tab is clickable")
+  local staleProxies = 0
+  for i = mark, #ENGINE.widgets do
+    local w = ENGINE.widgets[i]
+    if not w._freed and w._cbtHoverProxy ~= nil
+        and w._visible == false and w._cbtHoverProxy._visible then
+      staleProxies = staleProxies + 1
+    end
+  end
+  check(staleProxies == 0, "no visible hover proxy over a hidden label ("
+    .. tostring(staleProxies) .. ")")
+  check(click("targetButton"), "Target unit tab is clickable")
+  local frameLabel = byId("frameModeGroupLabel")
+  check(frameLabel ~= nil and frameLabel._visible == true
+    and frameLabel._cbtHoverProxy ~= nil and frameLabel._cbtHoverProxy._visible == true,
+    "target controls and their proxies come back with Target")
   check(textOf("cbtIconSearch_title") == nil or true, "icon search window title readable")
 
   -- dynamic row tooltips carry the current values

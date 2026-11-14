@@ -78,7 +78,7 @@ local CooldawnBuffTracker = {
   name = "Cooldown Buff Tracker",
   author = "Adfazer & Claude",
   desc = "Addon for tracking buffs",
-  version = "1.36.2"
+  version = "1.36.3"
 }
 
 local buffData = {}

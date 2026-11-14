@@ -102,6 +102,7 @@ Buff log	Журнал баффов
 Buff log cleared	Журнал баффов очищен
 Buff, debuff or skill ID (a name from Custom entries also works). Type to filter, Enter or Add to track it.	ID баффа, дебаффа или навыка (подойдёт и имя из пользовательских записей). Вводите для фильтра, Enter или Add — отслеживать.
 Buff/Debuff	Бафф/Дебафф
+Buff/Debuff: tracked by its aura. Fields: ID, Name, Cooldown, Duration, icon.	Бафф/дебафф: отслеживается по ауре. Поля: ID, Name, Cooldown, Duration, иконка.
 Buff/debuff ID, e.g. 800004. Required for Buff/Debuff entries.	ID баффа/дебаффа, например 800004. Обязателен для записей Buff/Debuff.
 Buffs seen: %s (active %s)	Баффов замечено: %s (активных %s)
 CD %s s	КД %s с
@@ -599,6 +600,7 @@ Buff log	Buff kaydı
 Buff log cleared	Buff kaydı temizlendi
 Buff, debuff or skill ID (a name from Custom entries also works). Type to filter, Enter or Add to track it.	Buff, debuff veya beceri ID'si (Custom entries içindeki bir ad da olur). Filtrelemek için yazın, izlemek için Enter veya Add.
 Buff/Debuff	Buff/Debuff
+Buff/Debuff: tracked by its aura. Fields: ID, Name, Cooldown, Duration, icon.	Buff/Debuff: aurasıyla izlenir. Alanlar: ID, Name, Cooldown, Duration, simge.
 Buff/debuff ID, e.g. 800004. Required for Buff/Debuff entries.	Buff/debuff ID'si, örn. 800004. Buff/Debuff kayıtları için zorunlu.
 Buffs seen: %s (active %s)	Görülen bufflar: %s (etkin %s)
 CD %s s	CD %s s
@@ -1095,6 +1097,7 @@ Buff log	버프 기록
 Buff log cleared	버프 기록이 지워졌습니다
 Buff, debuff or skill ID (a name from Custom entries also works). Type to filter, Enter or Add to track it.	버프, 디버프 또는 스킬 ID (사용자 지정 항목의 이름도 가능). 입력하면 필터링되고 Enter 또는 Add로 추적합니다.
 Buff/Debuff	버프/디버프
+Buff/Debuff: tracked by its aura. Fields: ID, Name, Cooldown, Duration, icon.	버프/디버프: 오라로 추적합니다. 필드: ID, Name, Cooldown, Duration, 아이콘.
 Buff/debuff ID, e.g. 800004. Required for Buff/Debuff entries.	버프/디버프 ID (예: 800004). Buff/Debuff 항목에 필수입니다.
 Buffs seen: %s (active %s)	확인된 버프: %s (활성 %s)
 CD %s s	CD %s초
