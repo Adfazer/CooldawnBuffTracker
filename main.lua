@@ -840,6 +840,11 @@ local function triggerTargetCooldown(sourceId, buffId, startedAt, now)
       status = "active"
     }
   end
+  if settings and settings.debugBuffId then
+    CbtLog.debug("target skill: %s from %s -> cd %.1fs%s",
+      tostring(buffId), tostring(sourceId), tonumber(cdUsed) or 0,
+      (currentTargetId and tostring(currentTargetId) == tostring(sourceId)) and " (current target)" or " (cached)")
+  end
 end
 
 -- Запомнить имя юнита (и применить отложенные триггеры для этого имени)
@@ -2553,8 +2558,12 @@ local function updateBuffIcons(unitType)
         -- Используем историю для последней цели
         local historyBuffs = targetActiveBuffs[lastDisplayedTargetId]
         local historyActiveBuffs = {}
+        local now = getCurrentTime()
         for _, buffInfo in ipairs(activeBuffs) do
-          if historyBuffs[buffInfo.id] then
+          local rec = buffInfo.buff
+          local syntheticLive = rec and rec.synthetic and rec.fixedTime
+            and (tonumber(rec.readyAt) or 0) > now
+          if historyBuffs[buffInfo.id] or syntheticLive then
             table.insert(historyActiveBuffs, buffInfo)
           end
         end
@@ -2577,9 +2586,16 @@ local function updateBuffIcons(unitType)
 
       local historyBuffs = targetActiveBuffs[currentTargetId]
       local historyActiveBuffs = {}
+      local now = getCurrentTime()
 
       for _, buffInfo in ipairs(activeBuffs) do
-        if historyBuffs[buffInfo.id] then
+        local rec = buffInfo.buff
+        -- History normally marks everything seen on this target. Synthetic
+        -- skill records (combat-log triggers) are valid cooldowns even when
+        -- that history was lost/rebuilt; keep them while their cooldown runs.
+        local syntheticLive = rec and rec.synthetic and rec.fixedTime
+          and (tonumber(rec.readyAt) or 0) > now
+        if historyBuffs[buffInfo.id] or syntheticLive then
           table.insert(historyActiveBuffs, buffInfo)
         end
       end
@@ -2783,8 +2799,15 @@ local function checkBuffs(unitType)
         newCache = { lastSeen = currentTime, buffStates = {} }
         targetCache[newTargetId] = newCache
       end
-      -- Restore buff data from cache
+      -- Restore buff data from cache. The history table is what the target
+      -- renderer uses to decide which records to keep; without this, a target
+      -- that was left and re-acquired showed an empty panel until every record
+      -- was triggered again.
+      if not targetActiveBuffs[newTargetId] then
+        targetActiveBuffs[newTargetId] = {}
+      end
       for buffId, cachedBuff in pairs(newCache.buffStates) do
+        targetActiveBuffs[newTargetId][buffId] = true
         targetBuffData[buffId] = {
           name = cachedBuff.name,
           icon = cachedBuff.icon,
